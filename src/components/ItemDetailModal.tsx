@@ -26,12 +26,26 @@ import {
 import { fetchAssetAsBlob, resolveAssetUrl } from '@/src/lib/local-vault';
 import { FormSelect } from './CustomSelect';
 import { MediaImage } from './MediaImage';
+import {
+  buttonStyles,
+  copyToClipboard,
+  cx,
+  inputStyles,
+  labelStyles,
+  Sheet,
+  SheetCloseButton,
+  sizes,
+  StagePill,
+  useFeedback,
+} from './ui';
+
+const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
 
 interface ItemDetailModalProps {
   item: ContentItem | null;
   onClose: () => void;
   onEdit: (item: ContentItem) => void;
-  onDelete: (itemId: number) => Promise<void>;
+  onDelete: (item: ContentItem) => Promise<void>;
   onUpdateFields: (
     itemId: number,
     patch: Partial<Pick<ContentItem, 'status' | 'postDate' | 'liveLink' | 'notes'>>
@@ -60,6 +74,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [liveLink, setLiveLink] = useState(item?.liveLink ?? '');
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [savingMeta, setSavingMeta] = useState(false);
+  const { toast } = useFeedback();
 
   const rawVideoUrl = item?.videoAsset?.url ?? '';
   const isIdbVideo = rawVideoUrl.startsWith('idb://');
@@ -96,12 +111,11 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
   const copyText = async (key: string, value: string) => {
     if (!value.trim()) return;
-    try {
-      await navigator.clipboard.writeText(value);
+    if (await copyToClipboard(value)) {
       setCopiedField(key);
       setTimeout(() => setCopiedField((prev) => (prev === key ? null : prev)), 1500);
-    } catch {
-      // Clipboard fallback ignored
+    } else {
+      toast('Could not copy to clipboard', 'error');
     }
   };
 
@@ -185,6 +199,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+    } catch {
+      toast('Could not build the zip file', 'error');
     } finally {
       setZipProgress(false);
     }
@@ -210,57 +226,35 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const tagsFormatted = formatTagsForCopy(item.tags);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Details for ${item.title}`}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-6"
-    >
-      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-t-2xl border border-zinc-200 bg-white sm:rounded-2xl dark:border-zinc-800 dark:bg-zinc-950">
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-zinc-200 bg-white/95 px-5 py-4 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/95">
-          <div className="min-w-0">
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">
-              <span className="font-medium text-blue-600 dark:text-blue-400">
-                {getPlatformLabel(item.platform)}
-              </span>
-              {item.channelName ? ` · ${item.channelName}` : ''}
+    <Sheet onClose={onClose} label={`Details for ${item.title}`} size="xl">
+        <div className="border-b border-zinc-100 px-5 pb-4 pt-3 sm:px-6 sm:pt-5 dark:border-zinc-800">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                <StagePill status={item.status} />
+                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                  {getPlatformLabel(item.platform)}
+                </span>
+                {item.channelName ? <span>· {item.channelName}</span> : null}
+              </div>
+              <h2 className="mt-2 text-lg font-bold leading-snug tracking-tight sm:text-xl">{item.title}</h2>
             </div>
-            <h2 className="truncate text-lg font-bold text-zinc-950 dark:text-zinc-50">
-              {item.title}
-            </h2>
+            <SheetCloseButton onClick={onClose} label="Close" />
           </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => onAskAI(item)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 whitespace-nowrap"
-            >
-              <MessageSquare className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              Ask AI
-            </button>
-            <button
-              type="button"
-              onClick={() => onEdit(item)}
-              aria-label={`Edit ${item.title}`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 whitespace-nowrap"
-            >
-              <Pencil className="h-3.5 w-3.5" />
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={() => onEdit(item)} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
               Edit
             </button>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close item detail"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
-            >
-              <X className="h-4 w-4" />
+            <button type="button" onClick={() => onAskAI(item)} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
+              <MessageSquare className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+              Ask AI
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 p-5 lg:grid-cols-12">
+        <div className="flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
+        <div className="grid grid-cols-1 gap-5 p-5 sm:p-6 lg:grid-cols-12">
           {/* Left Column: Media Preview & Downloads */}
           <div className="space-y-4 lg:col-span-7">
             {videoSrc ? (
@@ -340,24 +334,24 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             )}
 
             {/* Files & ZIP Download */}
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                    Files & Export ({allAssets.length})
+                    Files ({allAssets.length})
                   </h3>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Download individual files or bundle media + caption text as a zip.
+                    Save one file, or everything plus the caption as a .zip.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleDownloadAllZip}
                   disabled={zipProgress}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
+                  className={cx(buttonStyles.primary, sizes.sm, 'h-9')}
                 >
                   <Download className="h-3.5 w-3.5" />
-                  {zipProgress ? 'Zipping...' : 'Download All (.zip)'}
+                  {zipProgress ? 'Zipping…' : 'Download all'}
                 </button>
               </div>
 
@@ -369,23 +363,16 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       className="flex items-center justify-between gap-3 py-2.5 text-xs"
                     >
                       <div className="min-w-0">
-                        <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                          {label}
-                        </span>
-                        <span className="mx-1.5 text-zinc-400">·</span>
-                        <span className="truncate text-zinc-600 dark:text-zinc-400">
-                          {asset.name}
-                        </span>
-                        <span className="mx-1.5 text-zinc-400">·</span>
-                        <span className="font-mono text-zinc-500 tabular-nums">
-                          {formatFileSize(asset.size)}
-                        </span>
+                        <p className="font-semibold text-zinc-900 dark:text-zinc-100">{label}</p>
+                        <p className="truncate text-zinc-500 dark:text-zinc-400">
+                          {asset.name} · <span className="tabular-nums">{formatFileSize(asset.size)}</span>
+                        </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => downloadSingleAsset(asset)}
                         aria-label={`Download ${asset.name}`}
-                        className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 font-medium text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 shrink-0"
+                        className={cx(buttonStyles.secondary, sizes.sm, 'shrink-0')}
                       >
                         <Download className="h-3 w-3" />
                         Save
@@ -400,7 +387,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           {/* Right Column: One-tap Copy + Tracking + References */}
           <div className="space-y-5 lg:col-span-5">
             {/* One-tap Copy Blocks */}
-            <div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
                   Title
@@ -408,7 +395,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={() => copyText('title', item.title)}
-                  className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                  className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
                 >
                   {copiedField === 'title' ? (
                     <>
@@ -418,7 +405,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   ) : (
                     <>
                       <Copy className="h-3.5 w-3.5" />
-                      Copy Title
+                      Copy
                     </>
                   )}
                 </button>
@@ -435,7 +422,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={() => copyText('caption', item.caption)}
-                    className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
                   >
                     {copiedField === 'caption' ? (
                       <>
@@ -445,7 +432,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     ) : (
                       <>
                         <Copy className="h-3.5 w-3.5" />
-                        Copy Caption
+                        Copy
                       </>
                     )}
                   </button>
@@ -463,7 +450,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={() => copyText('tags', tagsFormatted)}
-                    className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
                   >
                     {copiedField === 'tags' ? (
                       <>
@@ -473,7 +460,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     ) : (
                       <>
                         <Copy className="h-3.5 w-3.5" />
-                        Copy Tags
+                        Copy
                       </>
                     )}
                   </button>
@@ -487,25 +474,25 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             {/* Status, Post Date, Live Link, Notes */}
             <form
               onSubmit={handleSaveTracking}
-              className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+              className="space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60"
             >
               <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                Tracking & Archive
+                Tracking
               </h3>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
                 <div>
                   <label
                     htmlFor="detail-status"
-                    className="block text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                    className={labelStyles}
                   >
-                    Status
+                    Stage
                   </label>
                   <FormSelect
                     id="detail-status"
                     value={status}
                     onChange={(e) => setStatus(e.target.value as StatusKey)}
-                    className="mt-1 h-9 dark:border-zinc-700 dark:bg-zinc-950"
+                    className="mt-0"
                   >
                     {STATUS_OPTIONS.map((s) => (
                       <option key={s.key} value={s.key}>
@@ -518,7 +505,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 <div>
                   <label
                     htmlFor="detail-post-date"
-                    className="block text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                    className={labelStyles}
                   >
                     Post Date
                   </label>
@@ -527,7 +514,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     type="date"
                     value={postDate}
                     onChange={(e) => setPostDate(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                    className={cx(inputStyles, 'h-11')}
                   />
                 </div>
               </div>
@@ -535,26 +522,26 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               <div>
                 <label
                   htmlFor="detail-live-link"
-                  className="block text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                  className={labelStyles}
                 >
                   Live Post URL
                 </label>
-                <div className="mt-1 flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <input
                     id="detail-live-link"
                     type="url"
                     value={liveLink}
                     onChange={(e) => setLiveLink(e.target.value)}
                     placeholder="https://youtube.com/... or instagram.com/..."
-                    className="h-9 flex-1 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                    className={cx(inputStyles, 'h-11 flex-1')}
                   />
-                  {liveLink ? (
+                  {isWebLink(liveLink) ? (
                     <a
-                      href={liveLink}
+                      href={liveLink.trim()}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       aria-label="Open live link"
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-blue-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-blue-400"
+                      className={cx(buttonStyles.secondary, 'h-11 w-11 shrink-0 text-blue-600 dark:text-blue-400')}
                     >
                       <ExternalLink className="h-4 w-4" />
                     </a>
@@ -565,7 +552,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               <div>
                 <label
                   htmlFor="detail-notes"
-                  className="block text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                  className={labelStyles}
                 >
                   Production Notes
                 </label>
@@ -574,18 +561,15 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-white p-2.5 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  className={cx(inputStyles, 'py-2.5')}
                 />
               </div>
 
               <div className="flex items-center justify-between pt-1">
                 <button
                   type="button"
-                  onClick={async () => {
-                    await onDelete(item.id);
-                    onClose();
-                  }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                  onClick={() => onDelete(item)}
+                  className={cx(buttonStyles.dangerGhost, sizes.sm, 'h-10 px-3')}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete Post
@@ -594,16 +578,16 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 <button
                   type="submit"
                   disabled={savingMeta}
-                  className="h-9 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                  className={cx(buttonStyles.primary, sizes.md)}
                 >
-                  {savingMeta ? 'Saving...' : 'Save Tracking'}
+                  {savingMeta ? 'Saving…' : 'Save'}
                 </button>
               </div>
             </form>
 
             {/* Attached References */}
             {item.attachedReferences.length > 0 ? (
-              <div className="space-y-2.5 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="space-y-2.5 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
                 <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
                   Attached References ({item.attachedReferences.length})
                 </h3>
@@ -627,11 +611,11 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                             {ref.note}
                           </p>
                         ) : null}
-                        {ref.url ? (
+                        {isWebLink(ref.url) ? (
                           <a
                             href={ref.url}
                             target="_blank"
-                            rel="noreferrer"
+                            rel="noopener noreferrer"
                             className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
                           >
                             Open Reference
@@ -646,7 +630,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             ) : null}
           </div>
         </div>
-      </div>
-    </div>
+        </div>
+    </Sheet>
   );
 };

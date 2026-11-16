@@ -67,11 +67,11 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen((prev) => !prev)}
-        className={`inline-flex h-9 items-center justify-between gap-2 rounded-lg border px-3 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+        className={`inline-flex h-10 items-center justify-between gap-2 rounded-xl border px-3.5 text-[13px] font-semibold shadow-xs transition-colors whitespace-nowrap shrink-0 ${
           isFiltered
-            ? 'border-blue-600/40 bg-blue-50/70 text-blue-700 hover:bg-blue-50 dark:border-blue-500/40 dark:bg-blue-950/30 dark:text-blue-300'
+            ? 'border-blue-500/40 bg-blue-50 text-blue-700 hover:bg-blue-100/70 dark:border-blue-500/40 dark:bg-blue-950/40 dark:text-blue-300'
             : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-700 dark:hover:bg-zinc-800'
-        }`}
+        } ${open ? 'ring-4 ring-blue-500/15' : ''}`}
       >
         <span className="truncate max-w-[140px]">{displayLabel}</span>
         <ChevronDown
@@ -88,7 +88,7 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
         <div
           role="listbox"
           aria-label={ariaLabel}
-          className="absolute right-0 z-30 mt-1.5 min-w-[190px] overflow-hidden rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-950"
+          className="animate-pop-in absolute left-0 z-30 mt-2 max-h-72 min-w-[200px] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-xl shadow-zinc-950/10 dark:border-zinc-800 dark:bg-zinc-900"
         >
           <button
             type="button"
@@ -98,10 +98,10 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
               onChange('all');
               setOpen(false);
             }}
-            className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors ${
+            className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition-colors ${
               value === 'all'
-                ? 'bg-zinc-100 text-zinc-950 dark:bg-zinc-900 dark:text-white'
-                : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900/60'
+                ? 'bg-zinc-100 text-zinc-950 dark:bg-zinc-800 dark:text-white'
+                : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/70'
             }`}
           >
             <span>{allLabel}</span>
@@ -126,10 +126,10 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
                   onChange(option.value);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors ${
+                className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition-colors ${
                   active
                     ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
-                    : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900/60'
+                    : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/70'
                 }`}
               >
                 <span className="truncate">{option.label}</span>
@@ -164,7 +164,7 @@ export const FormSelect: React.FC<FormSelectProps> = ({
     <div className="relative">
       <select
         {...props}
-        className={`w-full appearance-none rounded-lg border border-zinc-200 bg-white pl-3 pr-9 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 ${className}`}
+        className={`h-11 w-full appearance-none rounded-xl border border-zinc-200 bg-white pl-3.5 pr-10 text-sm text-zinc-900 shadow-xs transition-colors hover:border-zinc-300 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/15 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-700 ${className}`}
       >
         {children}
       </select>

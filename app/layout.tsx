@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -16,11 +17,12 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: light)', color: '#fafafa' },
     { media: '(prefers-color-scheme: dark)', color: '#09090b' },
   ],
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export const metadata: Metadata = {
@@ -57,7 +59,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
       className={`${plusJakarta.variable} ${jetbrainsMono.variable}`}
     >
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        {/* Apply the saved theme before first paint to avoid a light/dark flash. */}
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`try{var t=localStorage.getItem('slatevault_theme');var d=t==='dark'||((!t||t==='system')&&matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark')}catch(e){}`}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

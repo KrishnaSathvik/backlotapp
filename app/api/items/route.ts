@@ -1,55 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { contentItems } from '@/src/db/schema.ts';
-import { verifyRequestUser } from '@/src/lib/auth-server.ts';
+import { requireUser } from '@/src/lib/auth-server.ts';
+import {
+  asset,
+  assets,
+  assertOwnsFiles,
+  badRequest,
+  errorResponse,
+  optionalInt,
+  platform,
+  readJson,
+  references,
+  status,
+  str,
+  tags,
+  webLink,
+} from '@/src/lib/api-utils.ts';
 
 export async function POST(request: NextRequest) {
-  const user = await verifyRequestUser(request);
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const { user, response } = await requireUser(request);
+  if (!user) return response;
 
   try {
-    const body = await request.json();
-    const title = typeof body.title === 'string' ? body.title.trim() : '';
-    if (!title) {
-      return NextResponse.json(
-        { error: 'Title is required.' },
-        { status: 400 }
-      );
-    }
+    const body = await readJson(request);
+    const title = str(body.title, 300, 'Title').trim();
+    if (!title) return badRequest('Title is required.');
 
-    const [created] = await db
-      .insert(contentItems)
-      .values({
-        userUid: user.uid,
-        title,
-        platform: typeof body.platform === 'string' ? body.platform : 'youtube_long',
-        channelId: typeof body.channelId === 'number' ? body.channelId : null,
-        channelName: typeof body.channelName === 'string' ? body.channelName : '',
-        status: typeof body.status === 'string' ? body.status : 'idea',
-        caption: typeof body.caption === 'string' ? body.caption : '',
-        tags: Array.isArray(body.tags) ? body.tags : [],
-        notes: typeof body.notes === 'string' ? body.notes : '',
-        liveLink: typeof body.liveLink === 'string' ? body.liveLink : '',
-        postDate: typeof body.postDate === 'string' ? body.postDate : '',
-        targetDate: typeof body.targetDate === 'string' ? body.targetDate : '',
-        coverAsset: body.coverAsset ?? null,
-        videoAsset: body.videoAsset ?? null,
-        slides: Array.isArray(body.slides) ? body.slides : [],
-        attachedReferences: Array.isArray(body.attachedReferences)
-          ? body.attachedReferences
-          : [],
-        sourceIdeaId: typeof body.sourceIdeaId === 'number' ? body.sourceIdeaId : null,
-      })
-      .returning();
+    const values = {
+      userUid: user.uid,
+      title,
+      platform: platform(body.platform),
+      channelId: optionalInt(body.channelId, 'Channel'),
+      channelName: str(body.channelName, 200, 'Channel'),
+      status: status(body.status),
+      caption: str(body.caption, 20000, 'Caption'),
+      tags: tags(body.tags),
+      notes: str(body.notes, 20000, 'Notes'),
+      liveLink: webLink(body.liveLink, 'Live link'),
+      postDate: str(body.postDate, 40, 'Post date'),
+      targetDate: str(body.targetDate, 40, 'Target date'),
+      coverAsset: asset(body.coverAsset, 'Cover'),
+      videoAsset: asset(body.videoAsset, 'Video'),
+      slides: assets(body.slides, 'Slides'),
+      attachedReferences: references(body.attachedReferences),
+      sourceIdeaId: optionalInt(body.sourceIdeaId, 'Source idea'),
+    };
+    await assertOwnsFiles(user.uid, [values.coverAsset, values.videoAsset, values.slides, values.attachedReferences]);
 
+    const [created] = await db.insert(contentItems).values(values).returning();
     return NextResponse.json({ item: created }, { status: 201 });
   } catch (error) {
-    console.error('Failed to create content item:', error);
-    return NextResponse.json(
-      { error: 'Unable to save content item.' },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Unable to save content item.');
   }
 }

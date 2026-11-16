@@ -13,7 +13,7 @@ import {
   reorderSlides,
   type ContentItem,
   type IdeaItem,
-} from './content-logic';
+} from './content-logic.ts';
 
 const sampleItems: ContentItem[] = [
   {

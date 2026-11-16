@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Send, Trash2 } from 'lucide-react';
+import { ArrowUp, Check, Copy, Lock, RotateCcw, Sparkles, X } from 'lucide-react';
 import { getPlatformLabel, type ContentItem } from '@/src/lib/content-logic';
+import { copyToClipboard, cx } from './ui';
 
 export interface ChatTurn {
   id: string;
@@ -12,28 +13,19 @@ export interface ChatTurn {
 
 interface StudioChatPanelProps {
   items: ContentItem[];
+  authToken: string | null;
   focusedItem: ContentItem | null;
   onClearFocus: () => void;
 }
 
 const STARTER_PROMPTS = [
-  'Write 3 opening hooks',
-  'Draft caption & 8 tags',
-  'Suggest weekly posting order',
+  { title: 'Opening hooks', prompt: 'Write 3 opening hooks for my next video' },
+  { title: 'Caption + tags', prompt: 'Draft a caption and 8 hashtags for my latest post' },
+  { title: 'Posting plan', prompt: 'Suggest a weekly posting order for my posts in progress' },
 ];
 
-export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
-  items,
-  focusedItem,
-  onClearFocus,
-}) => {
-  const [messages, setMessages] = useState<ChatTurn[]>([
-    {
-      id: 'welcome',
-      role: 'model',
-      text: 'Ask for video hooks, YouTube titles, Instagram captions, hashtag sets, or production planning across your content vault.',
-    },
-  ]);
+export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authToken, focusedItem, onClearFocus }) => {
+  const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState(() =>
     focusedItem
       ? `Write a high-retention hook, clean caption, and 8 hashtags for "${focusedItem.title}" (${getPlatformLabel(focusedItem.platform)}).`
@@ -43,262 +35,256 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const idCounterRef = useRef(1);
 
   useEffect(() => {
-    if (threadRef.current) {
-      threadRef.current.scrollTop = threadRef.current.scrollHeight;
-    }
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
+  // Auto-grow the composer up to ~5 lines.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+  }, [input]);
+
   const buildVaultContext = () => {
-    const lines = items.slice(0, 12).map(
-      (i) =>
-        `- ${i.title} [${getPlatformLabel(i.platform)} · ${i.status}${
-          i.channelName ? ` · ${i.channelName}` : ''
-        }]`
-    );
+    const lines = items
+      .slice(0, 12)
+      .map((i) => `- ${i.title} [${getPlatformLabel(i.platform)} · ${i.status}${i.channelName ? ` · ${i.channelName}` : ''}]`);
     if (focusedItem) {
       lines.unshift(
-        `Focused item: "${focusedItem.title}" (${getPlatformLabel(
-          focusedItem.platform
-        )}, channel: ${focusedItem.channelName || 'none'}, current caption: "${
-          focusedItem.caption
-        }", tags: ${focusedItem.tags.join(', ')})`
+        `Focused item: "${focusedItem.title}" (${getPlatformLabel(focusedItem.platform)}, channel: ${
+          focusedItem.channelName || 'none'
+        }, current caption: "${focusedItem.caption}", tags: ${focusedItem.tags.join(', ')})`
       );
     }
     return lines.join('\n');
   };
 
-  const sendMessage = async (textOverride?: string) => {
+  const sendMessage = async (textOverride?: string, history: ChatTurn[] = messages) => {
     const content = (textOverride ?? input).trim();
-    if (!content || sending) return;
+    if (!content || sending || !authToken) return;
 
     setError(null);
     idCounterRef.current += 1;
-    const userTurn: ChatTurn = {
-      id: `u-${idCounterRef.current}`,
-      role: 'user',
-      text: content,
-    };
-
-    const nextHistory = [...messages, userTurn];
+    const nextHistory = [...history, { id: `u-${idCounterRef.current}`, role: 'user' as const, text: content }];
     setMessages(nextHistory);
-    if (!textOverride) setInput('');
+    if (textOverride === undefined) setInput('');
     setSending(true);
 
     try {
-      const apiMessages = nextHistory
-        .filter((m) => m.id !== 'welcome')
-        .map((m) => ({ role: m.role, text: m.text }));
-
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
         body: JSON.stringify({
-          messages: apiMessages,
+          messages: nextHistory.map((m) => ({ role: m.role, text: m.text })),
           context: buildVaultContext(),
         }),
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to get AI response.');
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to get an AI response.');
 
       idCounterRef.current += 1;
       setMessages((prev) => [
         ...prev,
-        {
-          id: `m-${idCounterRef.current}`,
-          role: 'model',
-          text: data.reply || 'No response text returned.',
-        },
+        { id: `m-${idCounterRef.current}`, role: 'model', text: data.reply || 'No response text returned.' },
       ]);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Unable to reach Studio AI right now.'
-      );
+      setError(err instanceof Error ? err.message : 'Unable to reach Studio AI right now.');
     } finally {
       setSending(false);
     }
   };
 
-  const handleCopyReply = async (turn: ChatTurn) => {
-    try {
-      await navigator.clipboard.writeText(turn.text);
+  const retry = () => {
+    const lastUserIndex = messages.map((m) => m.role).lastIndexOf('user');
+    if (lastUserIndex === -1) return;
+    sendMessage(messages[lastUserIndex].text, messages.slice(0, lastUserIndex));
+  };
+
+  const handleCopy = async (turn: ChatTurn) => {
+    if (await copyToClipboard(turn.text)) {
       setCopiedId(turn.id);
       setTimeout(() => setCopiedId((prev) => (prev === turn.id ? null : prev)), 1500);
-    } catch {
-      // Ignore clipboard failure
     }
+  };
+
+  const reset = () => {
+    setMessages([]);
+    setError(null);
+    onClearFocus();
   };
 
   return (
     <section
-      aria-label="Studio AI Chat"
-      className="mx-auto flex h-[calc(100vh-190px)] min-h-[460px] max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+      aria-label="Studio AI chat"
+      className="mx-auto flex h-[calc(100dvh-17rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] min-h-[380px] max-w-3xl flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-xs md:h-[calc(100dvh-15rem)] dark:border-zinc-800 dark:bg-zinc-900/60"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3.5 dark:border-zinc-800">
-        <div>
-          <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
-            Studio AI Strategist
-          </h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Multi-turn assistant for hooks, captions, tags, and content flow
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            setMessages([
-              {
-                id: 'welcome',
-                role: 'model',
-                text: 'Started a fresh conversation. Ask about hooks, captions, tags, or your upcoming uploads.',
-              },
-            ]);
-            setError(null);
-            onClearFocus();
-          }}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Clear
-        </button>
-      </div>
-
-      {focusedItem ? (
-        <div className="flex items-center justify-between border-b border-zinc-200 bg-blue-50/70 px-5 py-2 text-xs text-blue-800 dark:border-zinc-800 dark:bg-blue-950/30 dark:text-blue-200">
-          <span className="truncate">
-            Focused on: <strong>{focusedItem.title}</strong>
-          </span>
-          <button
-            type="button"
-            onClick={onClearFocus}
-            className="ml-2 font-medium hover:underline shrink-0"
-          >
-            Detach
-          </button>
+      {focusedItem || messages.length ? (
+        <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
+          {focusedItem ? (
+            <span className="flex min-w-0 items-center gap-2 rounded-full bg-blue-50 py-1 pl-3 pr-1 text-xs font-medium text-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+              <span className="truncate">About: {focusedItem.title}</span>
+              <button
+                type="button"
+                onClick={onClearFocus}
+                aria-label="Stop focusing on this post"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full hover:bg-blue-100 dark:hover:bg-blue-900"
+              >
+                <X className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </span>
+          ) : (
+            <span />
+          )}
+          {messages.length ? (
+            <button
+              type="button"
+              onClick={reset}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              New chat
+            </button>
+          ) : null}
         </div>
       ) : null}
 
-      {/* Scrollable Thread */}
-      <div
-        ref={threadRef}
-        data-testid="chat-thread"
-        className="flex-1 space-y-4 overflow-y-auto p-5"
-      >
-        {messages.map((turn) => (
-          <div
-            key={turn.id}
-            className={`flex flex-col ${
-              turn.role === 'user' ? 'items-end' : 'items-start'
-            }`}
-          >
-            <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                turn.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'border border-zinc-200 bg-zinc-50 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100'
-              }`}
-            >
-              <p className="whitespace-pre-wrap">{turn.text}</p>
+      <div ref={threadRef} data-testid="chat-thread" className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+        {messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-lg shadow-blue-600/25">
+              <Sparkles className="h-5 w-5" aria-hidden="true" />
             </div>
-            {turn.role === 'model' && turn.id !== 'welcome' ? (
-              <button
-                type="button"
-                onClick={() => handleCopyReply(turn)}
-                className="mt-1 inline-flex items-center gap-1 px-1 text-[11px] font-medium text-zinc-500 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-400"
-              >
-                {copiedId === turn.id ? (
-                  <>
-                    <Check className="h-3 w-3" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3 w-3" />
-                    Copy response
-                  </>
-                )}
-              </button>
+            <h2 className="mt-4 text-lg font-semibold">What are we making today?</h2>
+            <p className="mt-1 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">
+              Hooks, titles, captions, hashtag sets and posting plans — using what’s in your vault.
+            </p>
+            {authToken ? (
+              <div className="mt-6 grid w-full max-w-xl gap-2 sm:grid-cols-3">
+                {STARTER_PROMPTS.map((p) => (
+                  <button
+                    key={p.title}
+                    type="button"
+                    onClick={() => sendMessage(p.prompt)}
+                    className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
+                  >
+                    <span className="block text-[13px] font-semibold">{p.title}</span>
+                    <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">{p.prompt}</span>
+                  </button>
+                ))}
+              </div>
             ) : null}
           </div>
-        ))}
-
-        {sending ? (
-          <div className="flex items-start">
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
-              Thinking...
-            </div>
+        ) : (
+          <div className="space-y-5">
+            {messages.map((turn) =>
+              turn.role === 'user' ? (
+                <div key={turn.id} className="flex justify-end">
+                  <p className="max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-br-lg bg-blue-600 px-4 py-2.5 text-sm leading-relaxed text-white">
+                    {turn.text}
+                  </p>
+                </div>
+              ) : (
+                <div key={turn.id} className="flex gap-3">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white">
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">{turn.text}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(turn)}
+                      className="mt-2 inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                    >
+                      {copiedId === turn.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedId === turn.id ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
+            {sending ? (
+              <div className="flex gap-3" aria-live="polite">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white">
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                </div>
+                <div className="flex items-center gap-1 py-2" aria-label="Thinking">
+                  {[0, 150, 300].map((d) => (
+                    <span
+                      key={d}
+                      className="h-2 w-2 animate-bounce rounded-full bg-zinc-300 dark:bg-zinc-600"
+                      style={{ animationDelay: `${d}ms` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
-
-      {/* Quick Prompts */}
-      <div className="flex flex-wrap gap-2 border-t border-zinc-100 px-5 py-2.5 dark:border-zinc-800">
-        {STARTER_PROMPTS.map((prompt) => (
-          <button
-            key={prompt}
-            type="button"
-            onClick={() => sendMessage(prompt)}
-            className="h-8 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-xs font-medium text-zinc-700 hover:border-blue-600 hover:text-blue-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 whitespace-nowrap shrink-0"
-          >
-            {prompt}
-          </button>
-        ))}
+        )}
       </div>
 
       {error ? (
         <div
           role="alert"
-          className="flex items-center justify-between gap-3 border-t border-red-200 bg-red-50 px-5 py-2 text-xs font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+          className="mx-3 mb-2 flex items-center justify-between gap-3 rounded-2xl bg-red-50 px-4 py-2.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300"
         >
           <span>{error}</span>
-          <button
-            type="button"
-            onClick={() => {
-              const lastUser = [...messages]
-                .reverse()
-                .find((m) => m.role === 'user');
-              if (lastUser) sendMessage(lastUser.text);
-            }}
-            className="rounded border border-red-300 px-2 py-0.5 text-[11px] font-semibold hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900/40 shrink-0"
-          >
+          <button type="button" onClick={retry} className="shrink-0 font-semibold underline-offset-2 hover:underline">
             Retry
           </button>
         </div>
       ) : null}
 
-      {/* Composer */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          sendMessage();
-        }}
-        className="flex items-center gap-2 border-t border-zinc-200 p-4 dark:border-zinc-800"
-      >
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask for hooks, captions, hashtags, or posting ideas..."
-          aria-label="Message Studio AI"
-          className="h-11 flex-1 rounded-xl border border-zinc-200 bg-white px-4 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-600 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
-        />
-        <button
-          type="submit"
-          disabled={sending || !input.trim()}
-          aria-label="Send message"
-          className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+      {authToken ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            sendMessage();
+          }}
+          className="p-3 pt-0"
         >
-          <Send className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Send</span>
-        </button>
-      </form>
+          <div className="flex items-end gap-2 rounded-3xl border border-zinc-200 bg-zinc-50 p-1.5 pl-4 transition-colors focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-500/10 dark:border-zinc-800 dark:bg-zinc-950 dark:focus-within:border-blue-700">
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder="Ask for hooks, captions, hashtags…"
+              aria-label="Message Studio AI"
+              maxLength={8000}
+              className="max-h-[140px] flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-6 text-zinc-950 placeholder:text-zinc-400 focus:outline-none sm:text-sm dark:text-zinc-50"
+            />
+            <button
+              type="submit"
+              disabled={sending || !input.trim()}
+              aria-label="Send message"
+              className={cx(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors',
+                input.trim() && !sending
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+              )}
+            >
+              <ArrowUp className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="m-3 mt-0 flex items-center gap-3 rounded-2xl bg-zinc-100 px-4 py-3 text-sm text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">
+          <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Sign in with Google to use Studio AI.
+        </div>
+      )}
     </section>
   );
 };

@@ -76,10 +76,14 @@ export const MediaImage: React.FC<MediaImageProps> = ({
   }
 
   return (
+    // Plain <img>: sources are blob: URLs or cookie-authenticated /api/files, which next/image can't optimize.
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={resolvedSrc}
       alt={alt}
       referrerPolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
       onError={() => setFailedSrc(src ?? null)}
       className={className}
     />

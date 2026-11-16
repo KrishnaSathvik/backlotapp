@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { integer, jsonb, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, index, integer, jsonb, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
 export interface MediaAssetRecord {
   id: string;
@@ -31,7 +31,7 @@ export const channels = pgTable('channels', {
   name: text('name').notNull(),
   handle: text('handle').default('').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => [index('channels_user_idx').on(t.userUid)]);
 
 export const contentItems = pgTable('content_items', {
   id: serial('id').primaryKey(),
@@ -54,7 +54,7 @@ export const contentItems = pgTable('content_items', {
   sourceIdeaId: integer('source_idea_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (t) => [index('content_items_user_idx').on(t.userUid)]);
 
 export const ideas = pgTable('ideas', {
   id: serial('id').primaryKey(),
@@ -71,7 +71,7 @@ export const ideas = pgTable('ideas', {
   targetDate: text('target_date').default('').notNull(),
   convertedItemId: integer('converted_item_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => [index('ideas_user_idx').on(t.userUid)]);
 
 export const uploadedFiles = pgTable('uploaded_files', {
   id: serial('id').primaryKey(),
@@ -79,9 +79,9 @@ export const uploadedFiles = pgTable('uploaded_files', {
   storageKey: text('storage_key').notNull().unique(),
   fileName: text('file_name').notNull(),
   mimeType: text('mime_type').notNull(),
-  sizeBytes: integer('size_bytes').notNull(),
+  sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => [index('uploaded_files_user_idx').on(t.userUid)]);
 
 export const usersRelations = relations(users, ({ many }) => ({
   channels: many(channels),

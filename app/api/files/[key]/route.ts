@@ -2,24 +2,48 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { eq } from 'drizzle-orm';
+import { Readable } from 'node:stream';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/src/db/index.ts';
 import { uploadedFiles } from '@/src/db/schema.ts';
+import { requireUser } from '@/src/lib/auth-server.ts';
+import { UPLOAD_ROOT } from '@/src/lib/api-utils.ts';
+import { IMAGE_TYPES, VIDEO_TYPES } from '@/src/lib/upload-limits.ts';
 
-const UPLOAD_ROOT = path.join(process.cwd(), '.uploads');
+function streamFile(filePath: string, start?: number, end?: number) {
+  const nodeStream = fs.createReadStream(filePath, { start, end });
+  return Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+}
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ key: string }> }
-) {
+/** Parses a single byte range. Returns null when unsatisfiable, undefined when absent/ignored. */
+function parseRange(header: string | null, size: number): { start: number; end: number } | null | undefined {
+  if (!header) return undefined;
+  const match = header.trim().match(/^bytes=(\d*)-(\d*)$/);
+  if (!match || (!match[1] && !match[2])) return undefined;
+  let start: number;
+  let end: number;
+  if (!match[1]) {
+    // Suffix range: last N bytes.
+    const suffix = Number(match[2]);
+    if (suffix === 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  }
+  if (start >= size || start > end) return null;
+  return { start, end };
+}
+
+export async function GET(request: NextRequest, context: { params: Promise<{ key: string }> }) {
+  const { user, response } = await requireUser(request);
+  if (!user) return response;
+
   try {
-    const { key } = await context.params;
-    const safeKey = path.basename(decodeURIComponent(key));
-    const filePath = path.join(UPLOAD_ROOT, safeKey);
-
-    let stat: fs.Stats;
+    let safeKey: string;
     try {
-      stat = await fsp.stat(filePath);
+      safeKey = path.basename(decodeURIComponent((await context.params).key));
     } catch {
       return NextResponse.json({ error: 'File not found.' }, { status: 404 });
     }
@@ -27,55 +51,49 @@ export async function GET(
     const [meta] = await db
       .select()
       .from(uploadedFiles)
-      .where(eq(uploadedFiles.storageKey, safeKey));
+      .where(and(eq(uploadedFiles.storageKey, safeKey), eq(uploadedFiles.userUid, user.uid)));
+    if (!meta) return NextResponse.json({ error: 'File not found.' }, { status: 404 });
 
-    const contentType = meta?.mimeType || 'application/octet-stream';
-    const fileName = meta?.fileName || safeKey;
-    const isDownload = request.nextUrl.searchParams.get('download') === '1';
-
-    const rangeHeader = request.headers.get('range');
-    if (rangeHeader && !isDownload) {
-      const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader);
-      if (match) {
-        const start = Number(match[1]);
-        const end = match[2] ? Math.min(Number(match[2]), stat.size - 1) : stat.size - 1;
-        const chunkSize = end - start + 1;
-
-        const stream = fs.createReadStream(filePath, { start, end });
-        const webStream = new ReadableStream({
-          start(controller) {
-            stream.on('data', (chunk) => controller.enqueue(chunk));
-            stream.on('end', () => controller.close());
-            stream.on('error', (err) => controller.error(err));
-          },
-          cancel() {
-            stream.destroy();
-          },
-        });
-
-        return new NextResponse(webStream, {
-          status: 206,
-          headers: {
-            'Content-Range': `bytes ${start}-${end}/${stat.size}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': String(chunkSize),
-            'Content-Type': contentType,
-          },
-        });
-      }
+    const filePath = path.join(UPLOAD_ROOT, safeKey);
+    let size: number;
+    try {
+      size = (await fsp.stat(filePath)).size;
+    } catch {
+      return NextResponse.json({ error: 'File not found.' }, { status: 404 });
     }
 
-    const fileBuffer = await fsp.readFile(filePath);
+    const isMedia = IMAGE_TYPES.includes(meta.mimeType) || VIDEO_TYPES.includes(meta.mimeType);
+    const isDownload = request.nextUrl.searchParams.get('download') === '1' || !isMedia;
+    const fileName = meta.fileName.replace(/["\\\r\n]/g, '');
+
     const headers: Record<string, string> = {
-      'Content-Type': contentType,
-      'Content-Length': String(stat.size),
+      'Content-Type': isMedia ? meta.mimeType : 'application/octet-stream',
       'Accept-Ranges': 'bytes',
+      'Cache-Control': 'private, max-age=3600',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'Content-Disposition': `${isDownload ? 'attachment' : 'inline'}; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(meta.fileName)}`,
     };
-    if (isDownload) {
-      headers['Content-Disposition'] = `attachment; filename="${fileName.replace(/"/g, '')}"`;
+
+    const range = isDownload ? undefined : parseRange(request.headers.get('range'), size);
+    if (range === null) {
+      return new NextResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+    }
+    if (range) {
+      return new NextResponse(streamFile(filePath, range.start, range.end), {
+        status: 206,
+        headers: {
+          ...headers,
+          'Content-Range': `bytes ${range.start}-${range.end}/${size}`,
+          'Content-Length': String(range.end - range.start + 1),
+        },
+      });
     }
 
-    return new NextResponse(fileBuffer, { status: 200, headers });
+    return new NextResponse(streamFile(filePath), {
+      status: 200,
+      headers: { ...headers, 'Content-Length': String(size) },
+    });
   } catch (error) {
     console.error('File streaming failed:', error);
     return NextResponse.json({ error: 'Unable to read file.' }, { status: 500 });

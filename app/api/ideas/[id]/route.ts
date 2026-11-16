@@ -2,103 +2,93 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/src/db/index.ts';
 import { contentItems, ideas } from '@/src/db/schema.ts';
-import { verifyRequestUser } from '@/src/lib/auth-server.ts';
+import { requireUser } from '@/src/lib/auth-server.ts';
+import {
+  badRequest,
+  collectUnusedFiles,
+  errorResponse,
+  keysIn,
+  parseId,
+} from '@/src/lib/api-utils.ts';
 import { convertIdeaToPostDraft, type PlatformKey } from '@/src/lib/content-logic.ts';
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const user = await verifyRequestUser(request);
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+type Ctx = { params: Promise<{ id: string }> };
+
+/** Converts an idea into a post. Idempotent: a second call returns the existing post. */
+export async function POST(request: NextRequest, context: Ctx) {
+  const { user, response } = await requireUser(request);
+  if (!user) return response;
 
   try {
-    const { id } = await context.params;
-    const ideaId = Number(id);
-    if (!Number.isInteger(ideaId)) {
-      return NextResponse.json({ error: 'Invalid idea id.' }, { status: 400 });
-    }
+    const ideaId = parseId((await context.params).id);
+    if (!ideaId) return badRequest('Invalid idea id.');
 
-    const [idea] = await db
-      .select()
-      .from(ideas)
-      .where(and(eq(ideas.id, ideaId), eq(ideas.userUid, user.uid)));
+    const result = await db.transaction(async (tx) => {
+      // Lock the idea row so concurrent clicks cannot both convert it.
+      const [idea] = await tx
+        .select()
+        .from(ideas)
+        .where(and(eq(ideas.id, ideaId), eq(ideas.userUid, user.uid)))
+        .for('update');
+      if (!idea) return null;
 
-    if (!idea) {
-      return NextResponse.json({ error: 'Idea not found.' }, { status: 404 });
-    }
+      if (idea.convertedItemId) {
+        const [existing] = await tx
+          .select()
+          .from(contentItems)
+          .where(and(eq(contentItems.id, idea.convertedItemId), eq(contentItems.userUid, user.uid)));
+        if (existing) return { item: existing, idea, created: false };
+      }
 
-    const draft = convertIdeaToPostDraft({
-      id: idea.id,
-      title: idea.title,
-      linkUrl: idea.linkUrl,
-      linkTitle: idea.linkTitle,
-      linkDomain: idea.linkDomain,
-      screenshotUrl: idea.screenshotUrl,
-      notes: idea.notes,
-      platform: idea.platform as PlatformKey,
-      channelName: idea.channelName,
-      tags: idea.tags,
-      targetDate: idea.targetDate,
-      convertedItemId: idea.convertedItemId,
-      createdAt: idea.createdAt.toISOString(),
+      const draft = convertIdeaToPostDraft({
+        ...idea,
+        platform: idea.platform as PlatformKey,
+        createdAt: idea.createdAt.toISOString(),
+      });
+
+      const [item] = await tx
+        .insert(contentItems)
+        .values({
+          userUid: user.uid,
+          title: draft.title,
+          platform: draft.platform,
+          channelName: draft.channelName,
+          status: draft.status,
+          caption: draft.caption,
+          tags: draft.tags,
+          notes: draft.notes,
+          targetDate: draft.targetDate,
+          attachedReferences: draft.attachedReferences,
+          sourceIdeaId: idea.id,
+        })
+        .returning();
+
+      const [updatedIdea] = await tx
+        .update(ideas)
+        .set({ convertedItemId: item.id })
+        .where(eq(ideas.id, idea.id))
+        .returning();
+
+      return { item, idea: updatedIdea, created: true };
     });
 
-    const [createdItem] = await db
-      .insert(contentItems)
-      .values({
-        userUid: user.uid,
-        title: draft.title,
-        platform: draft.platform,
-        channelName: draft.channelName,
-        status: draft.status,
-        caption: draft.caption,
-        tags: draft.tags,
-        notes: draft.notes,
-        liveLink: '',
-        postDate: '',
-        targetDate: draft.targetDate,
-        coverAsset: null,
-        videoAsset: null,
-        slides: [],
-        attachedReferences: draft.attachedReferences,
-        sourceIdeaId: idea.id,
-      })
-      .returning();
-
-    const [updatedIdea] = await db
-      .update(ideas)
-      .set({ convertedItemId: createdItem.id })
-      .where(and(eq(ideas.id, idea.id), eq(ideas.userUid, user.uid)))
-      .returning();
-
-    return NextResponse.json({ item: createdItem, idea: updatedIdea }, { status: 201 });
-  } catch (error) {
-    console.error('Failed to convert idea to post:', error);
+    if (!result) return NextResponse.json({ error: 'Idea not found.' }, { status: 404 });
     return NextResponse.json(
-      { error: 'Unable to convert idea to post.' },
-      { status: 500 }
+      { item: result.item, idea: result.idea },
+      { status: result.created ? 201 : 200 }
     );
+  } catch (error) {
+    return errorResponse(error, 'Unable to convert idea to post.');
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const user = await verifyRequestUser(request);
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function DELETE(request: NextRequest, context: Ctx) {
+  const { user, response } = await requireUser(request);
+  if (!user) return response;
 
   try {
-    const { id } = await context.params;
-    const ideaId = Number(id);
-    if (!Number.isInteger(ideaId)) {
-      return NextResponse.json({ error: 'Invalid idea id.' }, { status: 400 });
-    }
+    const ideaId = parseId((await context.params).id);
+    if (!ideaId) return badRequest('Invalid idea id.');
 
     const deleted = await db
       .delete(ideas)
@@ -109,12 +99,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Idea not found.' }, { status: 404 });
     }
 
+    await collectUnusedFiles(user.uid, keysIn(deleted));
     return NextResponse.json({ deletedId: ideaId });
   } catch (error) {
-    console.error('Failed to delete idea:', error);
-    return NextResponse.json(
-      { error: 'Unable to delete idea.' },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Unable to delete idea.');
   }
 }

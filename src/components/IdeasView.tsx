@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowRight, ExternalLink, ImagePlus, Link2, Trash2 } from 'lucide-react';
+import { ArrowRight, ChevronDown, ExternalLink, ImagePlus, Lightbulb, Link2, Trash2, X } from 'lucide-react';
 import {
   extractDomainAndTitle,
   formatTagsForCopy,
@@ -13,8 +13,10 @@ import {
   type PlatformKey,
 } from '@/src/lib/content-logic';
 import { uploadAssetResumable } from '@/src/lib/upload-client';
+import { IMAGE_TYPES } from '@/src/lib/upload-limits';
 import { FormSelect } from './CustomSelect';
 import { MediaImage } from './MediaImage';
+import { buttonStyles, cardStyles, cx, inputStyles, labelStyles, sizes } from './ui';
 
 interface IdeasViewProps {
   ideas: IdeaItem[];
@@ -32,10 +34,12 @@ interface IdeasViewProps {
     channelName: string;
     tags: string[];
     targetDate: string;
-  }) => Promise<void>;
+  }) => Promise<boolean>;
   onMakePost: (idea: IdeaItem) => Promise<void>;
-  onDeleteIdea: (ideaId: number) => Promise<void>;
+  onDeleteIdea: (idea: IdeaItem) => Promise<void>;
 }
+
+const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
 
 export const IdeasView: React.FC<IdeasViewProps> = ({
   ideas,
@@ -55,19 +59,22 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
   const [targetDate, setTargetDate] = useState('');
   const [screenshotUrl, setScreenshotUrl] = useState('');
   const [uploadingShot, setUploadingShot] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [busyIdeaId, setBusyIdeaId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
   const preview = extractDomainAndTitle(linkUrl);
 
   const handleScreenshotPick = async (file: File | undefined) => {
     if (!file) return;
+    setError('');
     setUploadingShot(true);
     try {
       const asset = await uploadAssetResumable({ file, authToken });
       setScreenshotUrl(asset.url);
-    } catch {
-      setError('Could not attach screenshot.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not attach screenshot.');
     } finally {
       setUploadingShot(false);
     }
@@ -76,359 +83,287 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() && !linkUrl.trim() && !notes.trim() && !screenshotUrl) {
-      setError('Paste a link, drop a screenshot, or type a note to capture an idea.');
+      setError('Paste a link, add a screenshot, or type a note.');
       return;
     }
-
     setError('');
     setSaving(true);
-    try {
-      await onCaptureIdea({
-        title: title.trim() || preview.suggestedTitle || 'Captured Reference',
-        linkUrl: preview.validUrl,
-        linkTitle: preview.suggestedTitle,
-        linkDomain: preview.domain,
-        screenshotUrl,
-        notes: notes.trim(),
-        platform,
-        channelName,
-        tags: parseTagsInput(tagsRaw),
-        targetDate,
-      });
-
+    const ok = await onCaptureIdea({
+      title: title.trim() || preview.suggestedTitle || 'Captured idea',
+      linkUrl: preview.validUrl,
+      linkTitle: preview.suggestedTitle,
+      linkDomain: preview.domain,
+      screenshotUrl,
+      notes: notes.trim(),
+      platform,
+      channelName,
+      tags: parseTagsInput(tagsRaw),
+      targetDate,
+    });
+    setSaving(false);
+    if (ok) {
       setTitle('');
       setLinkUrl('');
       setNotes('');
       setTagsRaw('');
       setTargetDate('');
       setScreenshotUrl('');
+    }
+  };
+
+  const withBusy = async (idea: IdeaItem, fn: (idea: IdeaItem) => Promise<void>) => {
+    setBusyIdeaId(idea.id);
+    try {
+      await fn(idea);
     } finally {
-      setSaving(false);
+      setBusyIdeaId(null);
     }
   };
 
   return (
-    <section aria-label="Ideas and References" className="space-y-8">
-      {/* Capture Idea Form */}
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-              Capture an Idea or Reference
-            </h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Paste a YouTube or Instagram link, drop a screenshot, or jot a quick note.
-            </p>
-          </div>
-        </div>
+    <section aria-label="Ideas" className="grid gap-6 lg:grid-cols-[minmax(0,400px)_1fr] lg:items-start">
+      {/* Capture */}
+      <form onSubmit={handleSubmit} className={cx(cardStyles, 'p-4 sm:p-5 lg:sticky lg:top-20')}>
+        <h2 className="text-base font-semibold">Capture an idea</h2>
+        <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">Paste a link, add a screenshot, or jot a note.</p>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label
-              htmlFor="idea-link"
-              className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Reference Link
-            </label>
-            <div className="relative mt-1">
-              <Link2
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-                aria-hidden="true"
-              />
-              <input
-                id="idea-link"
-                type="text"
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="https://youtube.com/watch?v=... or instagram.com/reel/..."
-                className="h-10 w-full rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-600 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label
-              htmlFor="idea-title"
-              className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Idea Title
-            </label>
+        <div className="mt-4 space-y-3">
+          <div className="relative">
+            <Link2 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden="true" />
             <input
-              id="idea-title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={preview.suggestedTitle || 'e.g. Fast Hook Pacing Breakdown'}
-              className="mt-1 h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-600 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+              id="idea-link"
+              type="url"
+              inputMode="url"
+              aria-label="Reference link"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="Paste a YouTube or Instagram link"
+              className={cx(inputStyles, 'h-11 pl-10')}
             />
           </div>
-        </div>
+          {preview.domain ? (
+            <p className="flex items-center gap-1.5 truncate px-1 text-xs text-zinc-500 dark:text-zinc-400">
+              <ExternalLink className="h-3 w-3 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+              <span className="font-semibold text-zinc-700 dark:text-zinc-300">{preview.domain}</span>
+              <span className="truncate">· {preview.suggestedTitle}</span>
+            </p>
+          ) : null}
 
-        {preview.domain ? (
-          <div className="mt-3 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-950">
-            <span className="truncate font-medium text-zinc-800 dark:text-zinc-200">
-              Link preview: {preview.domain} · {preview.suggestedTitle}
-            </span>
-            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
-          </div>
-        ) : null}
+          <input
+            id="idea-title"
+            aria-label="Idea title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={preview.suggestedTitle || 'Title (optional)'}
+            maxLength={300}
+            className={cx(inputStyles, 'h-11')}
+          />
 
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label
-              htmlFor="idea-notes"
-              className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Notes
-            </label>
+          <div className="flex gap-3">
             <textarea
               id="idea-notes"
+              aria-label="Notes"
               rows={3}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="What caught your eye? Camera angle, hook line, pacing..."
-              className="mt-1 w-full rounded-lg border border-zinc-200 bg-white p-3 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-600 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+              placeholder="What caught your eye? Hook, angle, pacing…"
+              className={cx(inputStyles, 'flex-1 py-2.5')}
             />
-          </div>
-
-          <div className="flex flex-col justify-between gap-3">
-            <div>
-              <span className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                Reference Screenshot
-              </span>
-              <label className="mt-1 flex h-[84px] cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 text-xs font-medium text-zinc-600 hover:border-blue-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
-                <ImagePlus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span>
-                  {uploadingShot
-                    ? 'Attaching screenshot...'
-                    : screenshotUrl
-                    ? 'Screenshot attached — click to replace'
-                    : 'Drop or pick a screenshot'}
-                </span>
+            {screenshotUrl ? (
+              <div className="relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+                <MediaImage src={screenshotUrl} alt="Screenshot" />
+                <button
+                  type="button"
+                  onClick={() => setScreenshotUrl('')}
+                  aria-label="Remove screenshot"
+                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
+                >
+                  <X className="h-3 w-3" aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              <label
+                className={cx(
+                  'flex h-[88px] w-[88px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-zinc-300 text-center text-[11px] font-semibold text-zinc-500 transition-colors hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-blue-950/30',
+                  uploadingShot && 'pointer-events-none animate-pulse'
+                )}
+              >
+                <ImagePlus className="h-5 w-5" aria-hidden="true" />
+                {uploadingShot ? 'Adding…' : 'Screenshot'}
                 <input
                   type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => handleScreenshotPick(e.target.files?.[0])}
+                  accept={IMAGE_TYPES.join(',')}
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    handleScreenshotPick(f);
+                  }}
                 />
               </label>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label
-              htmlFor="idea-platform"
-              className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Platform
-            </label>
-            <FormSelect
-              id="idea-platform"
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value as PlatformKey)}
-              className="mt-1 h-10 dark:bg-zinc-950"
-            >
-              {PLATFORM_OPTIONS.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.label}
-                </option>
-              ))}
-            </FormSelect>
+            )}
           </div>
 
-          <div>
-            <label
-              htmlFor="idea-channel"
-              className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Channel
-            </label>
-            <FormSelect
-              id="idea-channel"
-              value={channelName}
-              onChange={(e) => setChannelName(e.target.value)}
-              className="mt-1 h-10 dark:bg-zinc-950"
-            >
-              <option value="">No channel</option>
-              {channels.map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </FormSelect>
-          </div>
-
-          <div>
-            <label
-              htmlFor="idea-tags"
-              className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Tags
-            </label>
-            <input
-              id="idea-tags"
-              type="text"
-              value={tagsRaw}
-              onChange={(e) => setTagsRaw(e.target.value)}
-              placeholder="#hook #lighting"
-              className="mt-1 h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-950 focus:border-blue-600 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="idea-target-date"
-              className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Target Date (optional)
-            </label>
-            <input
-              id="idea-target-date"
-              type="date"
-              value={targetDate}
-              onChange={(e) => setTargetDate(e.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-950 focus:border-blue-600 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
-            />
-          </div>
-        </div>
-
-        {error ? (
-          <p role="alert" className="mt-3 text-xs font-medium text-red-600 dark:text-red-400">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="mt-5 flex justify-end">
           <button
-            type="submit"
-            disabled={saving}
-            className="h-10 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            aria-expanded={showMore}
+            className="flex items-center gap-1 text-[13px] font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
-            {saving ? 'Saving Idea...' : 'Save to Ideas'}
+            <ChevronDown className={cx('h-4 w-4 transition-transform', showMore && 'rotate-180')} aria-hidden="true" />
+            Platform, channel, tags & date
+          </button>
+
+          {showMore ? (
+            <div className="animate-pop-in grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="idea-platform" className={labelStyles}>
+                  Platform
+                </label>
+                <FormSelect id="idea-platform" value={platform} onChange={(e) => setPlatform(e.target.value as PlatformKey)}>
+                  {PLATFORM_OPTIONS.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </FormSelect>
+              </div>
+              <div>
+                <label htmlFor="idea-channel" className={labelStyles}>
+                  Channel
+                </label>
+                <FormSelect id="idea-channel" value={channelName} onChange={(e) => setChannelName(e.target.value)}>
+                  <option value="">None</option>
+                  {channels.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </FormSelect>
+              </div>
+              <div>
+                <label htmlFor="idea-tags" className={labelStyles}>
+                  Tags
+                </label>
+                <input
+                  id="idea-tags"
+                  value={tagsRaw}
+                  onChange={(e) => setTagsRaw(e.target.value)}
+                  placeholder="#hook #lighting"
+                  autoCapitalize="none"
+                  className={cx(inputStyles, 'h-11')}
+                />
+              </div>
+              <div>
+                <label htmlFor="idea-target-date" className={labelStyles}>
+                  Target date
+                </label>
+                <input
+                  id="idea-target-date"
+                  type="date"
+                  value={targetDate}
+                  onChange={(e) => setTargetDate(e.target.value)}
+                  className={cx(inputStyles, 'h-11')}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {error ? (
+            <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          ) : null}
+
+          <button type="submit" disabled={saving || uploadingShot} className={cx(buttonStyles.primary, sizes.lg, 'w-full')}>
+            {saving ? 'Saving…' : 'Save idea'}
           </button>
         </div>
       </form>
 
-      {/* Captured Ideas List */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
-            Saved References ({ideas.length})
-          </h3>
-        </div>
+      {/* Saved ideas */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+          Saved <span className="tabular-nums">({ideas.length})</span>
+        </h2>
 
         {ideas.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/40">
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              No saved ideas or references yet
-            </p>
-            <p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-              Use this inbox for future post ideas. Paste a link, attach a screenshot, or jot a quick note above — then tap <strong>Make it a post</strong> whenever you are ready to move it into your Library.
+          <div className="flex flex-col items-center rounded-2xl border border-dashed border-zinc-300 px-6 py-14 text-center dark:border-zinc-800">
+            <Lightbulb className="h-6 w-6 text-zinc-400" aria-hidden="true" />
+            <p className="mt-3 text-sm font-semibold">No ideas yet</p>
+            <p className="mt-1 max-w-xs text-[13px] text-zinc-500 dark:text-zinc-400">
+              Save anything that inspires you. When you’re ready, turn it into a post with one tap.
             </p>
           </div>
         ) : (
-          <div
-            data-testid="ideas-grid"
-            className="grid grid-cols-1 gap-4 md:grid-cols-2"
-          >
-            {ideas.map((idea) => (
-              <article
-                key={idea.id}
-                className="flex flex-col justify-between overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-              >
-                <div className="flex flex-col sm:flex-row">
+          <div data-testid="ideas-grid" className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            {ideas.map((idea) => {
+              const busy = busyIdeaId === idea.id;
+              return (
+                <article
+                  key={idea.id}
+                  className={cx(cardStyles, 'flex overflow-hidden transition-shadow hover:shadow-md', busy && 'opacity-60')}
+                >
                   {idea.screenshotUrl ? (
-                    <div className="h-44 w-full shrink-0 bg-zinc-100 sm:h-auto sm:w-40 dark:bg-zinc-950">
-                      <MediaImage
-                        src={idea.screenshotUrl}
-                        alt={`${idea.title} reference screenshot`}
-                        fallbackLabel={idea.title}
-                      />
+                    <div className="w-24 shrink-0 bg-zinc-100 sm:w-32 dark:bg-zinc-800">
+                      <MediaImage src={idea.screenshotUrl} alt="" fallbackLabel="" />
                     </div>
                   ) : null}
 
-                  <div className="flex-1 p-4">
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                      <span className="font-medium text-blue-600 dark:text-blue-400">
-                        {getPlatformLabel(idea.platform)}
-                      </span>
-                      {idea.channelName ? (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span>{idea.channelName}</span>
-                        </>
-                      ) : null}
-                      {idea.targetDate ? (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="tabular-nums">Target {idea.targetDate}</span>
-                        </>
-                      ) : null}
-                    </div>
+                  <div className="flex min-w-0 flex-1 flex-col p-3.5 sm:p-4">
+                    <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">{getPlatformLabel(idea.platform)}</span>
+                      {idea.channelName ? <span>· {idea.channelName}</span> : null}
+                      {idea.targetDate ? <span className="tabular-nums">· {idea.targetDate}</span> : null}
+                    </p>
+                    <h3 className="mt-1 line-clamp-2 text-[15px] font-semibold leading-snug">{idea.title}</h3>
 
-                    <h4 className="mt-1.5 text-base font-semibold text-zinc-950 dark:text-zinc-50">
-                      {idea.title}
-                    </h4>
-
-                    {idea.linkUrl ? (
+                    {isWebLink(idea.linkUrl) ? (
                       <a
                         href={idea.linkUrl}
                         target="_blank"
-                        rel="noreferrer"
-                        className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex max-w-full items-center gap-1 self-start text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
                       >
-                        <span>{idea.linkDomain || idea.linkUrl}</span>
-                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        <span className="truncate">{idea.linkDomain || idea.linkUrl}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
                       </a>
                     ) : null}
 
                     {idea.notes ? (
-                      <p className="mt-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-                        {idea.notes}
-                      </p>
+                      <p className="mt-1.5 line-clamp-3 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-400">{idea.notes}</p>
                     ) : null}
-
                     {idea.tags.length > 0 ? (
-                      <p className="mt-2 font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
-                        {formatTagsForCopy(idea.tags)}
-                      </p>
+                      <p className="mt-1.5 truncate font-mono text-[11px] text-zinc-500">{formatTagsForCopy(idea.tags)}</p>
                     ) : null}
+
+                    <div className="mt-auto flex items-center justify-between gap-2 pt-3">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => withBusy(idea, onDeleteIdea)}
+                        aria-label={`Delete idea ${idea.title}`}
+                        className={cx(buttonStyles.ghost, sizes.iconSm, 'rounded-full hover:text-red-600 dark:hover:text-red-400')}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => withBusy(idea, onMakePost)}
+                        className={cx(
+                          idea.convertedItemId ? buttonStyles.secondary : buttonStyles.primary,
+                          'h-9 rounded-full px-3.5 text-xs'
+                        )}
+                      >
+                        {idea.convertedItemId ? 'Open post' : 'Make it a post'}
+                        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
-                  <button
-                    type="button"
-                    onClick={() => onDeleteIdea(idea.id)}
-                    aria-label={`Delete idea ${idea.title}`}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-red-600 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-red-400"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    Delete
-                  </button>
-
-                  {idea.convertedItemId ? (
-                    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                      Converted to post
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onMakePost(idea)}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 whitespace-nowrap shrink-0"
-                    >
-                      <span>Make it a post</span>
-                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </div>

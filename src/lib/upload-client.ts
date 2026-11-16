@@ -1,82 +1,81 @@
 import type { MediaAsset } from './content-logic';
 import { saveLocalBlob } from './local-vault';
+import { CHUNK_SIZE, resolveMimeType, validateUpload } from './upload-limits';
 
-const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB chunks for resumable uploads
+function newUploadId() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `up-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
+/**
+ * Uploads a file in 2 MB chunks. Each chunk carries its byte offset, so retries
+ * never duplicate data, and an out-of-order reply tells us where to resume.
+ */
 export async function uploadAssetResumable(options: {
   file: File;
   authToken: string | null;
   onProgress?: (percent: number) => void;
 }): Promise<MediaAsset> {
   const { file, authToken, onProgress } = options;
-  const uploadId =
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const problem = validateUpload(file.name, file.type, file.size);
+  if (problem) throw new Error(problem);
+  const mimeType = resolveMimeType(file.name, file.type);
+  const uploadId = newUploadId();
 
   if (!authToken) {
-    // Preview / offline mode: persist raw Blob in IndexedDB with progress simulation
+    // Preview mode: keep the blob in IndexedDB.
     onProgress?.(35);
     const url = await saveLocalBlob(uploadId, file);
     onProgress?.(100);
-    return {
-      id: uploadId,
-      name: file.name,
-      url,
-      mimeType: file.type || 'application/octet-stream',
-      size: file.size,
-    };
+    return { id: uploadId, name: file.name, url, mimeType, size: file.size };
   }
 
-  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
-  let completedAsset: MediaAsset | null = null;
+  let offset = 0;
+  let failures = 0;
 
-  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
-    const start = chunkIndex * CHUNK_SIZE;
-    const end = Math.min(file.size, start + CHUNK_SIZE);
-    const slice = file.slice(start, end);
-
-    let attempt = 0;
-    let uploadedChunk = false;
-
-    while (!uploadedChunk && attempt < 3) {
-      attempt += 1;
-      try {
-        const res = await fetch('/api/upload/chunk', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            'x-upload-id': uploadId,
-            'x-chunk-index': String(chunkIndex),
-            'x-total-chunks': String(totalChunks),
-            'x-file-name': encodeURIComponent(file.name),
-            'x-mime-type': file.type || 'application/octet-stream',
-            'x-total-size': String(file.size),
-          },
-          body: slice,
-        });
-
-        if (!res.ok) {
-          throw new Error(`Upload failed (${res.status})`);
-        }
-
-        const data = await res.json();
-        uploadedChunk = true;
-        onProgress?.(Math.round(((chunkIndex + 1) / totalChunks) * 100));
-
-        if (data.completed && data.asset) {
-          completedAsset = data.asset as MediaAsset;
-        }
-      } catch (err) {
-        if (attempt >= 3) throw err;
-        await new Promise((r) => setTimeout(r, 400 * attempt));
-      }
+  while (true) {
+    const end = Math.min(file.size, offset + CHUNK_SIZE);
+    let res: Response;
+    try {
+      res = await fetch('/api/upload/chunk', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'x-upload-id': uploadId,
+          'x-chunk-offset': String(offset),
+          'x-total-size': String(file.size),
+          'x-file-name': encodeURIComponent(file.name),
+          'x-mime-type': mimeType,
+        },
+        body: file.slice(offset, end),
+      });
+    } catch (err) {
+      if (++failures > 4) throw err instanceof Error ? err : new Error('Upload failed.');
+      await new Promise((r) => setTimeout(r, 500 * failures));
+      continue;
     }
-  }
 
-  if (!completedAsset) {
-    throw new Error('Upload did not complete.');
-  }
+    const data = await res.json().catch(() => ({}));
 
-  return completedAsset;
+    if (res.status === 409 && typeof data.received === 'number') {
+      offset = data.received; // server tells us where to continue
+      continue;
+    }
+    if (!res.ok) {
+      if (res.status >= 500 && ++failures <= 4) {
+        await new Promise((r) => setTimeout(r, 500 * failures));
+        continue;
+      }
+      throw new Error(data.error || `Upload failed (${res.status}).`);
+    }
+
+    failures = 0;
+    offset = typeof data.received === 'number' ? data.received : end;
+    onProgress?.(Math.min(100, Math.round((offset / file.size) * 100)));
+
+    if (data.completed && data.asset) return data.asset as MediaAsset;
+    if (offset >= file.size) throw new Error('Upload did not complete.');
+  }
 }
