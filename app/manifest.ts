@@ -3,8 +3,8 @@ import type { MetadataRoute } from 'next';
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
-    name: 'SlateVault — Content Tracker',
-    short_name: 'SlateVault',
+    name: 'Content Vault',
+    short_name: 'Content Vault',
     description:
       'Private creator content vault for YouTube videos, Shorts, Reels, Instagram carousels, captions, tags, and ideas.',
     start_url: '/',

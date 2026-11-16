@@ -7,3 +7,5 @@ coverage/
 !.env.example
 .uploads/
 
+tsconfig.tsbuildinfo
+next-env.d.ts.bak

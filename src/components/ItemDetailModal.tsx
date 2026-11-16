@@ -175,7 +175,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         item.title
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '') || 'slatevault-item';
+          .replace(/^-|-$/g, '') || 'content-vault-item';
 
       const url = URL.createObjectURL(content);
       const a = document.createElement('a');

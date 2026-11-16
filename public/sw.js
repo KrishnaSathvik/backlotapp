@@ -1,4 +1,4 @@
-const CACHE_NAME = 'slatevault-shell-v1';
+const CACHE_NAME = 'contentvault-shell-v1';
 const SHELL_ASSETS = [
   '/',
   '/icon.svg',

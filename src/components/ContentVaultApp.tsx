@@ -39,7 +39,7 @@ import { StudioChatPanel } from './StudioChatPanel';
 
 type ActiveTab = 'library' | 'ideas' | 'tracker' | 'chat';
 
-export const SlateVaultApp: React.FC = () => {
+export const ContentVaultApp: React.FC = () => {
   const [authReady, setAuthReady] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
@@ -490,7 +490,7 @@ export const SlateVaultApp: React.FC = () => {
   if (!authReady && !previewMode) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white dark:bg-zinc-950">
-        <span className="text-sm font-medium text-zinc-500">Loading SlateVault...</span>
+        <span className="text-sm font-medium text-zinc-500">Loading Content Vault...</span>
       </div>
     );
   }
@@ -518,7 +518,7 @@ export const SlateVaultApp: React.FC = () => {
             href="/"
             className="text-lg font-bold tracking-tight text-zinc-950 whitespace-nowrap shrink-0 dark:text-zinc-50"
           >
-            SlateVault
+            Content Vault
           </Link>
 
           {/* Zone 2: Desktop Single-Line Navigation Links */}

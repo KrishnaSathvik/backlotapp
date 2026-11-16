@@ -24,27 +24,27 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'SlateVault — Creator Content Tracker',
+  title: 'Content Vault — Creator Content Tracker',
   description:
     'Private creator content vault and PWA for YouTube videos, Shorts, Instagram Reels, carousels, captions, tags, and ideas.',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'SlateVault',
+    title: 'Content Vault',
   },
   icons: {
     icon: '/icon.svg',
     apple: '/apple-touch-icon.png',
   },
   openGraph: {
-    title: 'SlateVault — Creator Content Tracker',
+    title: 'Content Vault — Creator Content Tracker',
     description:
       'Organize YouTube videos, Shorts, Reels, carousels, captions, tags, and ideas in one private PWA.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SlateVault — Creator Content Tracker',
+    title: 'Content Vault — Creator Content Tracker',
     description:
       'Organize YouTube videos, Shorts, Reels, carousels, captions, tags, and ideas in one private PWA.',
   },

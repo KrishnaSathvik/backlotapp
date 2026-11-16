@@ -23,7 +23,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
-              SlateVault
+              Content Vault
             </h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Private Creator Content Tracker

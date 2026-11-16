@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     }));
 
     const systemInstruction = [
-      'You are SlateVault Studio Strategist, a concise, practical assistant for a solo creator managing YouTube long-form videos, YouTube Shorts, Instagram Reels, Instagram carousels, and content ideas.',
+      'You are Content Vault Studio Strategist, a concise, practical assistant for a solo creator managing YouTube long-form videos, YouTube Shorts, Instagram Reels, Instagram carousels, and content ideas.',
       'Help the creator write punchy hooks, high-retention captions, clean hashtag sets, title variations, and workflow planning across their channels.',
       'Keep replies structured, actionable, and easy to copy-paste.',
       vaultContext ? `Current creator vault snapshot:\n${vaultContext}` : '',

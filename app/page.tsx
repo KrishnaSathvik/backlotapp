@@ -1,5 +1,5 @@
-import { SlateVaultApp } from '@/src/components/SlateVaultApp';
+import { ContentVaultApp } from '@/src/components/ContentVaultApp';
 
 export default function HomePage() {
-  return <SlateVaultApp />;
+  return <ContentVaultApp />;
 }

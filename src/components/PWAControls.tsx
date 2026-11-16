@@ -41,7 +41,7 @@ export const PWAInstallButton: React.FC = () => {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Install SlateVault on iOS"
+            aria-label="Install Content Vault on iOS"
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           >
             <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
@@ -61,7 +61,7 @@ export const PWAInstallButton: React.FC = () => {
               <ol className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
                 <li>1. Tap the Share button in Safari&apos;s toolbar.</li>
                 <li>2. Scroll down and tap Add to Home Screen.</li>
-                <li>3. Open SlateVault offline anytime from your home screen.</li>
+                <li>3. Open Content Vault offline anytime from your home screen.</li>
               </ol>
               <button
                 type="button"
