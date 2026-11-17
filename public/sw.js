@@ -1,5 +1,5 @@
 // Bump CACHE_VERSION when changing this file; old caches are deleted on activate.
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `backlot-shell-${CACHE_VERSION}`;
 const SHELL_ASSETS = ['/', '/app', '/favicon.ico', '/brand/backlot-mark-512.png', '/pwa-192x192.png', '/pwa-512x512.png', '/apple-touch-icon.png'];
 const MAX_ENTRIES = 150;

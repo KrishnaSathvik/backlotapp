@@ -2,7 +2,7 @@ import Image from 'next/image';
 import React from 'react';
 import { cx } from '../ui';
 
-/** Brand mark: the Backlot soundstage tile (public/brand/backlot-mark-*.png). */
+/** Brand mark: the Backlot "b" clapper tile (public/brand/backlot-mark-*.png). */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <Image
@@ -11,7 +11,7 @@ export function LogoMark({ className }: { className?: string }) {
       width={64}
       height={64}
       aria-hidden="true"
-      className={cx('h-8 w-8 shrink-0 select-none', className)}
+      className={cx('h-8 w-8 shrink-0 select-none rounded-[24%] dark:ring-1 dark:ring-white/15', className)}
       draggable={false}
     />
   );
