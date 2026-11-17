@@ -12,9 +12,9 @@ import {
   Lightbulb,
   Plus,
   Smartphone,
-  Sparkles,
   Tv,
 } from 'lucide-react';
+import { SlateAvatar } from '../SlateAvatar';
 import { cx } from '../ui';
 import { BrowserFrame, HeroShowcase, PhoneFrame, Shot, type ScreenName } from './Showcase';
 import { SiteFooter, SiteHeader } from './SiteChrome';
@@ -68,7 +68,7 @@ const FEATURES: Array<{
     eyebrow: 'Post details',
     title: 'Copy the caption, grab the files, post.',
     body: 'Open any post to copy the title, caption or hashtags in one tap, download the cover and video, and keep notes and references together.',
-    points: ['One-tap copy for caption + tags', 'Download single files or everything as .zip', 'Ask Studio AI about any post'],
+    points: ['One-tap copy for caption + tags', 'Download single files or everything as .zip', 'Ask Slate about any post'],
     accent: 'cantaloupe',
   },
 ];
@@ -119,8 +119,8 @@ const PERSONAS = [
   {
     icon: Layers,
     title: 'Multi-channel creators',
-    blurb: 'A main channel, a clips channel, a side project. One vault for all of it.',
-    uses: ['Filter by channel and platform', 'One library across every account', 'Ask Studio AI to plan the week'],
+    blurb: 'A main channel, a clips channel, a side project. One backlot for all of it.',
+    uses: ['Filter by channel and platform', 'One library across every account', 'Ask Slate to plan the week'],
     accent: 'cantaloupe',
   },
 ];
@@ -139,8 +139,8 @@ const FAQ = [
     a: 'It’s built mobile-first. Install it to your home screen on iPhone or Android and it opens like a native app, even when you’re offline.',
   },
   {
-    q: 'What does Studio AI do?',
-    a: 'Studio AI reads the posts and ideas in your vault and helps with hooks, captions, hashtags and planning. It only sees your own content.',
+    q: 'Who is Slate?',
+    a: 'Slate is the AI creative partner built into Backlot. It reads the posts and ideas in your backlot and helps with hooks, captions, hashtags and planning. It only sees your own content.',
   },
   {
     q: 'Who can see my content?',
@@ -184,14 +184,14 @@ export function Landing() {
               className="group inline-flex animate-rise items-center gap-2 rounded-full border border-zinc-200 bg-white/70 py-1 pl-1 pr-3 text-[12.5px] font-medium text-zinc-600 shadow-xs backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300"
             >
               <span className="rounded-full bg-cantaloupe-500 px-2 py-0.5 text-[11px] font-bold text-white">New</span>
-              Studio AI writes hooks from your own vault
+              Meet Slate, your AI creative partner
               <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
             </a>
 
             <h1 className="mx-auto mt-7 max-w-4xl animate-rise text-[44px] font-extrabold leading-[0.98] tracking-[-0.04em] text-balance [animation-delay:80ms] sm:text-7xl lg:text-[80px]">
               Every video, reel & caption.{' '}
               <span className="relative inline-block whitespace-nowrap text-electric-600 dark:text-electric-400">
-                One vault.
+                One backlot.
                 <svg
                   aria-hidden="true"
                   viewBox="0 0 300 20"
@@ -213,7 +213,7 @@ export function Landing() {
             </h1>
 
             <p className="mx-auto mt-7 max-w-xl animate-rise text-base leading-relaxed text-zinc-600 [animation-delay:160ms] sm:text-lg dark:text-zinc-400">
-              Content Vault is the private workspace for creators. Keep covers, cuts, slides, captions and ideas together, and move every
+              Backlot is the private workspace for creators. Keep covers, cuts, slides, captions and ideas together, and move every
               post from idea to posted.
             </p>
 
@@ -282,19 +282,20 @@ export function Landing() {
           </div>
         </section>
 
-        {/* ---------------- Studio AI spotlight (always midnight) ---------------- */}
+        {/* ---------------- Slate spotlight (always midnight) ---------------- */}
         <section id="studio" className="scroll-mt-20 px-4 sm:px-6">
           <div className="grain relative mx-auto max-w-6xl overflow-hidden rounded-[32px] bg-zinc-950 px-6 py-16 text-white ring-1 ring-white/10 sm:px-14 sm:py-20">
             <div aria-hidden="true" className="absolute -right-32 -top-32 h-96 w-96 animate-glow rounded-full bg-cantaloupe-500/30 blur-3xl" />
             <div aria-hidden="true" className="absolute -bottom-40 -left-24 h-96 w-96 animate-glow rounded-full bg-electric-600/40 blur-3xl [animation-delay:-3s]" />
             <div className="relative grid items-center gap-12 lg:grid-cols-2">
               <div data-reveal>
-                <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-cantaloupe-400">
-                  <Sparkles className="h-3.5 w-3.5" /> Studio AI
-                </p>
-                <h2 className="mt-4 text-4xl font-bold leading-[1.02] sm:text-5xl">An assistant that has read your whole vault.</h2>
+                <div className="flex items-center gap-4">
+                  <SlateAvatar size={72} className="animate-float" />
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cantaloupe-400">Meet Slate</p>
+                </div>
+                <h2 className="mt-4 text-4xl font-bold leading-[1.02] sm:text-5xl">Your AI creative partner, who knows your whole backlot.</h2>
                 <p className="mt-5 max-w-md text-[15px] leading-relaxed text-zinc-400">
-                  Ask for hooks, rewrite a caption in your voice, find tags that fit, or plan next week’s posts. Studio AI answers using the
+                  Ask for hooks, rewrite a caption in your voice, find tags that fit, or plan next week’s posts. Slate answers using the
                   posts and ideas you’ve already saved.
                 </p>
                 <ul className="mt-7 grid gap-2.5 text-sm text-zinc-300 sm:grid-cols-2">
@@ -543,9 +544,7 @@ function Bubble({ me = false, children }: { me?: boolean; children: React.ReactN
   return (
     <div className={cx('flex items-end gap-3', me && 'justify-end')}>
       {!me ? (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cantaloupe-400 to-cantaloupe-600">
-          <Sparkles className="h-4 w-4 text-white" aria-hidden="true" />
-        </span>
+        <SlateAvatar size={34} />
       ) : null}
       <p
         className={cx(

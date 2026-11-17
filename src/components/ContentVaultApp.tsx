@@ -31,7 +31,7 @@ import { buttonStyles, cx, FeedbackProvider, sizes, useFeedback } from './ui';
 const PAGE_COPY: Record<ActiveTab, { title: string; subtitle?: string }> = {
   library: { title: 'Library' },
   ideas: { title: 'Ideas', subtitle: 'Save links, screenshots and notes for later.' },
-  chat: { title: 'Studio AI', subtitle: 'Hooks, captions, tags and planning help.' },
+  chat: { title: 'Slate', subtitle: 'Your AI creative partner: hooks, captions, tags and plans.' },
 };
 
 const SESSION_COOKIE = 'cv_session';
@@ -474,7 +474,7 @@ const VaultShell: React.FC = () => {
       <div className="flex min-h-dvh items-center justify-center">
         <div className="flex items-center gap-3 text-sm font-medium text-zinc-500">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-electric-600" />
-          Loading Content Vault…
+          Loading Backlot…
         </div>
       </div>
     );

@@ -32,29 +32,33 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Content Vault — Creator Content Tracker',
+  title: 'Backlot — Every post, one backlot',
   description:
-    'Private creator content vault and PWA for YouTube videos, Shorts, Instagram Reels, carousels, captions, tags, and ideas.',
+    'Private home for every YouTube video, Short, Reel, TikTok and Instagram post: covers, captions, tags, ideas and Slate, your AI creative partner.',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Content Vault',
+    title: 'Backlot',
   },
   icons: {
-    icon: '/icon.svg',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+    ],
     apple: '/apple-touch-icon.png',
   },
   openGraph: {
-    title: 'Content Vault — Creator Content Tracker',
+    title: 'Backlot — Every post, one backlot',
     description:
-      'Organize YouTube videos, Shorts, Reels, carousels, captions, tags, and ideas in one private PWA.',
+      'Private home for every YouTube video, Short, Reel, TikTok and Instagram post: covers, captions, tags, ideas and Slate, your AI creative partner.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Content Vault — Creator Content Tracker',
+    title: 'Backlot — Every post, one backlot',
     description:
-      'Organize YouTube videos, Shorts, Reels, carousels, captions, tags, and ideas in one private PWA.',
+      'Private home for every YouTube video, Short, Reel, TikTok and Instagram post: covers, captions, tags, ideas and Slate, your AI creative partner.',
   },
 };
 

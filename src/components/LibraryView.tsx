@@ -170,7 +170,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-electric-500 to-electric-700 text-white shadow-lg shadow-electric-600/30">
               <Sparkles className="h-6 w-6" aria-hidden="true" />
             </div>
-            <h2 className="relative mt-5 text-xl font-bold tracking-tight">Your vault is empty</h2>
+            <h2 className="relative mt-5 text-xl font-bold tracking-tight">Your backlot is empty</h2>
             <p className="relative mx-auto mt-2 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
               Keep every video, Short, Reel and carousel — with its cover, caption and tags — in one place.
             </p>

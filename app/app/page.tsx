@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { ContentVaultApp } from '@/src/components/ContentVaultApp';
 
 export const metadata: Metadata = {
-  title: 'Content Vault',
+  title: 'Backlot',
 };
 
 export default function AppPage() {

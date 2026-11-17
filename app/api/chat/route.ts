@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   const retryAfter = takeRateLimitSlot(user.uid);
   if (retryAfter !== null) {
     return NextResponse.json(
-      { error: `You've reached the Studio AI limit (${RATE_LIMIT} messages per 10 minutes). Try again in ${Math.ceil(retryAfter / 60)} min.` },
+      { error: `You've reached Slate's limit (${RATE_LIMIT} messages per 10 minutes). Try again in ${Math.ceil(retryAfter / 60)} min.` },
       { status: 429, headers: { 'Retry-After': String(retryAfter) } }
     );
   }
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     const priorHistory = messages.slice(0, -1).map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
 
     const systemInstruction = [
-      'You are Content Vault Studio Strategist, a concise, practical assistant for a solo creator managing YouTube videos, YouTube Shorts, Instagram Reels, TikTok videos, Instagram posts, and content ideas.',
+      'You are Slate, the friendly AI creative partner inside Backlot: a concise, practical assistant for a solo creator managing YouTube videos, YouTube Shorts, Instagram Reels, TikTok videos, Instagram posts, and content ideas.',
       'Help the creator write punchy hooks, high-retention captions, clean hashtag sets, title variations, and workflow planning across their channels.',
       'Keep replies structured, actionable, and easy to copy-paste.',
       vaultContext

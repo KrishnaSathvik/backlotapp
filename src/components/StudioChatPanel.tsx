@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, Copy, Lock, RotateCcw, Sparkles, X } from 'lucide-react';
+import { ArrowUp, Check, Copy, Lock, RotateCcw, X } from 'lucide-react';
 import { getPlatformLabel, type ContentItem, type IdeaItem } from '@/src/lib/content-logic';
+import { SlateAvatar } from './SlateAvatar';
 import { copyToClipboard, cx } from './ui';
 
 export interface ChatTurn {
@@ -138,7 +139,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, ideas, 
         { id: `m-${idCounterRef.current}`, role: 'model', text: data.reply || 'No response text returned.' },
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to reach Studio AI right now.');
+      setError(err instanceof Error ? err.message : 'Slate can’t be reached right now.');
     } finally {
       setSending(false);
     }
@@ -165,7 +166,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, ideas, 
 
   return (
     <section
-      aria-label="Studio AI chat"
+      aria-label="Chat with Slate"
       className="mx-auto flex h-[calc(100dvh-17rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] min-h-[380px] max-w-3xl flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-xs lg:h-[calc(100dvh-12.5rem)] dark:border-zinc-800 dark:bg-zinc-900/60"
     >
       {focusedItem || messages.length ? (
@@ -201,12 +202,10 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, ideas, 
       <div ref={threadRef} data-testid="chat-thread" className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cantaloupe-400 to-cantaloupe-600 text-white shadow-lg shadow-cantaloupe-500/30">
-              <Sparkles className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <h2 className="mt-4 text-lg font-semibold">What are we making today?</h2>
+            <SlateAvatar size={112} chip={false} className="animate-float" />
+            <h2 className="mt-3 text-lg font-semibold">Hi, I’m Slate. What are we making today?</h2>
             <p className="mt-1 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">
-              Hooks, titles, captions, hashtag sets and posting plans — using what’s in your vault.
+              Hooks, titles, captions, hashtag sets and posting plans — using what’s in your backlot.
             </p>
             {authToken ? (
               <div className="mt-6 grid w-full max-w-xl gap-2 sm:grid-cols-3">
@@ -235,9 +234,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, ideas, 
                 </div>
               ) : (
                 <div key={turn.id} className="flex gap-3">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cantaloupe-400 to-cantaloupe-600 text-white">
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                  </div>
+                  <SlateAvatar size={30} className="mt-0.5" />
                   <div className="min-w-0 flex-1">
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">{turn.text}</p>
                     <button
@@ -254,9 +251,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, ideas, 
             )}
             {sending ? (
               <div className="flex gap-3" aria-live="polite">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cantaloupe-400 to-cantaloupe-600 text-white">
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                </div>
+                <SlateAvatar size={30} thinking />
                 <div className="flex items-center gap-1 py-2" aria-label="Thinking">
                   {[0, 150, 300].map((d) => (
                     <span
@@ -305,7 +300,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, ideas, 
                 }
               }}
               placeholder="Ask for hooks, captions, hashtags…"
-              aria-label="Message Studio AI"
+              aria-label="Message Slate"
               maxLength={8000}
               className="max-h-[140px] flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-6 text-zinc-950 placeholder:text-zinc-400 focus:outline-none sm:text-sm dark:text-zinc-50"
             />
@@ -327,7 +322,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, ideas, 
       ) : (
         <div className="m-3 mt-0 flex items-center gap-3 rounded-2xl bg-zinc-100 px-4 py-3 text-sm text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">
           <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Sign in with Google to use Studio AI.
+          Sign in with Google to chat with Slate.
         </div>
       )}
     </section>

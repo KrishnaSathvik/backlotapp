@@ -27,7 +27,7 @@ export function SiteHeader() {
       )}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
-        <Link href="/" aria-label="Content Vault home" className="rounded-lg">
+        <Link href="/" aria-label="Backlot home" className="rounded-lg">
           <Logo />
         </Link>
 
@@ -48,9 +48,9 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-8 pb-[calc(2rem+env(safe-area-inset-bottom))] text-center sm:flex-row sm:px-6 sm:text-left">
         <div className="flex items-center gap-3">
           <Logo />
-          <span className="hidden text-sm text-zinc-400 md:inline">· Your content, one vault.</span>
+          <span className="hidden text-sm text-zinc-400 md:inline">· Every post, one backlot.</span>
         </div>
-        <p className="text-xs text-zinc-500">© {year} Content Vault. Your content stays yours.</p>
+        <p className="text-xs text-zinc-500">© {year} Backlot. Your content stays yours.</p>
       </div>
     </footer>
   );

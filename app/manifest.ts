@@ -3,10 +3,10 @@ import type { MetadataRoute } from 'next';
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
-    name: 'Content Vault',
-    short_name: 'Content Vault',
+    name: 'Backlot',
+    short_name: 'Backlot',
     description:
-      'Private creator content vault for YouTube videos, Shorts, Reels, Instagram carousels, captions, tags, and ideas.',
+      'Private home for every YouTube video, Short, Reel, TikTok and Instagram post: covers, captions, tags, ideas and Slate, your AI creative partner.',
     start_url: '/app',
     scope: '/',
     display: 'standalone',

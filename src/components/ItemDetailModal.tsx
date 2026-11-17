@@ -193,7 +193,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         item.title
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '') || 'content-vault-item';
+          .replace(/^-|-$/g, '') || 'backlot-item';
 
       const url = URL.createObjectURL(content);
       const a = document.createElement('a');
@@ -255,7 +255,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             )}
             <button type="button" onClick={() => onAskAI(item)} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
               <MessageSquare className="h-3.5 w-3.5 text-electric-600 dark:text-electric-400" aria-hidden="true" />
-              Ask AI
+              Ask Slate
             </button>
           </div>
         </div>

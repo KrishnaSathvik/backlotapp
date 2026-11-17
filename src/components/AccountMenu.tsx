@@ -184,7 +184,7 @@ export function AccountMenu({
               className="mx-1 mb-2 flex w-[calc(100%-0.5rem)] items-center justify-center gap-2 rounded-xl bg-electric-600 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-electric-500"
             >
               <LogIn className="h-4 w-4" aria-hidden="true" />
-              Sign in to start your vault
+              Sign in to start your backlot
             </button>
           ) : null}
 
@@ -212,7 +212,7 @@ export function AccountMenu({
           ) : null}
           <Link href="/" role="menuitem" className={item}>
             <Globe className="h-4 w-4 text-zinc-400" aria-hidden="true" />
-            Content Vault website
+            Backlot website
           </Link>
           <button
             type="button"
@@ -240,7 +240,7 @@ export function AccountMenu({
               {[
                 'Tap the Share button in Safari’s toolbar.',
                 'Scroll down and tap “Add to Home Screen”.',
-                'Open Content Vault from your home screen.',
+                'Open Backlot from your home screen.',
               ].map((step, i) => (
                 <li key={step} className="flex gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-electric-50 text-xs font-semibold text-electric-700 dark:bg-electric-950 dark:text-electric-300">

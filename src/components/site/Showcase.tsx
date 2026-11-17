@@ -69,7 +69,7 @@ export function BrowserFrame({ children, className }: { children: React.ReactNod
         <span className="h-2 w-2 rounded-full bg-[#febc2e] sm:h-2.5 sm:w-2.5" />
         <span className="h-2 w-2 rounded-full bg-[#28c840] sm:h-2.5 sm:w-2.5" />
         <span className="mx-auto hidden rounded-md bg-white px-3 py-0.5 font-mono text-[10.5px] text-zinc-400 ring-1 ring-zinc-200 sm:block dark:bg-zinc-950 dark:ring-zinc-800">
-          contentvault.app
+          getbacklot.app
         </span>
         <span className="hidden w-12 sm:block" />
       </div>
@@ -109,7 +109,7 @@ export function PhoneFrame({ children, className }: { children: React.ReactNode;
 }
 
 const TABS: Array<{ key: ScreenName; label: string; icon: React.ElementType; alt: string }> = [
-  { key: 'library', label: 'Library', icon: LayoutGrid, alt: 'Content Vault library with post cards, stages and filters' },
+  { key: 'library', label: 'Library', icon: LayoutGrid, alt: 'Backlot library with post cards, stages and filters' },
   { key: 'ideas', label: 'Ideas', icon: Lightbulb, alt: 'Ideas inbox with saved links and screenshots' },
   { key: 'detail', label: 'Details', icon: FileText, alt: 'Post details with cover, files and one-tap copy' },
 ];

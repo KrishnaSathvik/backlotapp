@@ -1,6 +1,6 @@
-# Content Vault
+# Backlot
 
-A private tracker for YouTube videos, Shorts, Reels and Instagram carousels: covers, video files, slides, captions, tags, ideas and a production board, plus a Gemini-powered "Studio AI" helper.
+A private home for YouTube videos, Shorts, Reels, TikToks and Instagram posts: covers, video files, slides, captions, tags and ideas, plus Slate, a Gemini-powered AI creative partner.
 
 Next.js 15 · React 19 · Tailwind 4 · Firebase Auth (Google) · Postgres (Drizzle) · Gemini.
 
@@ -38,7 +38,7 @@ The installed PWA opens at `/app`.
 | `npm test` | Unit tests (`node --test`) |
 | `npm run db:push` | Apply `src/db/schema.ts` to Postgres (uses the `SQL_ADMIN_*` credentials) |
 
-## Studio AI
+## Slate (AI)
 
 - Signed-in only. The browser sends the conversation (last 30 messages) plus a compact snapshot of the vault: up to 40 recent posts (platform, stage, channel, dates, tags), up to 20 open ideas, and the focused post's caption when opened from "Ask AI".
 - `app/api/chat/route.ts` verifies the user, validates sizes, wraps the snapshot in `<vault>` tags as data (not instructions), and calls Gemini (`GEMINI_MODEL`, default `gemini-4-hydrogen`) with a short system prompt. Busy/rate-limited calls retry twice.

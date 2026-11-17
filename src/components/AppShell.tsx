@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import React from 'react';
-import { Hash, LayoutGrid, Lightbulb, LogIn, MessageSquare, Plus, Sparkles } from 'lucide-react';
+import { Hash, LayoutGrid, Lightbulb, LogIn, MessageSquare, Plus } from 'lucide-react';
 import type { ThemePreference } from '@/src/lib/content-logic';
 import type { ChannelItem, ContentItem, LibraryFilters } from '@/src/lib/content-logic';
 import { AccountMenu, type AccountInfo } from './AccountMenu';
+import { SlateAvatar } from './SlateAvatar';
 import { LogoMark, Logo } from './site/Logo';
 import { cx, STAGE_STYLES } from './ui';
 
@@ -14,7 +15,7 @@ export type ActiveTab = 'library' | 'ideas' | 'chat';
 export const TABS: Array<{ key: ActiveTab; label: string; short: string; icon: React.ElementType }> = [
   { key: 'library', label: 'Library', short: 'Library', icon: LayoutGrid },
   { key: 'ideas', label: 'Ideas', short: 'Ideas', icon: Lightbulb },
-  { key: 'chat', label: 'Studio AI', short: 'AI', icon: MessageSquare },
+  { key: 'chat', label: 'Slate', short: 'Slate', icon: MessageSquare },
 ];
 
 interface ShellProps {
@@ -51,7 +52,7 @@ export function Sidebar({
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[256px] flex-col border-r border-zinc-200/80 bg-zinc-50/80 backdrop-blur-xl lg:flex dark:border-zinc-800/80 dark:bg-zinc-950/80">
       <div className="flex h-16 items-center px-5">
-        <Link href="/" aria-label="Content Vault website" className="rounded-lg">
+        <Link href="/" aria-label="Backlot website" className="rounded-lg">
           <Logo />
         </Link>
       </div>
@@ -87,10 +88,11 @@ export function Sidebar({
               )}
             >
               {on ? <span className="absolute -left-3 top-2 h-5 w-1 rounded-r-full bg-electric-500" aria-hidden="true" /> : null}
-              <Icon
-                className={cx('h-4 w-4', on ? (key === 'chat' ? 'text-cantaloupe-500' : 'text-electric-600 dark:text-electric-400') : 'text-zinc-400')}
-                aria-hidden="true"
-              />
+              {key === 'chat' ? (
+                <SlateAvatar size={18} chip={false} className={on ? '' : 'opacity-70 grayscale'} />
+              ) : (
+                <Icon className={cx('h-4 w-4', on ? 'text-electric-600 dark:text-electric-400' : 'text-zinc-400')} aria-hidden="true" />
+              )}
               {label}
               {count !== null ? (
                 <span
@@ -101,8 +103,6 @@ export function Sidebar({
                 >
                   {count}
                 </span>
-              ) : key === 'chat' ? (
-                <Sparkles className="ml-auto h-3.5 w-3.5 text-cantaloupe-400" aria-hidden="true" />
               ) : null}
             </button>
           );
@@ -149,7 +149,7 @@ export function Sidebar({
               Demo workspace
             </p>
             <p className="mt-1 text-[12px] leading-snug text-zinc-600 dark:text-zinc-400">
-              You’re exploring sample content. Sign in to build your own vault.
+              You’re exploring sample content. Sign in to build your own backlot.
             </p>
             {shell.onSignIn ? (
               <button
@@ -184,9 +184,9 @@ export function MobileTopBar(shell: ShellProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl backdrop-saturate-150 lg:hidden dark:border-zinc-800/70 dark:bg-zinc-950/80">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-4 sm:px-6">
-        <Link href="/" aria-label="Content Vault website" className="flex items-center gap-2.5 rounded-lg">
+        <Link href="/" aria-label="Backlot website" className="flex items-center gap-2.5 rounded-lg">
           <LogoMark />
-          <span className="font-display text-[16px] font-bold tracking-tight">Content Vault</span>
+          <span className="font-display text-[16px] font-bold tracking-tight">Backlot</span>
         </Link>
         {shell.account.isPreview ? (
           <span data-preview-badge className="rounded-full bg-cantaloupe-100 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-cantaloupe-700 dark:bg-cantaloupe-950 dark:text-cantaloupe-300">
@@ -222,7 +222,11 @@ export function MobileTabBar({ activeTab, onTab, onNewPost, readOnly }: Pick<She
           on ? 'text-zinc-950 dark:text-white' : 'text-zinc-400 dark:text-zinc-500'
         )}
       >
-        <Icon className={cx('h-[21px] w-[21px] transition-transform', on && 'scale-110 text-electric-600 dark:text-electric-400')} aria-hidden="true" />
+        {t.key === 'chat' ? (
+          <SlateAvatar size={24} chip={false} className={cx('transition-transform', on ? 'scale-110' : 'opacity-70 grayscale')} />
+        ) : (
+          <Icon className={cx('h-[21px] w-[21px] transition-transform', on && 'scale-110 text-electric-600 dark:text-electric-400')} aria-hidden="true" />
+        )}
         {t.short}
         {on ? <span className="absolute bottom-1 h-1 w-1 rounded-full bg-electric-500" aria-hidden="true" /> : null}
       </button>

@@ -17,7 +17,7 @@ const POINTS = [
   { icon: Copy, title: 'One-tap copy', text: 'Captions and hashtags, ready to paste.' },
   { icon: Columns3, title: 'Idea → Posted', text: 'Every post’s stage at a glance.' },
   { icon: Lightbulb, title: 'Ideas inbox', text: 'Links, screenshots and notes for later.' },
-  { icon: Sparkles, title: 'Studio AI', text: 'Hooks and captions from your own vault.' },
+  { icon: Sparkles, title: 'Slate, your AI', text: 'Hooks and captions from your own posts.' },
 ];
 
 export const AuthGate: React.FC<AuthGateProps> = ({ onGoogleSignIn, onPreview, isSigningIn, errorMessage }) => {
@@ -33,7 +33,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onGoogleSignIn, onPreview, i
             <div className="rounded-[28px] border border-zinc-200 bg-white/90 p-7 shadow-[0_30px_80px_-40px_rgba(10,20,60,0.35)] backdrop-blur sm:p-9 dark:border-zinc-800 dark:bg-zinc-900/80">
               <LogoMark className="h-11 w-11" />
               <h1 className="mt-6 text-[34px] font-extrabold leading-[1.02] sm:text-[40px]">
-                Welcome to your <span className="text-electric-600 dark:text-electric-400">vault.</span>
+                Welcome to your <span className="text-electric-600 dark:text-electric-400">backlot.</span>
               </h1>
               <p className="mt-3 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">
                 Sign in to keep every video, reel, carousel and caption in one private place.
@@ -94,7 +94,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onGoogleSignIn, onPreview, i
 
               <p className="mt-6 flex items-center justify-center gap-1.5 text-xs text-zinc-500">
                 <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-                Your vault is private to your Google account.
+                Your backlot is private to your Google account.
               </p>
             </div>
           </div>
@@ -108,7 +108,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onGoogleSignIn, onPreview, i
             <div aria-hidden="true" className="absolute -bottom-28 -left-16 h-80 w-80 animate-glow rounded-full bg-cantaloupe-500/30 blur-3xl [animation-delay:-3s]" />
 
             <div className="relative">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cantaloupe-400">Inside the vault</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cantaloupe-400">Inside your backlot</p>
               <h2 className="mt-3 text-4xl font-bold leading-[1.04]">Everything a post needs, in one card.</h2>
 
               {/* Mock post card */}
