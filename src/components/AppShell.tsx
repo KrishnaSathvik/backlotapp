@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import React from 'react';
-import { Hash, LayoutGrid, Lightbulb, LogIn, MessageSquare, Plus } from 'lucide-react';
+import { ArrowLeft, Hash, Layers, LayoutGrid, Lightbulb, LogIn, MessageSquare, Plus } from 'lucide-react';
 import type { ThemePreference } from '@/src/lib/content-logic';
-import type { ChannelItem, ContentItem, LibraryFilters } from '@/src/lib/content-logic';
+import { channelPlatform, type ChannelItem, type ContentItem, type LibraryFilters } from '@/src/lib/content-logic';
 import { AccountMenu, type AccountInfo } from './AccountMenu';
+import { PlatformIcon } from './PlatformIcon';
 import { SlateAvatar } from './SlateAvatar';
+import { ThemeToggle } from './ThemeToggle';
 import { LogoMark, Logo } from './site/Logo';
 import { cx, STAGE_STYLES } from './ui';
 
@@ -111,27 +113,40 @@ export function Sidebar({
 
       {channels.length ? (
         <div className="mt-7 min-h-0 flex-1 overflow-y-auto px-3 no-scrollbar">
-          <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">Channels</p>
+          <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">Your channels</p>
           <div className="space-y-0.5">
-            {channels.map((ch) => {
+            {[{ id: -1, name: 'all', handle: '' }, ...channels].map((ch) => {
+              const isAll = ch.id === -1;
               const on = activeTab === 'library' && activeChannel === ch.name;
-              const n = items.filter((i) => i.channelName === ch.name).length;
+              const n = isAll ? items.length : items.filter((i) => i.channelName === ch.name).length;
+              const platform = isAll ? null : channelPlatform(items, ch.name);
               return (
                 <button
                   key={ch.id}
                   type="button"
-                  onClick={() => onChannel(on ? 'all' : ch.name)}
+                  onClick={() => onChannel(isAll || on ? 'all' : ch.name)}
                   aria-pressed={on}
+                  title={isAll ? 'Show posts from every channel' : `Show only ${ch.name} posts`}
                   className={cx(
-                    'flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors',
+                    'flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left transition-colors',
+                    isAll ? 'h-8' : 'h-11',
                     on
-                      ? 'bg-electric-50 font-semibold text-electric-700 dark:bg-electric-950/50 dark:text-electric-300'
+                      ? 'bg-electric-50 text-electric-700 dark:bg-electric-950/50 dark:text-electric-300'
                       : 'text-zinc-600 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:bg-zinc-900/70'
                   )}
                 >
-                  <Hash className={cx('h-3.5 w-3.5', on ? 'text-electric-500' : 'text-zinc-400')} aria-hidden="true" />
-                  <span className="truncate">{ch.name}</span>
-                  <span className="ml-auto text-[11px] tabular-nums text-zinc-400">{n}</span>
+                  {isAll ? (
+                    <Layers className={cx('h-4 w-4 shrink-0', on ? 'text-electric-500' : 'text-zinc-400')} aria-hidden="true" />
+                  ) : platform ? (
+                    <PlatformIcon platform={platform} size={18} />
+                  ) : (
+                    <Hash className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className={cx('block truncate text-[13px]', on && 'font-semibold')}>{isAll ? 'All channels' : ch.name}</span>
+                    {!isAll && ch.handle ? <span className="block truncate text-[11px] text-zinc-400">{ch.handle}</span> : null}
+                  </span>
+                  <span className="text-[11px] tabular-nums text-zinc-400">{n}</span>
                 </button>
               );
             })}
@@ -163,14 +178,22 @@ export function Sidebar({
             ) : null}
           </div>
         ) : null}
-        <AccountMenu
-          variant="row"
-          account={account}
-          theme={shell.theme}
-          onThemeChange={shell.onThemeChange}
-          onSignOut={shell.onSignOut}
-          onSignIn={shell.onSignIn}
-        />
+        {account.isPreview ? (
+          // Demo: no account menu, just a way back and the theme switch.
+          <div className="flex items-center gap-2">
+            <DemoBackLink className="flex-1" />
+            <ThemeToggle compact />
+          </div>
+        ) : (
+          <AccountMenu
+            variant="row"
+            account={account}
+            theme={shell.theme}
+            onThemeChange={shell.onThemeChange}
+            onSignOut={shell.onSignOut}
+            onSignIn={shell.onSignIn}
+          />
+        )}
       </div>
     </aside>
   );
@@ -179,6 +202,22 @@ export function Sidebar({
 /* ------------------------------------------------------------------ */
 /* Mobile / tablet                                                     */
 /* ------------------------------------------------------------------ */
+
+/** Leaves the demo and returns to the website. */
+function DemoBackLink({ className }: { className?: string }) {
+  return (
+    <Link
+      href="/"
+      className={cx(
+        'flex h-9 items-center justify-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3.5 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-700 dark:hover:text-white',
+        className
+      )}
+    >
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+      Back
+    </Link>
+  );
+}
 
 export function MobileTopBar(shell: ShellProps) {
   return (
@@ -193,14 +232,21 @@ export function MobileTopBar(shell: ShellProps) {
             Demo
           </span>
         ) : null}
-        <div className="ml-auto">
-          <AccountMenu
-            account={shell.account}
-            theme={shell.theme}
-            onThemeChange={shell.onThemeChange}
-            onSignOut={shell.onSignOut}
-            onSignIn={shell.onSignIn}
-          />
+        <div className="ml-auto flex items-center gap-2">
+          {shell.account.isPreview ? (
+            <>
+              <ThemeToggle compact />
+              <DemoBackLink />
+            </>
+          ) : (
+            <AccountMenu
+              account={shell.account}
+              theme={shell.theme}
+              onThemeChange={shell.onThemeChange}
+              onSignOut={shell.onSignOut}
+              onSignIn={shell.onSignIn}
+            />
+          )}
         </div>
       </div>
     </header>

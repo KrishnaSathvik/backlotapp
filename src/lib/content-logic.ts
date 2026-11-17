@@ -92,6 +92,16 @@ export function getPlatformLabel(platform: PlatformKey): string {
   return PLATFORM_OPTIONS.find((p) => p.key === platform)?.label ?? 'Other';
 }
 
+/** The platform a channel posts to most, for showing its logo. Null if it has no posts yet. */
+export function channelPlatform(items: ContentItem[], channelName: string): PlatformKey | null {
+  const counts = new Map<PlatformKey, number>();
+  for (const i of items) if (i.channelName === channelName) counts.set(i.platform, (counts.get(i.platform) ?? 0) + 1);
+  let best: PlatformKey | null = null;
+  let max = 0;
+  for (const [k, v] of counts) if (v > max) [best, max] = [k, v];
+  return best;
+}
+
 export function getPlatformShortLabel(platform: PlatformKey): string {
   return PLATFORM_OPTIONS.find((p) => p.key === platform)?.shortLabel ?? 'Other';
 }

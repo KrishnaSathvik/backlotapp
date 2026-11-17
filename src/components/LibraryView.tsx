@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  channelPlatform,
   formatTagsForCopy,
   getPlatformShortLabel,
   PLATFORM_OPTIONS,
@@ -40,6 +41,8 @@ import {
 interface LibraryViewProps {
   items: ContentItem[];
   totalItemsCount: number;
+  /** Every post (unfiltered), for channel counts and logos. */
+  allItems: ContentItem[];
   channels: ChannelItem[];
   filters: LibraryFilters;
   onFiltersChange: (next: LibraryFilters) => void;
@@ -56,6 +59,7 @@ const EMPTY_FILTERS: LibraryFilters = { platform: 'all', channel: 'all', status:
 export const LibraryView: React.FC<LibraryViewProps> = ({
   items,
   totalItemsCount,
+  allItems,
   channels,
   filters,
   onFiltersChange,
@@ -263,7 +267,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               type="button"
               onClick={() => onFiltersChange({ ...filters, channel: 'all' })}
               aria-label={`Remove channel filter ${filters.channel}`}
-              className="flex h-10 items-center gap-1.5 rounded-xl bg-electric-50 px-3 text-[13px] font-semibold text-electric-700 ring-1 ring-electric-200 transition-colors hover:bg-electric-100 dark:bg-electric-950/50 dark:text-electric-300 dark:ring-electric-900"
+              className="hidden h-10 items-center gap-1.5 rounded-xl bg-electric-50 px-3 lg:flex text-[13px] font-semibold text-electric-700 ring-1 ring-electric-200 transition-colors hover:bg-electric-100 dark:bg-electric-950/50 dark:text-electric-300 dark:ring-electric-900"
             >
               # {filters.channel}
               <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -283,18 +287,54 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </button>
           )}
           {hasActiveFilters ? (
-            <button
-              type="button"
-              onClick={() => onFiltersChange(EMPTY_FILTERS)}
-              className={cx(buttonStyles.ghost, 'h-10 shrink-0 px-3 text-[13px] text-electric-600 dark:text-electric-400')}
-            >
-              Clear filters
-            </button>
+            // Desktop only: on phones the "All" chips clear each filter.
+            <div className="hidden lg:block">
+              <button
+                type="button"
+                onClick={() => onFiltersChange(EMPTY_FILTERS)}
+                className={cx(buttonStyles.ghost, 'h-10 shrink-0 px-3 text-[13px] text-electric-600 dark:text-electric-400')}
+              >
+                Clear filters
+              </button>
+            </div>
           ) : null}
         </div>
       </div>
 
       {channelForm}
+
+      {/* Channel chips (phones and tablets; desktop uses the sidebar) */}
+      {channels.length ? (
+        <div
+          role="tablist"
+          aria-label="Filter by channel"
+          className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0 lg:hidden"
+        >
+          {[{ id: -1, name: 'all', handle: '' }, ...channels].map((ch) => {
+            const isAll = ch.id === -1;
+            const active = filters.channel === ch.name;
+            const platform = isAll ? null : channelPlatform(allItems, ch.name);
+            return (
+              <button
+                key={ch.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onFiltersChange({ ...filters, channel: ch.name })}
+                className={cx(
+                  'flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition-all',
+                  active
+                    ? 'bg-electric-600 text-white shadow-sm'
+                    : 'border border-zinc-200 bg-white text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300'
+                )}
+              >
+                {platform ? <PlatformIcon platform={platform} size={16} /> : null}
+                {isAll ? 'All channels' : ch.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       {/* Platform chips */}
       <div

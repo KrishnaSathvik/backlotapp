@@ -593,6 +593,7 @@ const VaultShell: React.FC = () => {
           <LibraryView
             items={filteredItems}
             totalItemsCount={items.length}
+            allItems={items}
             channels={channels}
             filters={filters}
             onFiltersChange={setFilters}
