@@ -282,27 +282,27 @@ export function Landing() {
           </div>
         </section>
 
-        {/* ---------------- Slate spotlight (always midnight) ---------------- */}
+        {/* ---------------- Slate spotlight (light in light mode, midnight in dark) ---------------- */}
         <section id="studio" className="scroll-mt-20 px-4 sm:px-6">
-          <div className="grain relative mx-auto max-w-6xl overflow-hidden rounded-[32px] bg-zinc-950 px-6 py-16 text-white ring-1 ring-white/10 sm:px-14 sm:py-20">
-            <div aria-hidden="true" className="absolute -right-32 -top-32 h-96 w-96 animate-glow rounded-full bg-cantaloupe-500/30 blur-3xl" />
-            <div aria-hidden="true" className="absolute -bottom-40 -left-24 h-96 w-96 animate-glow rounded-full bg-electric-600/40 blur-3xl [animation-delay:-3s]" />
+          <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[32px] px-6 py-16 sm:px-14 sm:py-20 grain bg-gradient-to-br from-white via-zinc-50 to-electric-50/60 text-zinc-950 ring-1 ring-zinc-200/80 shadow-[0_30px_80px_-40px_rgba(10,20,60,0.25)] dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-950 dark:text-white dark:ring-white/10 dark:shadow-none">
+            <div aria-hidden="true" className="absolute -right-32 -top-32 h-96 w-96 animate-glow rounded-full bg-cantaloupe-300/30 blur-3xl dark:bg-cantaloupe-500/30" />
+            <div aria-hidden="true" className="absolute -bottom-40 -left-24 h-96 w-96 animate-glow rounded-full bg-electric-300/30 blur-3xl [animation-delay:-3s] dark:bg-electric-600/40" />
             <div className="relative grid items-center gap-12 lg:grid-cols-2">
               <div data-reveal>
                 <div className="flex items-center gap-4">
                   <SlateAvatar size={72} className="animate-float" />
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cantaloupe-400">Meet Slate</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cantaloupe-600 dark:text-cantaloupe-400">Meet Slate</p>
                 </div>
                 <h2 className="mt-4 text-4xl font-bold leading-[1.02] sm:text-5xl">Your AI creative partner, who knows your whole backlot.</h2>
-                <p className="mt-5 max-w-md text-[15px] leading-relaxed text-zinc-400">
+                <p className="mt-5 max-w-md text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">
                   Ask for hooks, rewrite a caption in your voice, find tags that fit, or plan next week’s posts. Slate answers using the
                   posts and ideas you’ve already saved.
                 </p>
-                <ul className="mt-7 grid gap-2.5 text-sm text-zinc-300 sm:grid-cols-2">
+                <ul className="mt-7 grid gap-2.5 text-sm text-zinc-700 sm:grid-cols-2 dark:text-zinc-300">
                   {['Hooks for any post', 'Caption rewrites', 'Hashtag sets', 'Weekly posting plan'].map((t) => (
                     <li key={t} className="flex items-center gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10">
-                        <Check className="h-3 w-3 text-cantaloupe-400" />
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cantaloupe-100 dark:bg-white/10">
+                        <Check className="h-3 w-3 text-cantaloupe-600 dark:text-cantaloupe-400" />
                       </span>
                       {t}
                     </li>
@@ -313,7 +313,7 @@ export function Landing() {
               <div data-reveal style={{ '--reveal-delay': '120ms' } as React.CSSProperties} className="space-y-3">
                 <Bubble me>Give me 3 hooks for the desk setup video.</Bubble>
                 <Bubble>
-                  <span className="font-semibold text-white">Here are three, based on your caption:</span>
+                  <span className="font-semibold text-zinc-950 dark:text-white">Here are three, based on your caption:</span>
                   <br />
                   1. “I rebuilt my desk for one reason.”
                   <br />
@@ -324,7 +324,7 @@ export function Landing() {
                 <Bubble me>Turn #2 into a Reels caption with tags.</Bubble>
                 <div className="flex items-center gap-1.5 pl-11">
                   {[0, 1, 2].map((i) => (
-                    <span key={i} className="h-2 w-2 animate-pulse rounded-full bg-zinc-500" style={{ animationDelay: `${i * 160}ms` }} />
+                    <span key={i} className="h-2 w-2 animate-pulse rounded-full bg-zinc-400 dark:bg-zinc-500" style={{ animationDelay: `${i * 160}ms` }} />
                   ))}
                 </div>
               </div>
@@ -549,7 +549,7 @@ function Bubble({ me = false, children }: { me?: boolean; children: React.ReactN
       <p
         className={cx(
           'max-w-[85%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed',
-          me ? 'rounded-br-md bg-electric-600 text-white' : 'rounded-bl-md bg-white/[0.07] text-zinc-300 ring-1 ring-white/10'
+          me ? 'rounded-br-md bg-electric-600 text-white' : 'rounded-bl-md bg-white text-zinc-700 shadow-sm ring-1 ring-zinc-200 dark:bg-white/[0.07] dark:text-zinc-300 dark:shadow-none dark:ring-white/10'
         )}
       >
         {children}

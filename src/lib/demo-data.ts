@@ -34,8 +34,8 @@ export const DEMO_ITEMS: ContentItem[] = [
     "sourceIdeaId": null,
     "title": "Tokyo After Dark — Night Walk Cinematic",
     "platform": "youtube_long",
-    "channelId": 3,
-    "channelName": "Field Notes",
+    "channelId": 1,
+    "channelName": "Main Studio",
     "status": "editing",
     "caption": "45 minutes of neon, rain and 35mm through Shibuya after midnight. Shot handheld on a gimbal with no lights.",
     "tags": [
@@ -97,8 +97,8 @@ export const DEMO_ITEMS: ContentItem[] = [
     "sourceIdeaId": null,
     "title": "Golden Ridge Sunrise — 4 AM Hike",
     "platform": "instagram_reel",
-    "channelId": 3,
-    "channelName": "Field Notes",
+    "channelId": 2,
+    "channelName": "Design Feed",
     "status": "posted",
     "caption": "Alarm at 3:40. Worth it. 🌄 Full gear list in the comments.",
     "tags": [
@@ -160,8 +160,8 @@ export const DEMO_ITEMS: ContentItem[] = [
     "sourceIdeaId": null,
     "title": "15-Min Home Mobility Routine",
     "platform": "tiktok",
-    "channelId": 2,
-    "channelName": "Design Feed",
+    "channelId": 3,
+    "channelName": "Field Notes",
     "status": "scripting",
     "caption": "POV: you fixed your desk posture in 15 minutes 🧘 6 moves, no equipment. Save it for tomorrow.",
     "tags": [
@@ -255,8 +255,8 @@ export const DEMO_ITEMS: ContentItem[] = [
   {
     "title": "One-Handed Gimbal Rig for Vertical Reels",
     "platform": "instagram_reel",
-    "channelId": 1,
-    "channelName": "Main Studio",
+    "channelId": 2,
+    "channelName": "Design Feed",
     "status": "editing",
     "caption": "Why a compact cage + top mic beats heavy mirrorless rigs when shooting fast street reels. Full parts list pinned below.",
     "tags": [
@@ -343,7 +343,7 @@ export const DEMO_ITEMS: ContentItem[] = [
   },
   {
     "title": "Blue Hour Coastal Drive — Amalfi Cut",
-    "platform": "youtube_shorts",
+    "platform": "tiktok",
     "channelId": 3,
     "channelName": "Field Notes",
     "status": "scripting",
@@ -422,7 +422,7 @@ export const DEMO_IDEAS: IdeaItem[] = [
     "screenshotUrl": "/demo/neon-alley.jpg",
     "notes": "Low angle puddle reflections, 1/50 shutter, ND filter.",
     "platform": "youtube_long",
-    "channelName": "Field Notes",
+    "channelName": "Main Studio",
     "tags": [
       "broll",
       "neon"

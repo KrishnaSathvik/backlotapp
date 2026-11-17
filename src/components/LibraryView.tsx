@@ -109,11 +109,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
   };
 
-  const hasActiveFilters =
-    filters.platform !== 'all' ||
-    filters.channel !== 'all' ||
-    filters.status !== 'all' ||
-    filters.search.trim() !== '';
+  // The channel is the page you're on, not a filter: clearing keeps it.
+  const hasActiveFilters = filters.platform !== 'all' || filters.status !== 'all' || filters.search.trim() !== '';
+  // Platforms that have posts in the current scope (a channel page, or the whole library).
+  const scopePosts = filters.channel === 'all' ? allItems : allItems.filter((i) => i.channelName.toLowerCase() === filters.channel.toLowerCase());
+  const platformOptions = PLATFORM_OPTIONS.filter((p) => scopePosts.some((i) => i.platform === p.key));
+  const clearFilters = () => onFiltersChange({ ...EMPTY_FILTERS, channel: filters.channel });
 
   const channelForm = showChannelForm ? (
     <form
@@ -262,17 +263,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-          {filters.channel !== 'all' ? (
-            <button
-              type="button"
-              onClick={() => onFiltersChange({ ...filters, channel: 'all' })}
-              aria-label={`Remove channel filter ${filters.channel}`}
-              className="hidden h-10 items-center gap-1.5 rounded-xl bg-electric-50 px-3 lg:flex text-[13px] font-semibold text-electric-700 ring-1 ring-electric-200 transition-colors hover:bg-electric-100 dark:bg-electric-950/50 dark:text-electric-300 dark:ring-electric-900"
-            >
-              # {filters.channel}
-              <X className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          ) : null}
           {readOnly ? null : (
           <button
             type="button"
@@ -291,7 +281,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <div className="hidden lg:block">
               <button
                 type="button"
-                onClick={() => onFiltersChange(EMPTY_FILTERS)}
+                onClick={clearFilters}
                 className={cx(buttonStyles.ghost, 'h-10 shrink-0 px-3 text-[13px] text-electric-600 dark:text-electric-400')}
               >
                 Clear filters
@@ -312,7 +302,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         >
           {[{ id: -1, name: 'all', handle: '' }, ...channels].map((ch) => {
             const isAll = ch.id === -1;
-            const active = filters.channel === ch.name;
+            const active = filters.channel.toLowerCase() === ch.name.toLowerCase();
             const platform = isAll ? null : channelPlatform(allItems, ch.name);
             return (
               <button
@@ -320,7 +310,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => onFiltersChange({ ...filters, channel: ch.name })}
+                onClick={() => onFiltersChange({ ...filters, channel: ch.name, platform: 'all' })}
                 className={cx(
                   'flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition-all',
                   active
@@ -329,20 +319,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 )}
               >
                 {platform ? <PlatformIcon platform={platform} size={16} /> : null}
-                {isAll ? 'All channels' : ch.name}
+                {isAll ? 'All' : ch.name}
               </button>
             );
           })}
         </div>
       ) : null}
 
-      {/* Platform chips */}
+      {/* Platform chips: only platforms this view actually has; hidden when there is just one */}
+      {platformOptions.length > 1 ? (
       <div
         role="tablist"
         aria-label="Filter by platform"
         className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0"
       >
-        {[{ key: 'all' as const, label: 'All' }, ...PLATFORM_OPTIONS].map((p) => {
+        {[{ key: 'all' as const, label: 'All' }, ...platformOptions].map((p) => {
           const active = filters.platform === p.key;
           return (
             <button
@@ -365,6 +356,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           );
         })}
       </div>
+      ) : null}
 
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-800">
@@ -375,7 +367,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </p>
           <button
             type="button"
-            onClick={() => onFiltersChange(EMPTY_FILTERS)}
+            onClick={clearFilters}
             className={cx(buttonStyles.secondary, sizes.md, 'mt-5')}
           >
             Clear filters

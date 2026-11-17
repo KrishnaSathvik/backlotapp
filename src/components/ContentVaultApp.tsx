@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onIdTokenChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
 import {
   convertIdeaToPostDraft,
+  channelPlatform,
   filterContentItems,
   type ChannelItem,
   type ContentItem,
@@ -18,6 +19,7 @@ import { savePreviewWorkspace } from '@/src/lib/local-vault';
 import { DEMO_CHANNELS, DEMO_IDEAS, DEMO_ITEMS } from '@/src/lib/demo-data';
 import { useTheme } from '@/src/hooks/useTheme';
 import { MobileTabBar, MobileTopBar, Sidebar, StatsStrip, type ActiveTab } from './AppShell';
+import { PlatformIcon } from './PlatformIcon';
 import { AuthGate } from './AuthGate';
 import { IdeasView } from './IdeasView';
 import { ItemDetailModal } from './ItemDetailModal';
@@ -504,6 +506,20 @@ const VaultShell: React.FC = () => {
     ideas.length === 1 ? 'idea' : 'ideas'
   } · ${channels.length} ${channels.length === 1 ? 'channel' : 'channels'}`;
 
+  // A channel page: header, stats and posts for one channel only.
+  const activeChannel =
+    activeTab === 'library' && filters.channel !== 'all'
+      ? channels.find((c) => c.name.toLowerCase() === filters.channel.toLowerCase()) ?? null
+      : null;
+  const scopedItems = activeChannel ? items.filter((i) => i.channelName === activeChannel.name) : items;
+  const channelIdeas = activeChannel ? ideas.filter((i) => i.channelName === activeChannel.name).length : 0;
+  const channelLogo = activeChannel ? channelPlatform(items, activeChannel.name) : null;
+  const goTab = (tab: ActiveTab) => {
+    // "Library" always means everything; leaving a channel clears its filter.
+    if (tab === 'library') setFilters((f) => ({ ...f, channel: 'all' }));
+    setActiveTab(tab);
+  };
+
   const account = {
     email: firebaseUser?.email ?? null,
     name: firebaseUser?.displayName ?? null,
@@ -512,7 +528,7 @@ const VaultShell: React.FC = () => {
   };
   const shellProps = {
     activeTab,
-    onTab: setActiveTab,
+    onTab: goTab,
     onNewPost: () => openEditor(),
     account,
     theme: themePref,
@@ -529,9 +545,9 @@ const VaultShell: React.FC = () => {
         counts={{ library: items.length, ideas: ideas.filter((i) => !i.convertedItemId).length, chat: null }}
         channels={channels}
         items={items}
-        activeChannel={filters.channel}
+        activeChannel={activeChannel?.name ?? 'all'}
         onChannel={(name) => {
-          setFilters((f) => ({ ...f, channel: name }));
+          setFilters((f) => ({ ...f, channel: name, status: 'all', platform: 'all' }));
           setActiveTab('library');
         }}
       />
@@ -544,10 +560,30 @@ const VaultShell: React.FC = () => {
 
       <main className="mx-auto max-w-[1400px] px-4 pt-6 sm:px-6 sm:pt-8 lg:px-10 lg:pt-10">
         <div className={cx('mb-5 sm:mb-7', activeTab === 'chat' && 'mx-auto max-w-3xl')}>
-          <h1 key={activeTab} className="animate-rise text-3xl font-extrabold sm:text-[40px] sm:leading-[1.05]">{page.title}</h1>
-          <p className="mt-1 text-sm text-zinc-500 tabular-nums dark:text-zinc-400">
-            {activeTab === 'library' ? librarySubtitle : page.subtitle}
-          </p>
+          {activeChannel ? (
+            <div key={`ch-${activeChannel.id}`} className="flex animate-rise items-center gap-3 sm:gap-4">
+              {channelLogo ? <PlatformIcon platform={channelLogo} size={44} className="rounded-xl" /> : null}
+              <div className="min-w-0">
+                <h1 className="truncate text-3xl font-extrabold sm:text-[40px] sm:leading-[1.05]">{activeChannel.name}</h1>
+                <p className="mt-1 text-sm text-zinc-500 tabular-nums dark:text-zinc-400">
+                  {[
+                    activeChannel.handle,
+                    `${scopedItems.length} ${scopedItems.length === 1 ? 'post' : 'posts'}`,
+                    `${channelIdeas} ${channelIdeas === 1 ? 'idea' : 'ideas'}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1 key={activeTab} className="animate-rise text-3xl font-extrabold sm:text-[40px] sm:leading-[1.05]">{page.title}</h1>
+              <p className="mt-1 text-sm text-zinc-500 tabular-nums dark:text-zinc-400">
+                {activeTab === 'library' ? librarySubtitle : page.subtitle}
+              </p>
+            </>
+          )}
         </div>
 
         {workspaceError ? (
@@ -585,7 +621,7 @@ const VaultShell: React.FC = () => {
           <>
           {items.length ? (
             <StatsStrip
-              items={items}
+              items={scopedItems}
               active={filters.status}
               onSelect={(status) => setFilters((f) => ({ ...f, status }))}
             />

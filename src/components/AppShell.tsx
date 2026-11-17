@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import React from 'react';
-import { ArrowLeft, Hash, Layers, LayoutGrid, Lightbulb, LogIn, MessageSquare, Plus } from 'lucide-react';
+import { ArrowLeft, Hash, LayoutGrid, Lightbulb, LogIn, MessageSquare, Plus } from 'lucide-react';
 import type { ThemePreference } from '@/src/lib/content-logic';
 import { channelPlatform, type ChannelItem, type ContentItem, type LibraryFilters } from '@/src/lib/content-logic';
 import { AccountMenu, type AccountInfo } from './AccountMenu';
@@ -74,7 +74,7 @@ export function Sidebar({
 
       <nav aria-label="Sections" className={cx('space-y-0.5 px-3', shell.readOnly ? 'mt-2' : 'mt-5')}>
         {TABS.map(({ key, label, icon: Icon }) => {
-          const on = activeTab === key;
+          const on = activeTab === key && !(key === 'library' && activeChannel !== 'all');
           const count = counts[key];
           return (
             <button
@@ -115,36 +115,33 @@ export function Sidebar({
         <div className="mt-7 min-h-0 flex-1 overflow-y-auto px-3 no-scrollbar">
           <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">Your channels</p>
           <div className="space-y-0.5">
-            {[{ id: -1, name: 'all', handle: '' }, ...channels].map((ch) => {
-              const isAll = ch.id === -1;
+            {channels.map((ch) => {
               const on = activeTab === 'library' && activeChannel === ch.name;
-              const n = isAll ? items.length : items.filter((i) => i.channelName === ch.name).length;
-              const platform = isAll ? null : channelPlatform(items, ch.name);
+              const n = items.filter((i) => i.channelName === ch.name).length;
+              const platform = channelPlatform(items, ch.name);
               return (
                 <button
                   key={ch.id}
                   type="button"
-                  onClick={() => onChannel(isAll || on ? 'all' : ch.name)}
+                  onClick={() => onChannel(on ? 'all' : ch.name)}
                   aria-pressed={on}
-                  title={isAll ? 'Show posts from every channel' : `Show only ${ch.name} posts`}
+                  title={`Open ${ch.name}`}
                   className={cx(
                     'flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left transition-colors',
-                    isAll ? 'h-8' : 'h-11',
+                    'h-11',
                     on
                       ? 'bg-electric-50 text-electric-700 dark:bg-electric-950/50 dark:text-electric-300'
                       : 'text-zinc-600 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:bg-zinc-900/70'
                   )}
                 >
-                  {isAll ? (
-                    <Layers className={cx('h-4 w-4 shrink-0', on ? 'text-electric-500' : 'text-zinc-400')} aria-hidden="true" />
-                  ) : platform ? (
+                  {platform ? (
                     <PlatformIcon platform={platform} size={18} />
                   ) : (
                     <Hash className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className={cx('block truncate text-[13px]', on && 'font-semibold')}>{isAll ? 'All channels' : ch.name}</span>
-                    {!isAll && ch.handle ? <span className="block truncate text-[11px] text-zinc-400">{ch.handle}</span> : null}
+                    <span className={cx('block truncate text-[13px]', on && 'font-semibold')}>{ch.name}</span>
+                    {ch.handle ? <span className="block truncate text-[11px] text-zinc-400">{ch.handle}</span> : null}
                   </span>
                   <span className="text-[11px] tabular-nums text-zinc-400">{n}</span>
                 </button>
@@ -180,7 +177,7 @@ export function Sidebar({
         ) : null}
         {account.isPreview ? (
           // Demo: no account menu, just a way back and the theme switch.
-          <div className="flex items-center gap-2">
+          <div data-preview-badge className="flex items-center gap-2">
             <DemoBackLink className="flex-1" />
             <ThemeToggle compact />
           </div>
@@ -234,10 +231,10 @@ export function MobileTopBar(shell: ShellProps) {
         ) : null}
         <div className="ml-auto flex items-center gap-2">
           {shell.account.isPreview ? (
-            <>
+            <span data-preview-badge className="flex items-center gap-2">
               <ThemeToggle compact />
               <DemoBackLink />
-            </>
+            </span>
           ) : (
             <AccountMenu
               account={shell.account}
