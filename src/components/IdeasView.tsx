@@ -15,6 +15,7 @@ import {
 import { uploadAssetResumable } from '@/src/lib/upload-client';
 import { IMAGE_TYPES } from '@/src/lib/upload-limits';
 import { FormSelect } from './CustomSelect';
+import { PlatformIcon } from './PlatformIcon';
 import { MediaImage } from './MediaImage';
 import { buttonStyles, cardStyles, cx, inputStyles, labelStyles, sizes } from './ui';
 
@@ -37,6 +38,8 @@ interface IdeasViewProps {
   }) => Promise<boolean>;
   onMakePost: (idea: IdeaItem) => Promise<void>;
   onDeleteIdea: (idea: IdeaItem) => Promise<void>;
+  /** Demo mode: browse only, no capture/convert/delete. */
+  readOnly?: boolean;
 }
 
 const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
@@ -49,6 +52,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
   onCaptureIdea,
   onMakePost,
   onDeleteIdea,
+  readOnly = false,
 }) => {
   const [title, setTitle] = useState(initialSharedDraft?.title ?? '');
   const [linkUrl, setLinkUrl] = useState(initialSharedDraft?.url ?? '');
@@ -121,8 +125,9 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
   };
 
   return (
-    <section aria-label="Ideas" className="grid gap-6 lg:grid-cols-[minmax(0,400px)_1fr] lg:items-start">
+    <section aria-label="Ideas" className={cx('grid gap-6', !readOnly && 'lg:grid-cols-[minmax(0,400px)_1fr] lg:items-start')}>
       {/* Capture */}
+      {readOnly ? null : (
       <form onSubmit={handleSubmit} className={cx(cardStyles, 'p-4 sm:p-5 lg:sticky lg:top-20')}>
         <h2 className="text-base font-semibold">Capture an idea</h2>
         <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">Paste a link, add a screenshot, or jot a note.</p>
@@ -143,7 +148,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
           </div>
           {preview.domain ? (
             <p className="flex items-center gap-1.5 truncate px-1 text-xs text-zinc-500 dark:text-zinc-400">
-              <ExternalLink className="h-3 w-3 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+              <ExternalLink className="h-3 w-3 shrink-0 text-electric-600 dark:text-electric-400" aria-hidden="true" />
               <span className="font-semibold text-zinc-700 dark:text-zinc-300">{preview.domain}</span>
               <span className="truncate">· {preview.suggestedTitle}</span>
             </p>
@@ -184,7 +189,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
             ) : (
               <label
                 className={cx(
-                  'flex h-[88px] w-[88px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-zinc-300 text-center text-[11px] font-semibold text-zinc-500 transition-colors hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-blue-950/30',
+                  'flex h-[88px] w-[88px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-zinc-300 text-center text-[11px] font-semibold text-zinc-500 transition-colors hover:border-electric-400 hover:bg-electric-50/50 hover:text-electric-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-electric-950/30',
                   uploadingShot && 'pointer-events-none animate-pulse'
                 )}
               >
@@ -280,6 +285,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
           </button>
         </div>
       </form>
+      )}
 
       {/* Saved ideas */}
       <div>
@@ -296,7 +302,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
             </p>
           </div>
         ) : (
-          <div data-testid="ideas-grid" className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <div data-testid="ideas-grid" className={cx('grid grid-cols-1 gap-3 xl:grid-cols-2', readOnly && 'md:grid-cols-2')}>
             {ideas.map((idea) => {
               const busy = busyIdeaId === idea.id;
               return (
@@ -311,19 +317,26 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                   ) : null}
 
                   <div className="flex min-w-0 flex-1 flex-col p-3.5 sm:p-4">
-                    <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                      <span className="font-semibold text-blue-600 dark:text-blue-400">{getPlatformLabel(idea.platform)}</span>
-                      {idea.channelName ? <span>· {idea.channelName}</span> : null}
-                      {idea.targetDate ? <span className="tabular-nums">· {idea.targetDate}</span> : null}
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                      <span className="flex items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-200">
+                        <PlatformIcon platform={idea.platform} size={16} />
+                        {getPlatformLabel(idea.platform)}
+                      </span>
+                      {idea.channelName ? <span className="whitespace-nowrap">{idea.channelName}</span> : null}
+                      {idea.targetDate ? (
+                        <span className="whitespace-nowrap rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] tabular-nums dark:bg-zinc-800">
+                          {idea.targetDate}
+                        </span>
+                      ) : null}
                     </p>
-                    <h3 className="mt-1 line-clamp-2 text-[15px] font-semibold leading-snug">{idea.title}</h3>
+                    <h3 className="mt-1 line-clamp-2 font-display text-[16.5px] font-bold leading-snug tracking-tight">{idea.title}</h3>
 
                     {isWebLink(idea.linkUrl) ? (
                       <a
                         href={idea.linkUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-1 inline-flex max-w-full items-center gap-1 self-start text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                        className="mt-1 inline-flex max-w-full items-center gap-1 self-start text-xs font-medium text-electric-600 hover:underline dark:text-electric-400"
                       >
                         <span className="truncate">{idea.linkDomain || idea.linkUrl}</span>
                         <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -337,6 +350,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                       <p className="mt-1.5 truncate font-mono text-[11px] text-zinc-500">{formatTagsForCopy(idea.tags)}</p>
                     ) : null}
 
+                    {readOnly ? null : (
                     <div className="mt-auto flex items-center justify-between gap-2 pt-3">
                       <button
                         type="button"
@@ -360,6 +374,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                         <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     </div>
+                    )}
                   </div>
                 </article>
               );

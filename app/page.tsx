@@ -1,5 +1,5 @@
-import { ContentVaultApp } from '@/src/components/ContentVaultApp';
+import { Landing } from '@/src/components/site/Landing';
 
 export default function HomePage() {
-  return <ContentVaultApp />;
+  return <Landing />;
 }

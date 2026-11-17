@@ -25,6 +25,7 @@ import {
 } from '@/src/lib/content-logic';
 import { fetchAssetAsBlob, resolveAssetUrl } from '@/src/lib/local-vault';
 import { FormSelect } from './CustomSelect';
+import { PlatformIcon } from './PlatformIcon';
 import { MediaImage } from './MediaImage';
 import {
   buttonStyles,
@@ -46,6 +47,8 @@ interface ItemDetailModalProps {
   onClose: () => void;
   onEdit: (item: ContentItem) => void;
   onDelete: (item: ContentItem) => Promise<void>;
+  /** Demo mode: view and copy only. */
+  readOnly?: boolean;
   onUpdateFields: (
     itemId: number,
     patch: Partial<Pick<ContentItem, 'status' | 'postDate' | 'liveLink' | 'notes'>>
@@ -59,6 +62,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onEdit,
   onDelete,
   onUpdateFields,
+  readOnly = false,
   onAskAI,
 }) => {
   const [slideIndex, setSlideIndex] = useState(0);
@@ -232,7 +236,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                 <StagePill status={item.status} />
-                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                <span className="flex items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-200">
+                  <PlatformIcon platform={item.platform} size={16} />
                   {getPlatformLabel(item.platform)}
                 </span>
                 {item.channelName ? <span>· {item.channelName}</span> : null}
@@ -242,12 +247,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             <SheetCloseButton onClick={onClose} label="Close" />
           </div>
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => onEdit(item)} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
-              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-              Edit
-            </button>
+            {readOnly ? null : (
+              <button type="button" onClick={() => onEdit(item)} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
+                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                Edit
+              </button>
+            )}
             <button type="button" onClick={() => onAskAI(item)} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
-              <MessageSquare className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+              <MessageSquare className="h-3.5 w-3.5 text-electric-600 dark:text-electric-400" aria-hidden="true" />
               Ask AI
             </button>
           </div>
@@ -314,7 +321,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       aria-label={`View slide ${idx + 1}`}
                       className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 ${
                         idx === slideIndex
-                          ? 'border-blue-600'
+                          ? 'border-electric-600'
                           : 'border-zinc-200 dark:border-zinc-800'
                       }`}
                     >
@@ -395,7 +402,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={() => copyText('title', item.title)}
-                  className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                  className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-electric-600 hover:bg-electric-50 dark:text-electric-400 dark:hover:bg-electric-950/40"
                 >
                   {copiedField === 'title' ? (
                     <>
@@ -422,7 +429,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={() => copyText('caption', item.caption)}
-                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-electric-600 hover:bg-electric-50 dark:text-electric-400 dark:hover:bg-electric-950/40"
                   >
                     {copiedField === 'caption' ? (
                       <>
@@ -450,7 +457,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={() => copyText('tags', tagsFormatted)}
-                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-electric-600 hover:bg-electric-50 dark:text-electric-400 dark:hover:bg-electric-950/40"
                   >
                     {copiedField === 'tags' ? (
                       <>
@@ -472,6 +479,35 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             </div>
 
             {/* Status, Post Date, Live Link, Notes */}
+            {readOnly ? (
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+                <div>
+                  <dt className="text-xs font-medium text-zinc-500">Stage</dt>
+                  <dd className="mt-1"><StagePill status={item.status} /></dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-zinc-500">{item.postDate ? 'Posted on' : 'Target date'}</dt>
+                  <dd className="mt-1 font-medium tabular-nums">{item.postDate || item.targetDate || '—'}</dd>
+                </div>
+                {isWebLink(item.liveLink) ? (
+                  <div className="col-span-2">
+                    <dt className="text-xs font-medium text-zinc-500">Live post</dt>
+                    <dd className="mt-1">
+                      <a href={item.liveLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-electric-600 hover:underline dark:text-electric-400">
+                        <span className="truncate">{item.liveLink.replace(/^https?:\/\//, '')}</span>
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      </a>
+                    </dd>
+                  </div>
+                ) : null}
+                {item.notes ? (
+                  <div className="col-span-2">
+                    <dt className="text-xs font-medium text-zinc-500">Production notes</dt>
+                    <dd className="mt-1 leading-relaxed text-zinc-700 dark:text-zinc-300">{item.notes}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : (
             <form
               onSubmit={handleSaveTracking}
               className="space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60"
@@ -541,7 +577,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="Open live link"
-                      className={cx(buttonStyles.secondary, 'h-11 w-11 shrink-0 text-blue-600 dark:text-blue-400')}
+                      className={cx(buttonStyles.secondary, 'h-11 w-11 shrink-0 text-electric-600 dark:text-electric-400')}
                     >
                       <ExternalLink className="h-4 w-4" />
                     </a>
@@ -584,6 +620,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 </button>
               </div>
             </form>
+            )}
 
             {/* Attached References */}
             {item.attachedReferences.length > 0 ? (
@@ -616,7 +653,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                             href={ref.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-electric-600 hover:underline dark:text-electric-400"
                           >
                             Open Reference
                             <ExternalLink className="h-3 w-3" />

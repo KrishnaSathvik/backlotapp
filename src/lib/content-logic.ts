@@ -2,6 +2,7 @@ export type PlatformKey =
   | 'youtube_long'
   | 'youtube_shorts'
   | 'instagram_reel'
+  | 'tiktok'
   | 'instagram_carousel'
   | 'other';
 
@@ -71,10 +72,11 @@ export interface IdeaItem {
 }
 
 export const PLATFORM_OPTIONS: Array<{ key: PlatformKey; label: string; shortLabel: string }> = [
-  { key: 'youtube_long', label: 'YouTube Long', shortLabel: 'YT Long' },
-  { key: 'youtube_shorts', label: 'Shorts', shortLabel: 'Shorts' },
-  { key: 'instagram_reel', label: 'Reels', shortLabel: 'Reels' },
-  { key: 'instagram_carousel', label: 'Instagram Carousel', shortLabel: 'Carousels' },
+  { key: 'youtube_long', label: 'YouTube videos', shortLabel: 'YouTube' },
+  { key: 'youtube_shorts', label: 'YouTube Shorts', shortLabel: 'Shorts' },
+  { key: 'instagram_reel', label: 'Instagram Reels', shortLabel: 'Reels' },
+  { key: 'tiktok', label: 'TikTok', shortLabel: 'TikTok' },
+  { key: 'instagram_carousel', label: 'Instagram posts', shortLabel: 'Instagram' },
   { key: 'other', label: 'Other', shortLabel: 'Other' },
 ];
 
@@ -101,7 +103,8 @@ export function getStatusLabel(status: StatusKey): string {
 export interface LibraryFilters {
   platform: PlatformKey | 'all';
   channel: string;
-  status: StatusKey | 'all';
+  /** A single stage, every stage, or 'in_progress' (scripting + editing). */
+  status: StatusKey | 'all' | 'in_progress';
   search: string;
 }
 
@@ -122,7 +125,9 @@ export function filterContentItems(
     ) {
       return false;
     }
-    if (filters.status !== 'all' && item.status !== filters.status) {
+    if (filters.status === 'in_progress') {
+      if (item.status !== 'scripting' && item.status !== 'editing') return false;
+    } else if (filters.status !== 'all' && item.status !== filters.status) {
       return false;
     }
     if (query) {

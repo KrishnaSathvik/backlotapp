@@ -26,7 +26,7 @@ const buttonBase =
 export const buttonStyles = {
   primary: cx(
     buttonBase,
-    'bg-blue-600 text-white shadow-sm shadow-blue-600/20 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 dark:text-white'
+    'bg-electric-600 text-white shadow-sm shadow-electric-600/20 hover:bg-electric-700 dark:bg-electric-500 dark:hover:bg-electric-400 dark:text-white'
   ),
   secondary: cx(
     buttonBase,
@@ -55,7 +55,7 @@ export const sizes = {
 };
 
 export const inputStyles =
-  'w-full rounded-xl border border-zinc-200 bg-white px-3.5 text-sm text-zinc-950 shadow-xs transition-colors placeholder:text-zinc-400 hover:border-zinc-300 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/15 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:hover:border-zinc-700';
+  'w-full rounded-xl border border-zinc-200 bg-white px-3.5 text-sm text-zinc-950 shadow-xs transition-colors placeholder:text-zinc-400 hover:border-zinc-300 focus:border-electric-500 focus:outline-none focus:ring-4 focus:ring-electric-500/15 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:hover:border-zinc-700';
 
 export const labelStyles = 'mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300';
 
@@ -79,13 +79,13 @@ export const STAGE_STYLES: Record<StatusKey, { dot: string; pill: string; label:
   },
   editing: {
     label: 'Editing',
-    dot: 'bg-amber-500',
-    pill: 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900',
+    dot: 'bg-cantaloupe-500',
+    pill: 'bg-cantaloupe-50 text-cantaloupe-800 ring-cantaloupe-200 dark:bg-cantaloupe-950/40 dark:text-cantaloupe-300 dark:ring-cantaloupe-900',
   },
   ready: {
     label: 'Ready',
-    dot: 'bg-blue-500',
-    pill: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-900',
+    dot: 'bg-electric-500',
+    pill: 'bg-electric-50 text-electric-700 ring-electric-200 dark:bg-electric-950/50 dark:text-electric-300 dark:ring-electric-900',
   },
   posted: {
     label: 'Posted',
@@ -294,7 +294,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
             ) : t.tone === 'error' ? (
               <AlertTriangle className="h-4 w-4 shrink-0 text-red-400 dark:text-red-600" aria-hidden="true" />
             ) : (
-              <Info className="h-4 w-4 shrink-0 text-blue-400 dark:text-blue-600" aria-hidden="true" />
+              <Info className="h-4 w-4 shrink-0 text-electric-400 dark:text-electric-600" aria-hidden="true" />
             )}
             <span>{t.message}</span>
           </div>

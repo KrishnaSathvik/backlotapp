@@ -298,13 +298,13 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
             className={cx(
               'rounded-2xl border-2 border-dashed p-3 transition-colors sm:p-4',
               isDragOver
-                ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/30'
+                ? 'border-electric-500 bg-electric-50/60 dark:bg-electric-950/30'
                 : 'border-zinc-200 dark:border-zinc-800'
             )}
           >
             <legend className="px-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300">Media</legend>
             <p className="mb-3 hidden items-center gap-2 text-xs text-zinc-500 sm:flex dark:text-zinc-400">
-              <UploadCloud className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+              <UploadCloud className="h-4 w-4 text-electric-600 dark:text-electric-400" aria-hidden="true" />
               Drop files here, or choose below. Images up to 30 MB, video up to 10 GB.
             </p>
 
@@ -363,7 +363,7 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
               <label
                 className={cx(
                   fileButton,
-                  'flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 text-center text-xs font-semibold text-zinc-600 transition-colors hover:border-blue-300 hover:bg-blue-50/60 hover:text-blue-700 sm:aspect-[4/3] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-blue-800 dark:hover:bg-blue-950/30',
+                  'flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 text-center text-xs font-semibold text-zinc-600 transition-colors hover:border-electric-300 hover:bg-electric-50/60 hover:text-electric-700 sm:aspect-[4/3] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-electric-800 dark:hover:bg-electric-950/30',
                   uploading && 'pointer-events-none opacity-50'
                 )}
               >
@@ -392,7 +392,7 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                   <div
-                    className="h-full rounded-full bg-blue-600 transition-all"
+                    className="h-full rounded-full bg-electric-600 transition-all"
                     style={{ width: `${uploadPercent}%` }}
                   />
                 </div>
@@ -586,7 +586,7 @@ function MediaTile({
     );
   }
   return (
-    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 text-center text-xs font-semibold text-zinc-600 transition-colors hover:border-blue-300 hover:bg-blue-50/60 hover:text-blue-700 has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50 sm:aspect-[4/3] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-blue-800 dark:hover:bg-blue-950/30">
+    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 text-center text-xs font-semibold text-zinc-600 transition-colors hover:border-electric-300 hover:bg-electric-50/60 hover:text-electric-700 has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50 sm:aspect-[4/3] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-electric-800 dark:hover:bg-electric-950/30">
       <Icon className="h-5 w-5" aria-hidden="true" />
       {label}
       {input}

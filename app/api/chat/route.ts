@@ -7,6 +7,27 @@ const MAX_MESSAGES = 30;
 const MAX_MESSAGE_CHARS = 8000;
 const MAX_CONTEXT_CHARS = 20000;
 
+// Per-user request cap so one account cannot run up the Gemini bill.
+// In-memory: per server instance, resets on restart. Use a shared store if you run several instances.
+const RATE_LIMIT = 30;
+const RATE_WINDOW_MS = 10 * 60 * 1000;
+const recentRequests = new Map<string, number[]>();
+
+function takeRateLimitSlot(uid: string): number | null {
+  const now = Date.now();
+  const hits = (recentRequests.get(uid) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  if (hits.length >= RATE_LIMIT) {
+    recentRequests.set(uid, hits);
+    return Math.ceil((hits[0] + RATE_WINDOW_MS - now) / 1000);
+  }
+  hits.push(now);
+  recentRequests.set(uid, hits);
+  if (recentRequests.size > 5000) {
+    for (const [key, times] of recentRequests) if (!times.some((t) => now - t < RATE_WINDOW_MS)) recentRequests.delete(key);
+  }
+  return null;
+}
+
 function formatReadableError(raw: string): string {
   try {
     const parsed = JSON.parse(raw);
@@ -37,6 +58,14 @@ export async function POST(request: NextRequest) {
   const { user, response } = await requireUser(request);
   if (!user) return response;
 
+  const retryAfter = takeRateLimitSlot(user.uid);
+  if (retryAfter !== null) {
+    return NextResponse.json(
+      { error: `You've reached the Studio AI limit (${RATE_LIMIT} messages per 10 minutes). Try again in ${Math.ceil(retryAfter / 60)} min.` },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+    );
+  }
+
   let messages: { role: 'user' | 'model'; text: string }[];
   let vaultContext: string;
   try {
@@ -57,7 +86,7 @@ export async function POST(request: NextRequest) {
     const priorHistory = messages.slice(0, -1).map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
 
     const systemInstruction = [
-      'You are Content Vault Studio Strategist, a concise, practical assistant for a solo creator managing YouTube long-form videos, YouTube Shorts, Instagram Reels, Instagram carousels, and content ideas.',
+      'You are Content Vault Studio Strategist, a concise, practical assistant for a solo creator managing YouTube videos, YouTube Shorts, Instagram Reels, TikTok videos, Instagram posts, and content ideas.',
       'Help the creator write punchy hooks, high-retention captions, clean hashtag sets, title variations, and workflow planning across their channels.',
       'Keep replies structured, actionable, and easy to copy-paste.',
       vaultContext

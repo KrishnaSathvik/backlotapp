@@ -7,11 +7,11 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'Content Vault',
     description:
       'Private creator content vault for YouTube videos, Shorts, Reels, Instagram carousels, captions, tags, and ideas.',
-    start_url: '/',
+    start_url: '/app',
     scope: '/',
     display: 'standalone',
-    background_color: '#09090B',
-    theme_color: '#2563EB',
+    background_color: '#07080C',
+    theme_color: '#1A4DFF',
     icons: [
       {
         src: '/pwa-192x192.png',
@@ -33,7 +33,7 @@ export default function manifest(): MetadataRoute.Manifest {
       },
     ],
     share_target: {
-      action: '/',
+      action: '/app',
       method: 'GET',
       params: {
         title: 'share_title',

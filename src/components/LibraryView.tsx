@@ -18,14 +18,12 @@ import {
   formatTagsForCopy,
   getPlatformShortLabel,
   PLATFORM_OPTIONS,
-  STATUS_OPTIONS,
   type ChannelItem,
   type ContentItem,
   type LibraryFilters,
   type PlatformKey,
-  type StatusKey,
 } from '@/src/lib/content-logic';
-import { FilterDropdown } from './CustomSelect';
+import { PlatformIcon } from './PlatformIcon';
 import { MediaImage } from './MediaImage';
 import {
   buttonStyles,
@@ -49,8 +47,8 @@ interface LibraryViewProps {
   onCreateNew: () => void;
   onOpenIdeas: () => void;
   onAddChannel: (name: string, handle: string) => Promise<boolean>;
-  /** Only provided in preview mode. */
-  onLoadSample?: () => void;
+  /** Demo mode: browse only. */
+  readOnly?: boolean;
 }
 
 const EMPTY_FILTERS: LibraryFilters = { platform: 'all', channel: 'all', status: 'all', search: '' };
@@ -65,7 +63,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onCreateNew,
   onOpenIdeas,
   onAddChannel,
-  onLoadSample,
+  readOnly = false,
 }) => {
   const { toast } = useFeedback();
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -167,9 +165,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           <div className="relative px-6 pb-8 pt-10 text-center sm:px-10">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-blue-50 to-transparent dark:from-blue-950/30"
+              className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-electric-50 to-transparent dark:from-electric-950/30"
             />
-            <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-600/30">
+            <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-electric-500 to-electric-700 text-white shadow-lg shadow-electric-600/30">
               <Sparkles className="h-6 w-6" aria-hidden="true" />
             </div>
             <h2 className="relative mt-5 text-xl font-bold tracking-tight">Your vault is empty</h2>
@@ -181,12 +179,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add your first post
               </button>
-              {onLoadSample ? (
-                <button type="button" onClick={onLoadSample} className={cx(buttonStyles.secondary, sizes.lg)}>
-                  <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-                  Load sample content
-                </button>
-              ) : null}
             </div>
           </div>
 
@@ -218,13 +210,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 key={title}
                 className="flex flex-col gap-2 border-zinc-100 p-5 sm:border-l sm:first:border-l-0 [&:not(:first-child)]:border-t sm:[&:not(:first-child)]:border-t-0 dark:border-zinc-800"
               >
-                <Icon className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+                <Icon className="h-5 w-5 text-electric-600 dark:text-electric-400" aria-hidden="true" />
                 <h3 className="text-sm font-semibold">{title}</h3>
                 <p className="text-[13px] leading-relaxed text-zinc-500 dark:text-zinc-400">{text}</p>
                 <button
                   type="button"
                   onClick={action}
-                  className="mt-auto self-start text-[13px] font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                  className="mt-auto self-start text-[13px] font-semibold text-electric-600 hover:underline dark:text-electric-400"
                 >
                   {cta} →
                 </button>
@@ -266,37 +258,35 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-          <FilterDropdown
-            label="Channel"
-            ariaLabel="Filter by channel"
-            allLabel="All channels"
-            emptyHint="No channels yet"
-            value={filters.channel}
-            options={channels.map((ch) => ({ value: ch.name, label: ch.name }))}
-            onChange={(val) => onFiltersChange({ ...filters, channel: val })}
-          />
-          <FilterDropdown
-            label="Stage"
-            ariaLabel="Filter by stage"
-            allLabel="All stages"
-            value={filters.status}
-            options={STATUS_OPTIONS.map((st) => ({ value: st.key, label: st.label }))}
-            onChange={(val) => onFiltersChange({ ...filters, status: val as StatusKey | 'all' })}
-          />
+          {filters.channel !== 'all' ? (
+            <button
+              type="button"
+              onClick={() => onFiltersChange({ ...filters, channel: 'all' })}
+              aria-label={`Remove channel filter ${filters.channel}`}
+              className="flex h-10 items-center gap-1.5 rounded-xl bg-electric-50 px-3 text-[13px] font-semibold text-electric-700 ring-1 ring-electric-200 transition-colors hover:bg-electric-100 dark:bg-electric-950/50 dark:text-electric-300 dark:ring-electric-900"
+            >
+              # {filters.channel}
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
+          {readOnly ? null : (
           <button
             type="button"
             onClick={() => setShowChannelForm((v) => !v)}
             aria-expanded={showChannelForm}
-            className={cx(buttonStyles.secondary, 'h-10 shrink-0 px-3.5 text-[13px]')}
+            aria-label="Add channel"
+            title="Add channel"
+            className={cx(buttonStyles.secondary, 'h-10 shrink-0 px-3 text-[13px] min-[400px]:px-3.5')}
           >
-            <FolderPlus className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-            Channel
+            <FolderPlus className="h-4 w-4 text-electric-600 dark:text-electric-400" aria-hidden="true" />
+            <span className="hidden min-[400px]:inline">Channel</span>
           </button>
+          )}
           {hasActiveFilters ? (
             <button
               type="button"
               onClick={() => onFiltersChange(EMPTY_FILTERS)}
-              className={cx(buttonStyles.ghost, 'h-10 shrink-0 px-3 text-[13px] text-blue-600 dark:text-blue-400')}
+              className={cx(buttonStyles.ghost, 'h-10 shrink-0 px-3 text-[13px] text-electric-600 dark:text-electric-400')}
             >
               Clear filters
             </button>
@@ -322,12 +312,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               aria-selected={active}
               onClick={() => onFiltersChange({ ...filters, platform: p.key as PlatformKey | 'all' })}
               className={cx(
-                'h-9 shrink-0 rounded-full px-4 text-[13px] font-semibold transition-all',
+                'flex h-10 shrink-0 items-center gap-2 rounded-full pl-2.5 pr-4 text-[13px] font-semibold transition-all',
+                p.key === 'all' && 'pl-4',
                 active
-                  ? 'bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900'
-                  : 'border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
+                  ? 'bg-zinc-950 text-white shadow-sm dark:bg-white dark:text-zinc-950'
+                  : 'border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-white'
               )}
             >
+              {p.key === 'all' ? null : <PlatformIcon platform={p.key as PlatformKey} size={20} />}
               {p.label}
             </button>
           );
@@ -394,7 +386,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                 <div className="flex flex-1 flex-col p-4">
                   <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    <span className="shrink-0 font-semibold text-blue-600 dark:text-blue-400">
+                    <PlatformIcon platform={item.platform} size={16} />
+                    <span className="shrink-0 font-semibold text-zinc-700 dark:text-zinc-200">
                       {getPlatformShortLabel(item.platform)}
                     </span>
                     {item.channelName ? (
@@ -405,7 +398,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     ) : null}
                   </div>
 
-                  <h3 className="mt-1.5 line-clamp-2 text-[15px] font-semibold leading-snug">
+                  <h3 className="mt-1.5 line-clamp-2 font-display text-[16.5px] font-bold leading-snug tracking-tight">
                     {/* Stretched link: the whole card opens the post. */}
                     <button
                       type="button"

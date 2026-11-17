@@ -8,12 +8,5 @@ export function getGeminiClient(): GoogleGenAI {
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not configured in the server environment.');
   }
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
+  return new GoogleGenAI({ apiKey });
 }

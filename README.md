@@ -15,7 +15,18 @@ npm run dev                  # http://localhost:3000
 
 Open **http://localhost:3000**, not 127.0.0.1. Google sign-in only works on domains authorized in the Firebase console, and `localhost` is authorized by default.
 
-**No database?** On the sign-in screen, choose **Try it without an account**. Preview mode stores everything in the browser (localStorage and IndexedDB). Studio AI and server uploads need a signed-in account.
+**No database?** Choose **Try the demo**. The demo is a read-only sample workspace (`src/lib/demo-data.ts`, photos in `public/demo/`): you can browse, filter, open posts and copy captions, but adding and editing need a signed-in account.
+
+## Pages
+
+| Path | What it is |
+| --- | --- |
+| `/` | Landing page: product, features, who it's for, FAQ |
+| `/app` | The app. Shows the sign-in screen when signed out |
+| `/app?autostart=1` | Opens the read-only demo directly |
+| `/login` | Redirects to `/app` |
+
+The installed PWA opens at `/app`.
 
 ## Scripts
 
@@ -26,6 +37,13 @@ Open **http://localhost:3000**, not 127.0.0.1. Google sign-in only works on doma
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
 | `npm test` | Unit tests (`node --test`) |
 | `npm run db:push` | Apply `src/db/schema.ts` to Postgres (uses the `SQL_ADMIN_*` credentials) |
+
+## Studio AI
+
+- Signed-in only. The browser sends the conversation (last 30 messages) plus a compact snapshot of the vault: up to 40 recent posts (platform, stage, channel, dates, tags), up to 20 open ideas, and the focused post's caption when opened from "Ask AI".
+- `app/api/chat/route.ts` verifies the user, validates sizes, wraps the snapshot in `<vault>` tags as data (not instructions), and calls Gemini (`GEMINI_MODEL`, default `gemini-4-hydrogen`) with a short system prompt. Busy/rate-limited calls retry twice.
+- Limit: 30 messages per user per 10 minutes (in memory, per server instance).
+- Chats are saved in the browser per account and cleared on sign-out.
 
 ## Uploads
 

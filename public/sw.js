@@ -1,7 +1,7 @@
 // Bump CACHE_VERSION when changing this file; old caches are deleted on activate.
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `contentvault-shell-${CACHE_VERSION}`;
-const SHELL_ASSETS = ['/', '/icon.svg', '/pwa-192x192.png', '/pwa-512x512.png', '/apple-touch-icon.png'];
+const SHELL_ASSETS = ['/', '/app', '/icon.svg', '/pwa-192x192.png', '/pwa-512x512.png', '/apple-touch-icon.png'];
 const MAX_ENTRIES = 150;
 
 self.addEventListener('install', (event) => {
@@ -35,6 +35,11 @@ async function put(request, response) {
   await trim(cache);
 }
 
+// The landing page and the app are separate shells; cache each by its path only.
+function shellFor(url) {
+  return url.pathname.startsWith('/app') ? '/app' : '/';
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -49,10 +54,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          event.waitUntil(put('/', response.clone()));
+          event.waitUntil(put(shellFor(url), response.clone()));
           return response;
         })
-        .catch(async () => (await caches.match('/')) || Response.error())
+        .catch(async () => (await caches.match(shellFor(url))) || (await caches.match('/app')) || Response.error())
     );
     return;
   }

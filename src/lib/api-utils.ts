@@ -12,6 +12,7 @@ const PLATFORMS: PlatformKey[] = [
   'youtube_long',
   'youtube_shorts',
   'instagram_reel',
+  'tiktok',
   'instagram_carousel',
   'other',
 ];

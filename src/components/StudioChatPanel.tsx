@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Check, Copy, Lock, RotateCcw, Sparkles, X } from 'lucide-react';
-import { getPlatformLabel, type ContentItem } from '@/src/lib/content-logic';
+import { getPlatformLabel, type ContentItem, type IdeaItem } from '@/src/lib/content-logic';
 import { copyToClipboard, cx } from './ui';
 
 export interface ChatTurn {
@@ -13,6 +13,9 @@ export interface ChatTurn {
 
 interface StudioChatPanelProps {
   items: ContentItem[];
+  ideas: IdeaItem[];
+  /** localStorage key for this account's chat; null disables saving. */
+  historyKey: string | null;
   authToken: string | null;
   focusedItem: ContentItem | null;
   onClearFocus: () => void;
@@ -24,8 +27,25 @@ const STARTER_PROMPTS = [
   { title: 'Posting plan', prompt: 'Suggest a weekly posting order for my posts in progress' },
 ];
 
-export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authToken, focusedItem, onClearFocus }) => {
-  const [messages, setMessages] = useState<ChatTurn[]>([]);
+const MAX_SAVED_TURNS = 60;
+
+function loadHistory(key: string | null): ChatTurn[] {
+  if (!key) return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((t) => t && (t.role === 'user' || t.role === 'model') && typeof t.text === 'string' && typeof t.id === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+
+export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, ideas, historyKey, authToken, focusedItem, onClearFocus }) => {
+  const [messages, setMessages] = useState<ChatTurn[]>(() => loadHistory(historyKey));
   const [input, setInput] = useState(() =>
     focusedItem
       ? `Write a high-retention hook, clean caption, and 8 hashtags for "${focusedItem.title}" (${getPlatformLabel(focusedItem.platform)}).`
@@ -42,6 +62,17 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authTok
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
+  // Keep this account's conversation across refreshes (browser only).
+  useEffect(() => {
+    if (!historyKey) return;
+    try {
+      if (messages.length) window.localStorage.setItem(historyKey, JSON.stringify(messages.slice(-MAX_SAVED_TURNS)));
+      else window.localStorage.removeItem(historyKey);
+    } catch {
+      // Storage full or unavailable
+    }
+  }, [historyKey, messages]);
+
   // Auto-grow the composer up to ~5 lines.
   useEffect(() => {
     const el = inputRef.current;
@@ -50,18 +81,32 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authTok
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
   }, [input]);
 
+  // Compact snapshot of the vault: most recent posts first, then open ideas.
   const buildVaultContext = () => {
-    const lines = items
-      .slice(0, 12)
-      .map((i) => `- ${i.title} [${getPlatformLabel(i.platform)} · ${i.status}${i.channelName ? ` · ${i.channelName}` : ''}]`);
+    const posts = [...items]
+      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+      .slice(0, 40)
+      .map((i) => {
+        const date = i.postDate ? `posted ${i.postDate}` : i.targetDate ? `target ${i.targetDate}` : '';
+        const meta = [getPlatformLabel(i.platform), i.status, i.channelName, date].filter(Boolean).join(' · ');
+        const tags = i.tags.length ? ` #${i.tags.slice(0, 6).join(' #')}` : '';
+        return `- ${clip(i.title, 120)} [${meta}]${tags}`;
+      });
+    const openIdeas = ideas
+      .filter((i) => !i.convertedItemId)
+      .slice(0, 20)
+      .map((i) => `- ${clip(i.title, 120)} [${getPlatformLabel(i.platform)}${i.targetDate ? ` · target ${i.targetDate}` : ''}]${i.notes ? `: ${clip(i.notes, 160)}` : ''}`);
+    const lines = [`Posts (${items.length} total):`, ...posts];
+    if (openIdeas.length) lines.push('', `Saved ideas (${openIdeas.length}):`, ...openIdeas);
     if (focusedItem) {
       lines.unshift(
         `Focused item: "${focusedItem.title}" (${getPlatformLabel(focusedItem.platform)}, channel: ${
           focusedItem.channelName || 'none'
-        }, current caption: "${focusedItem.caption}", tags: ${focusedItem.tags.join(', ')})`
+        }, current caption: "${clip(focusedItem.caption, 1500)}", tags: ${focusedItem.tags.join(', ')})`,
+        ''
       );
     }
-    return lines.join('\n');
+    return clip(lines.join('\n'), 18000);
   };
 
   const sendMessage = async (textOverride?: string, history: ChatTurn[] = messages) => {
@@ -121,18 +166,18 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authTok
   return (
     <section
       aria-label="Studio AI chat"
-      className="mx-auto flex h-[calc(100dvh-17rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] min-h-[380px] max-w-3xl flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-xs md:h-[calc(100dvh-15rem)] dark:border-zinc-800 dark:bg-zinc-900/60"
+      className="mx-auto flex h-[calc(100dvh-17rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] min-h-[380px] max-w-3xl flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-xs lg:h-[calc(100dvh-12.5rem)] dark:border-zinc-800 dark:bg-zinc-900/60"
     >
       {focusedItem || messages.length ? (
         <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
           {focusedItem ? (
-            <span className="flex min-w-0 items-center gap-2 rounded-full bg-blue-50 py-1 pl-3 pr-1 text-xs font-medium text-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+            <span className="flex min-w-0 items-center gap-2 rounded-full bg-electric-50 py-1 pl-3 pr-1 text-xs font-medium text-electric-800 dark:bg-electric-950/50 dark:text-electric-200">
               <span className="truncate">About: {focusedItem.title}</span>
               <button
                 type="button"
                 onClick={onClearFocus}
                 aria-label="Stop focusing on this post"
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full hover:bg-blue-100 dark:hover:bg-blue-900"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full hover:bg-electric-100 dark:hover:bg-electric-900"
               >
                 <X className="h-3 w-3" aria-hidden="true" />
               </button>
@@ -156,7 +201,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authTok
       <div ref={threadRef} data-testid="chat-thread" className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-lg shadow-blue-600/25">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cantaloupe-400 to-cantaloupe-600 text-white shadow-lg shadow-cantaloupe-500/30">
               <Sparkles className="h-5 w-5" aria-hidden="true" />
             </div>
             <h2 className="mt-4 text-lg font-semibold">What are we making today?</h2>
@@ -170,7 +215,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authTok
                     key={p.title}
                     type="button"
                     onClick={() => sendMessage(p.prompt)}
-                    className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
+                    className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-left transition-colors hover:border-electric-300 hover:bg-electric-50/50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:border-electric-800 dark:hover:bg-electric-950/30"
                   >
                     <span className="block text-[13px] font-semibold">{p.title}</span>
                     <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">{p.prompt}</span>
@@ -184,13 +229,13 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authTok
             {messages.map((turn) =>
               turn.role === 'user' ? (
                 <div key={turn.id} className="flex justify-end">
-                  <p className="max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-br-lg bg-blue-600 px-4 py-2.5 text-sm leading-relaxed text-white">
+                  <p className="max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-br-lg bg-electric-600 px-4 py-2.5 text-sm leading-relaxed text-white">
                     {turn.text}
                   </p>
                 </div>
               ) : (
                 <div key={turn.id} className="flex gap-3">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cantaloupe-400 to-cantaloupe-600 text-white">
                     <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -209,7 +254,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authTok
             )}
             {sending ? (
               <div className="flex gap-3" aria-live="polite">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-white">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cantaloupe-400 to-cantaloupe-600 text-white">
                   <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                 </div>
                 <div className="flex items-center gap-1 py-2" aria-label="Thinking">
@@ -247,7 +292,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authTok
           }}
           className="p-3 pt-0"
         >
-          <div className="flex items-end gap-2 rounded-3xl border border-zinc-200 bg-zinc-50 p-1.5 pl-4 transition-colors focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-500/10 dark:border-zinc-800 dark:bg-zinc-950 dark:focus-within:border-blue-700">
+          <div className="flex items-end gap-2 rounded-3xl border border-zinc-200 bg-zinc-50 p-1.5 pl-4 transition-colors focus-within:border-electric-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-electric-500/10 dark:border-zinc-800 dark:bg-zinc-950 dark:focus-within:border-electric-700">
             <textarea
               ref={inputRef}
               rows={1}
@@ -271,7 +316,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({ items, authTok
               className={cx(
                 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors',
                 input.trim() && !sending
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-electric-600 text-white hover:bg-electric-700'
                   : 'bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
               )}
             >
