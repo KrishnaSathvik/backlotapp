@@ -11,6 +11,7 @@ import {
   Lightbulb,
   Plus,
   Search,
+  SlidersHorizontal,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -19,11 +20,15 @@ import {
   formatTagsForCopy,
   getPlatformShortLabel,
   PLATFORM_OPTIONS,
+  SORT_OPTIONS,
+  sortContentItems,
   type ChannelItem,
   type ContentItem,
   type LibraryFilters,
+  type LibrarySort,
   type PlatformKey,
 } from '@/src/lib/content-logic';
+import { FormSelect } from './CustomSelect';
 import { PlatformIcon } from './PlatformIcon';
 import { MediaImage } from './MediaImage';
 import {
@@ -32,7 +37,8 @@ import {
   copyToClipboard,
   cx,
   inputStyles,
-  labelStyles,
+  Sheet,
+  SheetCloseButton,
   sizes,
   StagePill,
   useFeedback,
@@ -49,9 +55,8 @@ interface LibraryViewProps {
   onSelectItem: (item: ContentItem) => void;
   onCreateNew: () => void;
   onOpenIdeas: () => void;
-  onAddChannel: (name: string, handle: string) => Promise<boolean>;
-  /** Demo mode: browse only. */
-  readOnly?: boolean;
+  /** Opens the add-channel dialog (also in the sidebar on desktop). */
+  onAddChannel: () => void;
 }
 
 const EMPTY_FILTERS: LibraryFilters = { platform: 'all', channel: 'all', status: 'all', search: '' };
@@ -67,15 +72,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onCreateNew,
   onOpenIdeas,
   onAddChannel,
-  readOnly = false,
 }) => {
   const { toast } = useFeedback();
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [showChannelForm, setShowChannelForm] = useState(false);
-  const [channelName, setChannelName] = useState('');
-  const [channelHandle, setChannelHandle] = useState('');
-  const [channelError, setChannelError] = useState('');
-  const [savingChannel, setSavingChannel] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState<LibrarySort>('updated');
+  const sortedItems = sortContentItems(items, sort);
 
   const handleQuickCopy = async (e: React.MouseEvent, item: ContentItem) => {
     e.stopPropagation();
@@ -92,80 +94,26 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
   };
 
-  const handleCreateChannel = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!channelName.trim()) {
-      setChannelError('Channel name is required.');
-      return;
-    }
-    setChannelError('');
-    setSavingChannel(true);
-    const ok = await onAddChannel(channelName.trim(), channelHandle.trim());
-    setSavingChannel(false);
-    if (ok) {
-      setChannelName('');
-      setChannelHandle('');
-      setShowChannelForm(false);
-    }
-  };
-
   // The channel is the page you're on, not a filter: clearing keeps it.
   const hasActiveFilters = filters.platform !== 'all' || filters.status !== 'all' || filters.search.trim() !== '';
   // Platforms that have posts in the current scope (a channel page, or the whole library).
   const scopePosts = filters.channel === 'all' ? allItems : allItems.filter((i) => i.channelName.toLowerCase() === filters.channel.toLowerCase());
   const platformOptions = PLATFORM_OPTIONS.filter((p) => scopePosts.some((i) => i.platform === p.key));
   const clearFilters = () => onFiltersChange({ ...EMPTY_FILTERS, channel: filters.channel });
+  // Phones and tablets: channel, platform and sort live in one Filters sheet.
+  const sheetFilterCount = (filters.channel !== 'all' ? 1 : 0) + (filters.platform !== 'all' ? 1 : 0);
 
-  const channelForm = showChannelForm ? (
-    <form
-      onSubmit={handleCreateChannel}
-      className={cx(cardStyles, 'animate-pop-in grid gap-3 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end')}
-    >
-      <div>
-        <label htmlFor="new-channel-name" className={labelStyles}>
-          Channel or brand name
-        </label>
-        <input
-          id="new-channel-name"
-          autoFocus
-          value={channelName}
-          onChange={(e) => setChannelName(e.target.value)}
-          placeholder="e.g. Main Channel"
-          maxLength={120}
-          className={cx(inputStyles, 'h-11')}
-        />
-      </div>
-      <div>
-        <label htmlFor="new-channel-handle" className={labelStyles}>
-          Handle <span className="font-normal text-zinc-400">(optional)</span>
-        </label>
-        <input
-          id="new-channel-handle"
-          value={channelHandle}
-          onChange={(e) => setChannelHandle(e.target.value)}
-          placeholder="@mainchannel"
-          maxLength={120}
-          className={cx(inputStyles, 'h-11')}
-        />
-      </div>
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setShowChannelForm(false)} className={cx(buttonStyles.secondary, 'h-11 px-4 text-sm')}>
-          Cancel
-        </button>
-        <button type="submit" disabled={savingChannel} className={cx(buttonStyles.primary, 'h-11 flex-1 px-4 text-sm sm:flex-none')}>
-          {savingChannel ? 'Saving…' : 'Save channel'}
-        </button>
-      </div>
-      {channelError ? (
-        <p className="text-xs font-medium text-red-600 sm:col-span-3 dark:text-red-400">{channelError}</p>
-      ) : null}
-    </form>
-  ) : null;
+  const chip = (active: boolean) =>
+    cx(
+      'flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition-all',
+      active
+        ? 'bg-zinc-950 text-white shadow-sm dark:bg-white dark:text-zinc-950'
+        : 'border border-zinc-200 bg-white text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300'
+    );
 
   if (totalItemsCount === 0) {
     return (
       <section aria-label="Content library" className="space-y-4">
-        {channelForm}
         <div data-testid="library-empty-state" className={cx(cardStyles, 'overflow-hidden')}>
           <div className="relative px-6 pb-8 pt-10 text-center sm:px-10">
             <div
@@ -193,7 +141,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 icon: FolderPlus,
                 title: 'Add a channel',
                 text: 'Group posts by YouTube channel or Instagram account.',
-                action: () => setShowChannelForm(true),
+                action: onAddChannel,
                 cta: 'Add channel',
               },
               {
@@ -236,8 +184,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   return (
     <section aria-label="Content library" className="space-y-4">
       {/* Search + filters */}
-      <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
-        <div className="relative flex-1 lg:max-w-md">
+      <div className="flex items-center gap-2.5">
+        <div className="relative min-w-0 flex-1 lg:max-w-md">
           <Search
             className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
             aria-hidden="true"
@@ -262,76 +210,51 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-          {readOnly ? null : (
-          <button
-            type="button"
-            onClick={() => setShowChannelForm((v) => !v)}
-            aria-expanded={showChannelForm}
-            aria-label="Add channel"
-            title="Add channel"
-            className={cx(buttonStyles.secondary, 'h-10 shrink-0 px-3 text-[13px] min-[400px]:px-3.5')}
-          >
-            <FolderPlus className="h-4 w-4 text-electric-600 dark:text-electric-400" aria-hidden="true" />
-            <span className="hidden min-[400px]:inline">Channel</span>
-          </button>
-          )}
-          {hasActiveFilters ? (
-            // Desktop only: on phones the "All" chips clear each filter.
-            <div className="hidden lg:block">
-              <button
-                type="button"
-                onClick={clearFilters}
-                className={cx(buttonStyles.ghost, 'h-10 shrink-0 px-3 text-[13px] text-electric-600 dark:text-electric-400')}
-              >
-                Clear filters
-              </button>
-            </div>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen(true)}
+          className={cx(buttonStyles.secondary, 'relative h-11 shrink-0 px-3.5 text-[13px] lg:hidden')}
+        >
+          <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+          Filters
+          {sheetFilterCount ? (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-electric-600 px-1.5 text-[11px] font-bold text-white tabular-nums">
+              {sheetFilterCount}
+            </span>
           ) : null}
+        </button>
+
+        <div className="ml-auto hidden items-center gap-2 lg:flex">
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className={cx(buttonStyles.ghost, 'h-10 shrink-0 px-3 text-[13px] text-electric-600 dark:text-electric-400')}
+            >
+              Clear filters
+            </button>
+          ) : null}
+          <FormSelect
+            value={sort}
+            onChange={(e) => setSort(e.target.value as LibrarySort)}
+            aria-label="Sort posts"
+            className="h-10 pr-9 text-[13px] font-semibold"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </FormSelect>
         </div>
       </div>
 
-      {channelForm}
-
-      {/* Channel chips (phones and tablets; desktop uses the sidebar) */}
-      {channels.length ? (
-        <div
-          role="tablist"
-          aria-label="Filter by channel"
-          className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0 lg:hidden"
-        >
-          {[{ id: -1, name: 'all', handle: '' }, ...channels].map((ch) => {
-            const isAll = ch.id === -1;
-            const active = filters.channel.toLowerCase() === ch.name.toLowerCase();
-            const platform = isAll ? null : channelPlatform(allItems, ch.name);
-            return (
-              <button
-                key={ch.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => onFiltersChange({ ...filters, channel: ch.name, platform: 'all' })}
-                className={cx(
-                  'flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition-all',
-                  active
-                    ? 'bg-electric-600 text-white shadow-sm'
-                    : 'border border-zinc-200 bg-white text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300'
-                )}
-              >
-                {platform ? <PlatformIcon platform={platform} size={16} /> : null}
-                {isAll ? 'All' : ch.name}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-
-      {/* Platform chips: only platforms this view actually has; hidden when there is just one */}
+      {/* Platform chips (desktop): only platforms this view has; hidden when there is just one */}
       {platformOptions.length > 1 ? (
       <div
         role="tablist"
         aria-label="Filter by platform"
-        className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        className="hidden items-center gap-2 lg:flex lg:flex-wrap"
       >
         {[{ key: 'all' as const, label: 'All' }, ...platformOptions].map((p) => {
           const active = filters.platform === p.key;
@@ -358,6 +281,101 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       </div>
       ) : null}
 
+      {filtersOpen ? (
+        <Sheet onClose={() => setFiltersOpen(false)} label="Filters" size="sm">
+          <div className="flex items-center justify-between border-b border-zinc-100 px-5 pb-3 pt-3 sm:pt-5 dark:border-zinc-800">
+            <h2 className="text-lg font-bold tracking-tight">Filters</h2>
+            <SheetCloseButton onClick={() => setFiltersOpen(false)} />
+          </div>
+          <div className="space-y-5 overflow-y-auto px-5 py-4">
+            <fieldset>
+              <legend className="mb-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Channel</legend>
+              <div className="flex flex-wrap gap-2">
+                {[{ id: -1, name: 'all', handle: '' }, ...channels].map((ch) => {
+                  const isAll = ch.id === -1;
+                  const platform = isAll ? null : channelPlatform(allItems, ch.name);
+                  return (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      aria-pressed={filters.channel.toLowerCase() === ch.name.toLowerCase()}
+                      onClick={() => onFiltersChange({ ...filters, channel: ch.name, platform: 'all' })}
+                      className={chip(filters.channel.toLowerCase() === ch.name.toLowerCase())}
+                    >
+                      {platform ? <PlatformIcon platform={platform} size={16} /> : null}
+                      {isAll ? 'All channels' : ch.name}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFiltersOpen(false);
+                    onAddChannel();
+                  }}
+                  className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-dashed border-zinc-300 px-3.5 text-[13px] font-semibold text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  Add channel
+                </button>
+              </div>
+            </fieldset>
+
+            {platformOptions.length > 1 ? (
+              <fieldset>
+                <legend className="mb-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Platform</legend>
+                <div className="flex flex-wrap gap-2">
+                  {[{ key: 'all' as const, label: 'All platforms' }, ...platformOptions].map((p) => (
+                    <button
+                      key={p.key}
+                      type="button"
+                      aria-pressed={filters.platform === p.key}
+                      onClick={() => onFiltersChange({ ...filters, platform: p.key as PlatformKey | 'all' })}
+                      className={chip(filters.platform === p.key)}
+                    >
+                      {p.key === 'all' ? null : <PlatformIcon platform={p.key as PlatformKey} size={16} />}
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
+
+            <fieldset>
+              <legend className="mb-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Sort by</legend>
+              <div className="flex flex-wrap gap-2">
+                {SORT_OPTIONS.map((o) => (
+                  <button
+                    key={o.key}
+                    type="button"
+                    aria-pressed={sort === o.key}
+                    onClick={() => setSort(o.key)}
+                    className={chip(sort === o.key)}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+          <div className="flex gap-2 border-t border-zinc-100 px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => {
+                onFiltersChange({ ...EMPTY_FILTERS, search: filters.search });
+                setSort('updated');
+              }}
+              className={cx(buttonStyles.secondary, sizes.md, 'flex-1')}
+            >
+              Reset
+            </button>
+            <button type="button" onClick={() => setFiltersOpen(false)} className={cx(buttonStyles.primary, sizes.md, 'flex-1')}>
+              Done
+            </button>
+          </div>
+        </Sheet>
+      ) : null}
+
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-800">
           <Search className="h-6 w-6 text-zinc-400" aria-hidden="true" />
@@ -378,7 +396,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           data-testid="library-grid"
           className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4"
         >
-          {items.map((item) => {
+          {sortedItems.map((item) => {
             const thumbUrl = item.coverAsset?.url || item.slides[0]?.url || null;
             const slideCount = item.slides.length;
             const date = item.postDate || item.targetDate;

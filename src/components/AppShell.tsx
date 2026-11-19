@@ -2,21 +2,21 @@
 
 import Link from 'next/link';
 import React from 'react';
-import { ArrowLeft, Hash, LayoutGrid, Lightbulb, LogIn, MessageSquare, Plus } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Hash, LayoutGrid, Lightbulb, LogIn, MessageSquare, Plus } from 'lucide-react';
 import type { ThemePreference } from '@/src/lib/content-logic';
 import { channelPlatform, type ChannelItem, type ContentItem, type LibraryFilters } from '@/src/lib/content-logic';
-import { AccountMenu, type AccountInfo } from './AccountMenu';
+import { AccountMenu, SidebarAccount, type AccountInfo } from './AccountMenu';
 import { PlatformIcon } from './PlatformIcon';
 import { SlateAvatar } from './SlateAvatar';
-import { ThemeToggle } from './ThemeToggle';
 import { LogoMark, Logo } from './site/Logo';
 import { cx, STAGE_STYLES } from './ui';
 
-export type ActiveTab = 'library' | 'ideas' | 'chat';
+export type ActiveTab = 'library' | 'ideas' | 'calendar' | 'chat';
 
 export const TABS: Array<{ key: ActiveTab; label: string; short: string; icon: React.ElementType }> = [
   { key: 'library', label: 'Library', short: 'Library', icon: LayoutGrid },
   { key: 'ideas', label: 'Ideas', short: 'Ideas', icon: Lightbulb },
+  { key: 'calendar', label: 'Calendar', short: 'Calendar', icon: CalendarDays },
   { key: 'chat', label: 'Slate', short: 'Slate', icon: MessageSquare },
 ];
 
@@ -29,7 +29,8 @@ interface ShellProps {
   onThemeChange: (t: ThemePreference) => void;
   onSignOut: () => void;
   onSignIn?: () => void;
-  readOnly?: boolean;
+  /** Signed-in only. */
+  onOpenSettings?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -42,6 +43,7 @@ export function Sidebar({
   items,
   activeChannel,
   onChannel,
+  onAddChannel,
   ...shell
 }: ShellProps & {
   counts: Record<ActiveTab, number | null>;
@@ -49,6 +51,7 @@ export function Sidebar({
   items: ContentItem[];
   activeChannel: string;
   onChannel: (name: string) => void;
+  onAddChannel: () => void;
 }) {
   const { activeTab, onTab, onNewPost, account } = shell;
   return (
@@ -59,7 +62,6 @@ export function Sidebar({
         </Link>
       </div>
 
-      {shell.readOnly ? null : (
       <div className="px-3">
         <button
           type="button"
@@ -70,9 +72,8 @@ export function Sidebar({
           New post
         </button>
       </div>
-      )}
 
-      <nav aria-label="Sections" className={cx('space-y-0.5 px-3', shell.readOnly ? 'mt-2' : 'mt-5')}>
+      <nav aria-label="Sections" className="mt-5 space-y-0.5 px-3">
         {TABS.map(({ key, label, icon: Icon }) => {
           const on = activeTab === key && !(key === 'library' && activeChannel !== 'all');
           const count = counts[key];
@@ -111,9 +112,29 @@ export function Sidebar({
         })}
       </nav>
 
-      {channels.length ? (
-        <div className="mt-7 min-h-0 flex-1 overflow-y-auto px-3 no-scrollbar">
-          <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">Your channels</p>
+      <div className="mt-7 min-h-0 flex-1 overflow-y-auto px-3 no-scrollbar">
+          <div className="flex items-center justify-between pb-1.5 pl-2.5 pr-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">Your channels</p>
+            <button
+              type="button"
+              onClick={onAddChannel}
+              aria-label="Add channel"
+              title="Add channel"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-200/70 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+          {channels.length === 0 ? (
+            <button
+              type="button"
+              onClick={onAddChannel}
+              className="flex h-10 w-full items-center gap-2 rounded-lg border border-dashed border-zinc-300 px-2.5 text-[13px] text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-900 dark:border-zinc-700 dark:hover:text-white"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add your first channel
+            </button>
+          ) : null}
           <div className="space-y-0.5">
             {channels.map((ch) => {
               const on = activeTab === 'library' && activeChannel === ch.name;
@@ -148,10 +169,7 @@ export function Sidebar({
               );
             })}
           </div>
-        </div>
-      ) : (
-        <div className="flex-1" />
-      )}
+      </div>
 
       <div className="space-y-2 p-3">
         {account.isPreview ? (
@@ -161,7 +179,7 @@ export function Sidebar({
               Demo workspace
             </p>
             <p className="mt-1 text-[12px] leading-snug text-zinc-600 dark:text-zinc-400">
-              You’re exploring sample content. Sign in to build your own backlot.
+              Try anything here. Changes reset when you refresh. Sign in to keep your Backlot.
             </p>
             {shell.onSignIn ? (
               <button
@@ -176,20 +194,12 @@ export function Sidebar({
           </div>
         ) : null}
         {account.isPreview ? (
-          // Demo: no account menu, just a way back and the theme switch.
-          <div data-preview-badge className="flex items-center gap-2">
-            <DemoBackLink className="flex-1" />
-            <ThemeToggle compact />
+          // Demo: no account menu, just a way back to the website.
+          <div data-preview-badge>
+            <DemoBackLink className="w-full" />
           </div>
         ) : (
-          <AccountMenu
-            variant="row"
-            account={account}
-            theme={shell.theme}
-            onThemeChange={shell.onThemeChange}
-            onSignOut={shell.onSignOut}
-            onSignIn={shell.onSignIn}
-          />
+          <SidebarAccount account={account} onSignOut={shell.onSignOut} onOpenSettings={shell.onOpenSettings} />
         )}
       </div>
     </aside>
@@ -231,18 +241,11 @@ export function MobileTopBar(shell: ShellProps) {
         ) : null}
         <div className="ml-auto flex items-center gap-2">
           {shell.account.isPreview ? (
-            <span data-preview-badge className="flex items-center gap-2">
-              <ThemeToggle compact />
+            <span data-preview-badge>
               <DemoBackLink />
             </span>
           ) : (
-            <AccountMenu
-              account={shell.account}
-              theme={shell.theme}
-              onThemeChange={shell.onThemeChange}
-              onSignOut={shell.onSignOut}
-              onSignIn={shell.onSignIn}
-            />
+            <AccountMenu account={shell.account} onSignOut={shell.onSignOut} onOpenSettings={shell.onOpenSettings} />
           )}
         </div>
       </div>
@@ -250,7 +253,7 @@ export function MobileTopBar(shell: ShellProps) {
   );
 }
 
-export function MobileTabBar({ activeTab, onTab, onNewPost, readOnly }: Pick<ShellProps, 'activeTab' | 'onTab' | 'onNewPost' | 'readOnly'>) {
+export function MobileTabBar({ activeTab, onTab, onNewPost }: Pick<ShellProps, 'activeTab' | 'onTab' | 'onNewPost'>) {
   const tab = (t: (typeof TABS)[number]) => {
     const on = activeTab === t.key;
     const Icon = t.icon;
@@ -261,17 +264,18 @@ export function MobileTabBar({ activeTab, onTab, onNewPost, readOnly }: Pick<She
         onClick={() => onTab(t.key)}
         aria-current={on ? 'page' : undefined}
         className={cx(
-          'relative flex h-full flex-col items-center justify-center gap-0.5 text-[10.5px] font-semibold transition-colors',
+          'flex h-full flex-col items-center justify-center gap-1.5 text-[11px] font-semibold leading-none transition-colors',
           on ? 'text-zinc-950 dark:text-white' : 'text-zinc-400 dark:text-zinc-500'
         )}
       >
-        {t.key === 'chat' ? (
-          <SlateAvatar size={24} chip={false} className={cx('transition-transform', on ? 'scale-110' : 'opacity-70 grayscale')} />
-        ) : (
-          <Icon className={cx('h-[21px] w-[21px] transition-transform', on && 'scale-110 text-electric-600 dark:text-electric-400')} aria-hidden="true" />
-        )}
+        <span className="flex h-6 w-6 items-center justify-center" aria-hidden="true">
+          {t.key === 'chat' ? (
+            <SlateAvatar size={24} chip={false} className={cx('transition-opacity', !on && 'opacity-60 grayscale')} />
+          ) : (
+            <Icon className={cx('h-[22px] w-[22px]', on && 'text-electric-600 dark:text-electric-400')} />
+          )}
+        </span>
         {t.short}
-        {on ? <span className="absolute bottom-1 h-1 w-1 rounded-full bg-electric-500" aria-hidden="true" /> : null}
       </button>
     );
   };
@@ -280,10 +284,7 @@ export function MobileTabBar({ activeTab, onTab, onNewPost, readOnly }: Pick<She
       aria-label="Sections"
       className="fixed inset-x-3 bottom-[calc(0.6rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-md rounded-[24px] border border-zinc-200/80 bg-white/85 shadow-[0_12px_40px_-12px_rgba(10,20,60,0.25)] backdrop-blur-xl backdrop-saturate-150 lg:hidden dark:border-zinc-800 dark:bg-zinc-900/85 dark:shadow-black/60"
     >
-      {readOnly ? (
-        <div className="grid h-[62px] grid-cols-3 items-center px-2">{TABS.map(tab)}</div>
-      ) : (
-      <div className="grid h-[62px] grid-cols-4 items-center px-1">
+      <div className="grid h-[64px] grid-cols-5 items-stretch px-1">
         {TABS.slice(0, 2).map(tab)}
         <div className="flex items-center justify-center">
           <button
@@ -291,14 +292,13 @@ export function MobileTabBar({ activeTab, onTab, onNewPost, readOnly }: Pick<She
             data-testid="mobile-add-btn"
             onClick={onNewPost}
             aria-label="New post"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-electric-600 text-white shadow-lg shadow-electric-600/40 ring-4 ring-white transition-transform active:scale-90 dark:ring-zinc-900"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-electric-600 text-white shadow-md shadow-electric-600/30 transition-transform active:scale-90"
           >
             <Plus className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
         {TABS.slice(2).map(tab)}
       </div>
-      )}
     </nav>
   );
 }
@@ -315,13 +315,14 @@ export function StatsStrip({ items, active, onSelect }: { items: ContentItem[]; 
   const by = (s: string) => items.filter((i) => i.status === s).length;
   const inProgress = by('scripting') + by('editing');
   const stats: Array<{ key: StageFilter; label: string; value: number; hint: string; dot: string; bar: string; ring: string }> = [
-    { key: 'all', label: 'All posts', value: total, hint: `${by('idea')} planned`, dot: 'bg-zinc-400', bar: 'bg-zinc-400 dark:bg-zinc-500', ring: 'ring-zinc-900 dark:ring-white' },
+    { key: 'all', label: 'All posts', value: total, hint: 'Every stage', dot: 'bg-zinc-900 dark:bg-white', bar: 'bg-zinc-900 dark:bg-zinc-200', ring: 'ring-zinc-900 dark:ring-white' },
+    { key: 'idea', label: 'Planned', value: by('idea'), hint: 'Not started yet', dot: STAGE_STYLES.idea.dot, bar: 'bg-zinc-400 dark:bg-zinc-500', ring: 'ring-zinc-400' },
     { key: 'in_progress', label: 'In progress', value: inProgress, hint: `${by('scripting')} scripting · ${by('editing')} editing`, dot: STAGE_STYLES.editing.dot, bar: 'bg-cantaloupe-500', ring: 'ring-cantaloupe-500' },
     { key: 'ready', label: 'Ready to post', value: by('ready'), hint: 'Waiting to go live', dot: STAGE_STYLES.ready.dot, bar: 'bg-electric-500', ring: 'ring-electric-500' },
     { key: 'posted', label: 'Posted', value: by('posted'), hint: 'Live on your channels', dot: STAGE_STYLES.posted.dot, bar: 'bg-emerald-500', ring: 'ring-emerald-500' },
   ];
   return (
-    <div role="radiogroup" aria-label="Filter by stage" className="mb-6 grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4">
+    <div role="radiogroup" aria-label="Filter by stage" className="-mx-4 mb-4 flex snap-x scroll-px-4 gap-2.5 overflow-x-auto px-4 pb-1 pt-1 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 md:mx-0 md:mb-5 md:grid md:grid-cols-5 md:gap-3 md:overflow-visible md:px-0 md:pt-0 [&::-webkit-scrollbar]:hidden">
       {stats.map((s) => {
         const on = active === s.key || (s.key === 'all' && !stats.some((x) => x.key === active));
         return (
@@ -332,7 +333,8 @@ export function StatsStrip({ items, active, onSelect }: { items: ContentItem[]; 
             aria-checked={on}
             onClick={() => onSelect(on && s.key !== 'all' ? 'all' : s.key)}
             className={cx(
-              'group relative overflow-hidden rounded-2xl border bg-white p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 sm:p-4 dark:bg-zinc-900/60',
+              'group relative overflow-hidden rounded-2xl border bg-white p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 sm:px-4 sm:py-3.5 dark:bg-zinc-900/60',
+              'w-[8.75rem] shrink-0 snap-start md:w-auto',
               on && s.key !== 'all' ? cx('border-transparent ring-2', s.ring) : 'border-zinc-200/80 dark:border-zinc-800 dark:hover:border-zinc-700'
             )}
           >
@@ -340,8 +342,8 @@ export function StatsStrip({ items, active, onSelect }: { items: ContentItem[]; 
               <span className={cx('h-1.5 w-1.5 rounded-full', s.dot)} aria-hidden="true" />
               {s.label}
             </p>
-            <p className="mt-1 font-display text-[24px] font-bold leading-none tracking-tight tabular-nums sm:mt-1.5 sm:text-[30px]">{s.value}</p>
-            <p className="mt-1.5 truncate text-[11.5px] text-zinc-400 sm:mt-2">{s.hint}</p>
+            <p className="mb-1.5 mt-1 font-display text-[24px] font-bold leading-none tracking-tight tabular-nums sm:mt-1.5 sm:text-[26px] xl:mb-0">{s.value}</p>
+            <p className="mt-1.5 hidden truncate text-[11.5px] text-zinc-400 xl:block">{s.hint}</p>
             <div className="absolute inset-x-0 bottom-0 h-1 bg-zinc-100 dark:bg-zinc-800">
               <div className={cx('h-full transition-[width] duration-700', s.bar)} style={{ width: total ? `${Math.max(4, (s.value / total) * 100)}%` : '0%' }} />
             </div>

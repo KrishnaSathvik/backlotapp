@@ -2,10 +2,10 @@
 
 import Image from 'next/image';
 import React, { useEffect, useState } from 'react';
-import { FileText, LayoutGrid, Lightbulb } from 'lucide-react';
+import { CalendarDays, FileText, LayoutGrid, Lightbulb, MessageSquare } from 'lucide-react';
 import { cx } from '../ui';
 
-export type ScreenName = 'library' | 'ideas' | 'detail';
+export type ScreenName = 'library' | 'ideas' | 'calendar' | 'chat' | 'detail';
 
 const SIZE = {
   desktop: { w: 2880, h: 1800 },
@@ -111,25 +111,37 @@ export function PhoneFrame({ children, className }: { children: React.ReactNode;
 const TABS: Array<{ key: ScreenName; label: string; icon: React.ElementType; alt: string }> = [
   { key: 'library', label: 'Library', icon: LayoutGrid, alt: 'Backlot library with post cards, stages and filters' },
   { key: 'ideas', label: 'Ideas', icon: Lightbulb, alt: 'Ideas inbox with saved links and screenshots' },
+  { key: 'calendar', label: 'Calendar', icon: CalendarDays, alt: 'Calendar of planned and posted content by day' },
+  { key: 'chat', label: 'Slate', icon: MessageSquare, alt: 'Slate, the AI partner, writing hooks for a post' },
   { key: 'detail', label: 'Details', icon: FileText, alt: 'Post details with cover, files and one-tap copy' },
 ];
 
 const INTERVAL = 5500;
 
-/** Hero product shot: real screens in a browser and phone frame, rotating through the app's sections. */
+/** Hero product shot: real screens in a browser frame (a phone frame on phones), rotating through the app's sections. */
 export function HeroShowcase() {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Once someone picks a screen, stop rotating (WCAG 2.2.2: moving content can be stopped).
+  const [chosen, setChosen] = useState(false);
 
   useEffect(() => {
-    if (paused) return;
+    if (paused || chosen) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const id = window.setTimeout(() => setActive((a) => (a + 1) % TABS.length), INTERVAL);
     return () => window.clearTimeout(id);
-  }, [active, paused]);
+  }, [active, paused, chosen]);
 
   return (
-    <div className="relative mx-auto w-full max-w-6xl" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+    <div
+      className="relative mx-auto w-full max-w-6xl"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPaused(false);
+      }}
+    >
       {/* Tabs */}
       <div role="tablist" aria-label="Product screens" className="mx-auto mb-6 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-zinc-200 bg-white/80 p-1 backdrop-blur no-scrollbar dark:border-zinc-800 dark:bg-zinc-900/80">
         {TABS.map((t, i) => {
@@ -140,7 +152,10 @@ export function HeroShowcase() {
               type="button"
               role="tab"
               aria-selected={on}
-              onClick={() => setActive(i)}
+              onClick={() => {
+                setActive(i);
+                setChosen(true);
+              }}
               className={cx(
                 'relative flex h-9 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
                 on ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
@@ -148,7 +163,7 @@ export function HeroShowcase() {
             >
               <t.icon className="h-3.5 w-3.5" aria-hidden="true" />
               {t.label}
-              {on && !paused ? (
+              {on && !paused && !chosen ? (
                 <span
                   key={`p-${active}`}
                   aria-hidden="true"
@@ -185,8 +200,8 @@ export function HeroShowcase() {
           ))}
         </BrowserFrame>
 
-        {/* Phone: overlaps the browser on large screens, stands alone on phones */}
-        <PhoneFrame className="relative mx-auto w-[68%] max-w-[300px] sm:hidden lg:absolute lg:-bottom-12 lg:-right-2 lg:block lg:w-[200px] xl:-right-16 xl:w-[240px]">
+        {/* Phones only: the desktop screenshot would be too small to read */}
+        <PhoneFrame className="relative mx-auto w-[68%] max-w-[300px] sm:hidden">
           {TABS.map((t, i) => (
             <div
               key={t.key}

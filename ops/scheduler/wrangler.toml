@@ -1,0 +1,33 @@
+# Cloudflare Worker that triggers Backlot's two scheduled jobs. Not deployed yet.
+# Deploy (after approval):  npx wrangler deploy   (from this directory)
+# Secrets:                  npx wrangler secret put DELETION_WORKER_SECRET
+#                           npx wrangler secret put MAINTENANCE_SECRET
+name = "backlot-scheduler"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = false   # no public URL
+
+[vars]
+BACKLOT_ORIGIN = "https://REPLACE-WITH-PRODUCTION-ORIGIN"
+
+[triggers]
+# Must match JOBS in worker.js. Times are UTC.
+crons = ["*/5 * * * *", "17 4 * * *"]
+
+[observability]
+enabled = true
+
+# Disposable staging scheduler (docs/INFRA_SETUP.md). Deploy with --env staging; delete it after
+# verification (npx wrangler delete --env staging). Its secrets are separate from production's:
+#   npx wrangler secret put DELETION_WORKER_SECRET --env staging
+#   npx wrangler secret put MAINTENANCE_SECRET --env staging
+#   npx wrangler secret put VERCEL_PROTECTION_BYPASS --env staging
+[env.staging]
+name = "backlot-scheduler-staging"
+workers_dev = false
+
+[env.staging.vars]
+BACKLOT_ORIGIN = "https://REPLACE-WITH-STAGING-BRANCH-ORIGIN"
+
+[env.staging.triggers]
+crons = ["*/5 * * * *", "17 4 * * *"]

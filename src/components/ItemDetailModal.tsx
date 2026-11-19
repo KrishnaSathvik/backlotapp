@@ -9,6 +9,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Files,
   MessageSquare,
   Pencil,
   Trash2,
@@ -18,8 +19,12 @@ import {
   formatFileSize,
   formatTagsForCopy,
   getPlatformLabel,
+  parseTagsInput,
+  PLATFORM_OPTIONS,
   STATUS_OPTIONS,
+  type ChannelItem,
   type ContentItem,
+  type PlatformKey,
   type MediaAsset,
   type StatusKey,
 } from '@/src/lib/content-logic';
@@ -28,6 +33,7 @@ import { FormSelect } from './CustomSelect';
 import { PlatformIcon } from './PlatformIcon';
 import { MediaImage } from './MediaImage';
 import {
+  ActionMenu,
   buttonStyles,
   copyToClipboard,
   cx,
@@ -42,27 +48,33 @@ import {
 
 const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
 
+export type ItemFieldsPatch = Partial<
+  Pick<
+    ContentItem,
+    'title' | 'caption' | 'tags' | 'status' | 'platform' | 'channelName' | 'targetDate' | 'postDate' | 'liveLink' | 'notes'
+  >
+>;
+
 interface ItemDetailModalProps {
   item: ContentItem | null;
+  channels: ChannelItem[];
   onClose: () => void;
-  onEdit: (item: ContentItem) => void;
+  /** Opens the full editor, used for changing the post's files. */
+  onEditFiles: (item: ContentItem) => void;
   onDelete: (item: ContentItem) => Promise<void>;
-  /** Demo mode: view and copy only. */
-  readOnly?: boolean;
-  onUpdateFields: (
-    itemId: number,
-    patch: Partial<Pick<ContentItem, 'status' | 'postDate' | 'liveLink' | 'notes'>>
-  ) => Promise<void>;
+  onDuplicate: (item: ContentItem) => Promise<void>;
+  onUpdateFields: (itemId: number, patch: ItemFieldsPatch) => Promise<boolean>;
   onAskAI: (item: ContentItem) => void;
 }
 
 export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   item,
+  channels,
   onClose,
-  onEdit,
+  onEditFiles,
   onDelete,
+  onDuplicate,
   onUpdateFields,
-  readOnly = false,
   onAskAI,
 }) => {
   const [slideIndex, setSlideIndex] = useState(0);
@@ -73,12 +85,24 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     url: string;
   }>({ key: '', url: '' });
 
-  const [status, setStatus] = useState<StatusKey>(item?.status ?? 'idea');
-  const [postDate, setPostDate] = useState(item?.postDate ?? '');
-  const [liveLink, setLiveLink] = useState(item?.liveLink ?? '');
-  const [notes, setNotes] = useState(item?.notes ?? '');
-  const [savingMeta, setSavingMeta] = useState(false);
-  const { toast } = useFeedback();
+  // Everything on the right is edited in place; one Save writes all of it.
+  const draftFrom = (src: ContentItem | null) => ({
+    title: src?.title ?? '',
+    caption: src?.caption ?? '',
+    tags: formatTagsForCopy(src?.tags ?? []),
+    status: (src?.status ?? 'idea') as StatusKey,
+    platform: (src?.platform ?? 'youtube_long') as PlatformKey,
+    channelName: src?.channelName ?? '',
+    targetDate: src?.targetDate ?? '',
+    postDate: src?.postDate ?? '',
+    liveLink: src?.liveLink ?? '',
+    notes: src?.notes ?? '',
+  });
+  const [draft, setDraft] = useState(() => draftFrom(item));
+  const [saving, setSaving] = useState(false);
+  const { toast, confirm } = useFeedback();
+  const set = <K extends keyof typeof draft>(key: K) => (value: (typeof draft)[K]) =>
+    setDraft((d) => ({ ...d, [key]: value }));
 
   const rawVideoUrl = item?.videoAsset?.url ?? '';
   const isIdbVideo = rawVideoUrl.startsWith('idb://');
@@ -210,15 +234,44 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     }
   };
 
-  const handleSaveTracking = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingMeta(true);
+  const saved = draftFrom(item);
+  const changedKeys = (Object.keys(draft) as Array<keyof typeof draft>).filter((k) => draft[k] !== saved[k]);
+  const dirty = changedKeys.length > 0;
+
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!draft.title.trim()) {
+      toast('Give the post a title', 'error');
+      return;
+    }
+    const patch: ItemFieldsPatch = {};
+    for (const k of changedKeys) {
+      if (k === 'tags') patch.tags = parseTagsInput(draft.tags);
+      else if (k === 'title') patch.title = draft.title.trim();
+      else Object.assign(patch, { [k]: draft[k] });
+    }
+    setSaving(true);
     try {
-      await onUpdateFields(item.id, { status, postDate, liveLink, notes });
+      await onUpdateFields(item.id, patch);
     } finally {
-      setSavingMeta(false);
+      setSaving(false);
     }
   };
+
+  /** Runs `next` right away, or after confirming that unsaved edits can be dropped. */
+  const leave = async (next: () => void) => {
+    if (dirty) {
+      const ok = await confirm({
+        title: 'Discard your changes?',
+        body: 'You have edits on this post that haven’t been saved.',
+        confirmLabel: 'Discard',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
+    next();
+  };
+  const requestClose = () => leave(onClose);
 
   const allAssets: Array<{ label: string; asset: MediaAsset }> = [];
   if (item.coverAsset) allAssets.push({ label: 'Cover', asset: item.coverAsset });
@@ -227,10 +280,23 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     allAssets.push({ label: `Slide ${idx + 1}`, asset: s })
   );
 
-  const tagsFormatted = formatTagsForCopy(item.tags);
+  const copyButton = (key: string, value: string) => (
+    <button
+      type="button"
+      onClick={() => copyText(key, value)}
+      disabled={!value.trim()}
+      className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-semibold text-electric-600 hover:bg-electric-50 disabled:opacity-40 disabled:hover:bg-transparent dark:text-electric-400 dark:hover:bg-electric-950/40"
+    >
+      {copiedField === key ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copiedField === key ? 'Copied' : 'Copy'}
+    </button>
+  );
+  const channelOptions = channels.some((c) => c.name === draft.channelName) || !draft.channelName
+    ? channels.map((c) => c.name)
+    : [draft.channelName, ...channels.map((c) => c.name)];
 
   return (
-    <Sheet onClose={onClose} label={`Details for ${item.title}`} size="xl">
+    <Sheet onClose={requestClose} label={`Details for ${item.title}`} size="xl">
         <div className="border-b border-zinc-100 px-5 pb-4 pt-3 sm:px-6 sm:pt-5 dark:border-zinc-800">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -244,19 +310,20 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               </div>
               <h2 className="mt-2 text-lg font-bold leading-snug tracking-tight sm:text-xl">{item.title}</h2>
             </div>
-            <SheetCloseButton onClick={onClose} label="Close" />
+            <SheetCloseButton onClick={requestClose} label="Close" />
           </div>
-          <div className="mt-3 flex gap-2">
-            {readOnly ? null : (
-              <button type="button" onClick={() => onEdit(item)} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
-                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                Edit
-              </button>
-            )}
-            <button type="button" onClick={() => onAskAI(item)} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => leave(() => onAskAI(item))} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
               <MessageSquare className="h-3.5 w-3.5 text-electric-600 dark:text-electric-400" aria-hidden="true" />
               Ask Slate
             </button>
+            <ActionMenu
+              className="ml-auto"
+              items={[
+                { label: 'Duplicate', icon: Files, onSelect: () => leave(() => onDuplicate(item)) },
+                { label: 'Delete post', icon: Trash2, onSelect: () => onDelete(item), tone: 'danger' },
+              ]}
+            />
           </div>
         </div>
 
@@ -351,15 +418,27 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     Save one file, or everything plus the caption as a .zip.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDownloadAllZip}
-                  disabled={zipProgress}
-                  className={cx(buttonStyles.primary, sizes.sm, 'h-9')}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {zipProgress ? 'Zipping…' : 'Download all'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => leave(() => onEditFiles(item))}
+                    className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    {allAssets.length ? 'Change files' : 'Add files'}
+                  </button>
+                  {allAssets.length ? (
+                    <button
+                      type="button"
+                      onClick={handleDownloadAllZip}
+                      disabled={zipProgress}
+                      className={cx(buttonStyles.primary, sizes.sm, 'h-9')}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      {zipProgress ? 'Zipping…' : 'Download all'}
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               {allAssets.length > 0 ? (
@@ -391,189 +470,115 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Right Column: One-tap Copy + Tracking + References */}
-          <div className="space-y-5 lg:col-span-5">
-            {/* One-tap Copy Blocks */}
+          {/* Right Column: the post's copy and details, edited in place */}
+          <form id="post-inline-form" onSubmit={handleSave} className="space-y-5 lg:col-span-5">
             <div className="space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  Title
-                </span>
-                <button
-                  type="button"
-                  onClick={() => copyText('title', item.title)}
-                  className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-electric-600 hover:bg-electric-50 dark:text-electric-400 dark:hover:bg-electric-950/40"
-                >
-                  {copiedField === 'title' ? (
-                    <>
-                      <Check className="h-3.5 w-3.5" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="text-sm font-medium text-zinc-950 dark:text-zinc-50">
-                {item.title}
-              </p>
-
-              <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    Caption
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => copyText('caption', item.caption)}
-                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-electric-600 hover:bg-electric-50 dark:text-electric-400 dark:hover:bg-electric-950/40"
-                  >
-                    {copiedField === 'caption' ? (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        Copy
-                      </>
-                    )}
-                  </button>
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label htmlFor="detail-title" className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Title</label>
+                  {copyButton('title', draft.title)}
                 </div>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                  {item.caption || 'No caption written yet.'}
-                </p>
+                <input
+                  id="detail-title"
+                  value={draft.title}
+                  onChange={(e) => set('title')(e.target.value)}
+                  maxLength={300}
+                  className={cx(inputStyles, 'h-11 font-medium')}
+                />
               </div>
-
-              <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    Tags
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => copyText('tags', tagsFormatted)}
-                    className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-electric-600 hover:bg-electric-50 dark:text-electric-400 dark:hover:bg-electric-950/40"
-                  >
-                    {copiedField === 'tags' ? (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        Copy
-                      </>
-                    )}
-                  </button>
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label htmlFor="detail-caption" className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Caption</label>
+                  {copyButton('caption', draft.caption)}
                 </div>
-                <p className="mt-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
-                  {tagsFormatted || 'No tags added.'}
-                </p>
+                <textarea
+                  id="detail-caption"
+                  rows={5}
+                  value={draft.caption}
+                  onChange={(e) => set('caption')(e.target.value)}
+                  placeholder="Write the caption…"
+                  className={cx(inputStyles, 'py-2.5 leading-relaxed')}
+                />
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label htmlFor="detail-tags" className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Tags</label>
+                  {copyButton('tags', formatTagsForCopy(parseTagsInput(draft.tags)))}
+                </div>
+                <input
+                  id="detail-tags"
+                  value={draft.tags}
+                  onChange={(e) => set('tags')(e.target.value)}
+                  placeholder="#travel #cinematic"
+                  className={cx(inputStyles, 'h-11 font-mono text-xs')}
+                />
               </div>
             </div>
 
-            {/* Status, Post Date, Live Link, Notes */}
-            {readOnly ? (
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900/60">
-                <div>
-                  <dt className="text-xs font-medium text-zinc-500">Stage</dt>
-                  <dd className="mt-1"><StagePill status={item.status} /></dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-zinc-500">{item.postDate ? 'Posted on' : 'Target date'}</dt>
-                  <dd className="mt-1 font-medium tabular-nums">{item.postDate || item.targetDate || '—'}</dd>
-                </div>
-                {isWebLink(item.liveLink) ? (
-                  <div className="col-span-2">
-                    <dt className="text-xs font-medium text-zinc-500">Live post</dt>
-                    <dd className="mt-1">
-                      <a href={item.liveLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-electric-600 hover:underline dark:text-electric-400">
-                        <span className="truncate">{item.liveLink.replace(/^https?:\/\//, '')}</span>
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                      </a>
-                    </dd>
-                  </div>
-                ) : null}
-                {item.notes ? (
-                  <div className="col-span-2">
-                    <dt className="text-xs font-medium text-zinc-500">Production notes</dt>
-                    <dd className="mt-1 leading-relaxed text-zinc-700 dark:text-zinc-300">{item.notes}</dd>
-                  </div>
-                ) : null}
-              </dl>
-            ) : (
-            <form
-              onSubmit={handleSaveTracking}
-              className="space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60"
-            >
-              <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                Tracking
-              </h3>
-
+            <div className="space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+              <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Details</h3>
               <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
                 <div>
-                  <label
-                    htmlFor="detail-status"
-                    className={labelStyles}
-                  >
-                    Stage
-                  </label>
-                  <FormSelect
-                    id="detail-status"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as StatusKey)}
-                    className="mt-0"
-                  >
-                    {STATUS_OPTIONS.map((s) => (
-                      <option key={s.key} value={s.key}>
-                        {s.label}
-                      </option>
+                  <label htmlFor="detail-status" className={labelStyles}>Stage</label>
+                  <FormSelect id="detail-status" value={draft.status} onChange={(e) => set('status')(e.target.value as StatusKey)}>
+                    {STATUS_OPTIONS.map((o) => (
+                      <option key={o.key} value={o.key}>{o.label}</option>
                     ))}
                   </FormSelect>
                 </div>
-
                 <div>
-                  <label
-                    htmlFor="detail-post-date"
-                    className={labelStyles}
-                  >
-                    Post Date
-                  </label>
+                  <label htmlFor="detail-platform" className={labelStyles}>Platform</label>
+                  <FormSelect id="detail-platform" value={draft.platform} onChange={(e) => set('platform')(e.target.value as PlatformKey)}>
+                    {PLATFORM_OPTIONS.map((o) => (
+                      <option key={o.key} value={o.key}>{o.label}</option>
+                    ))}
+                  </FormSelect>
+                </div>
+                <div className="min-[400px]:col-span-2">
+                  <label htmlFor="detail-channel" className={labelStyles}>Channel</label>
+                  <FormSelect id="detail-channel" value={draft.channelName} onChange={(e) => set('channelName')(e.target.value)}>
+                    <option value="">No channel</option>
+                    {channelOptions.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </FormSelect>
+                </div>
+                <div>
+                  <label htmlFor="detail-target-date" className={labelStyles}>Target date</label>
+                  <input
+                    id="detail-target-date"
+                    type="date"
+                    value={draft.targetDate}
+                    onChange={(e) => set('targetDate')(e.target.value)}
+                    className={cx(inputStyles, 'h-11')}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="detail-post-date" className={labelStyles}>Posted on</label>
                   <input
                     id="detail-post-date"
                     type="date"
-                    value={postDate}
-                    onChange={(e) => setPostDate(e.target.value)}
+                    value={draft.postDate}
+                    onChange={(e) => set('postDate')(e.target.value)}
                     className={cx(inputStyles, 'h-11')}
                   />
                 </div>
               </div>
 
               <div>
-                <label
-                  htmlFor="detail-live-link"
-                  className={labelStyles}
-                >
-                  Live Post URL
-                </label>
+                <label htmlFor="detail-live-link" className={labelStyles}>Live post URL</label>
                 <div className="flex items-center gap-2">
                   <input
                     id="detail-live-link"
                     type="url"
-                    value={liveLink}
-                    onChange={(e) => setLiveLink(e.target.value)}
+                    value={draft.liveLink}
+                    onChange={(e) => set('liveLink')(e.target.value)}
                     placeholder="https://youtube.com/... or instagram.com/..."
                     className={cx(inputStyles, 'h-11 flex-1')}
                   />
-                  {isWebLink(liveLink) ? (
+                  {isWebLink(draft.liveLink) ? (
                     <a
-                      href={liveLink.trim()}
+                      href={draft.liveLink.trim()}
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="Open live link"
@@ -586,41 +591,16 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               </div>
 
               <div>
-                <label
-                  htmlFor="detail-notes"
-                  className={labelStyles}
-                >
-                  Production Notes
-                </label>
+                <label htmlFor="detail-notes" className={labelStyles}>Production notes</label>
                 <textarea
                   id="detail-notes"
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  value={draft.notes}
+                  onChange={(e) => set('notes')(e.target.value)}
                   className={cx(inputStyles, 'py-2.5')}
                 />
               </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <button
-                  type="button"
-                  onClick={() => onDelete(item)}
-                  className={cx(buttonStyles.dangerGhost, sizes.sm, 'h-10 px-3')}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete Post
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={savingMeta}
-                  className={cx(buttonStyles.primary, sizes.md)}
-                >
-                  {savingMeta ? 'Saving…' : 'Save'}
-                </button>
-              </div>
-            </form>
-            )}
+            </div>
 
             {/* Attached References */}
             {item.attachedReferences.length > 0 ? (
@@ -665,9 +645,29 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 </div>
               </div>
             ) : null}
+          </form>
+        </div>
+        </div>
+
+        {dirty ? (
+          <div className="animate-pop-in flex items-center justify-between gap-3 border-t border-zinc-100 bg-white px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6 dark:border-zinc-800 dark:bg-zinc-950">
+            <p className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400">Unsaved changes</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDraft(draftFrom(item))}
+                disabled={saving}
+                className={cx(buttonStyles.secondary, sizes.md)}
+              >
+                Discard
+              </button>
+              <button type="submit" form="post-inline-form" disabled={saving} className={cx(buttonStyles.primary, sizes.md)}>
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
           </div>
-        </div>
-        </div>
+        ) : null}
     </Sheet>
   );
 };
+

@@ -16,7 +16,7 @@ import {
   type StatusKey,
 } from '@/src/lib/content-logic';
 import { uploadAssetResumable } from '@/src/lib/upload-client';
-import { IMAGE_TYPES, VIDEO_TYPES } from '@/src/lib/upload-limits';
+import { formatLimit, IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, VIDEO_TYPES } from '@/src/lib/upload-limits';
 import { FormSelect } from './CustomSelect';
 import { MediaImage } from './MediaImage';
 import {
@@ -305,7 +305,7 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
             <legend className="px-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300">Media</legend>
             <p className="mb-3 hidden items-center gap-2 text-xs text-zinc-500 sm:flex dark:text-zinc-400">
               <UploadCloud className="h-4 w-4 text-electric-600 dark:text-electric-400" aria-hidden="true" />
-              Drop files here, or choose below. Images up to 30 MB, video up to 10 GB.
+              Drop files here, or choose below. Images up to {formatLimit(MAX_IMAGE_BYTES)}, video up to {formatLimit(MAX_VIDEO_BYTES)}.
             </p>
 
             <div className="grid grid-cols-3 gap-2 sm:gap-3">

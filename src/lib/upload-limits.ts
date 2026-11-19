@@ -6,8 +6,18 @@ export const MAX_CHUNK_BYTES = 4 * 1024 * 1024; // server tolerance
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
 
-export const MAX_IMAGE_BYTES = 30 * MB;
-export const MAX_VIDEO_BYTES = 10 * GB;
+/**
+ * Per-file limits. Private-beta defaults: images 30 MB, videos 500 MB. Configurable (they're
+ * inlined into the browser bundle at build time, so changing them needs a redeploy):
+ *   NEXT_PUBLIC_UPLOAD_MAX_IMAGE_MB, NEXT_PUBLIC_UPLOAD_MAX_VIDEO_MB
+ * The storage layer itself supports much larger files (multipart uploads up to 10,000 parts).
+ */
+function mbFrom(raw: string | undefined, fallbackMb: number, maxMb: number): number {
+  const n = Number(raw);
+  return (Number.isFinite(n) && n > 0 && n <= maxMb ? n : fallbackMb) * MB;
+}
+export const MAX_IMAGE_BYTES = mbFrom(process.env.NEXT_PUBLIC_UPLOAD_MAX_IMAGE_MB, 30, 200);
+export const MAX_VIDEO_BYTES = mbFrom(process.env.NEXT_PUBLIC_UPLOAD_MAX_VIDEO_MB, 500, 50 * 1024);
 
 // SVG is deliberately excluded: it can carry script.
 export const IMAGE_TYPES = [
@@ -57,6 +67,11 @@ export function maxBytesFor(mimeType: string): number | null {
   return null;
 }
 
+/** "30 MB", "500 MB", "1.5 GB". */
+export function formatLimit(bytes: number): string {
+  return bytes >= GB ? `${+(bytes / GB).toFixed(1)} GB` : `${Math.round(bytes / MB)} MB`;
+}
+
 /** Human-readable reason a file cannot be uploaded, or null when it is fine. */
 export function validateUpload(name: string, reportedType: string, size: number): string | null {
   const mimeType = resolveMimeType(name, reportedType);
@@ -64,8 +79,7 @@ export function validateUpload(name: string, reportedType: string, size: number)
   if (max === null) return `"${name}" is not a supported image or video type.`;
   if (size <= 0) return `"${name}" is empty.`;
   if (size > max) {
-    const limit = max >= GB ? `${max / GB} GB` : `${max / MB} MB`;
-    return `"${name}" is larger than the ${limit} limit.`;
+    return `"${name}" is larger than the ${formatLimit(max)} limit.`;
   }
   return null;
 }

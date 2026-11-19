@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/src/db/index.ts';
-import { contentItems } from '@/src/db/schema.ts';
+import { contentItems, slateEmbeddings } from '@/src/db/schema.ts';
 import { requireUser } from '@/src/lib/auth-server.ts';
+import { conflictMessage, readExpectedVersion, updatePostVersioned, type PostUpdates } from '@/src/lib/content-mutations.ts';
 import {
   asset,
   assets,
@@ -33,7 +34,9 @@ export async function PATCH(request: NextRequest, context: Ctx) {
     if (!itemId) return badRequest('Invalid item id.');
 
     const body = await readJson(request);
-    const updates: Partial<typeof contentItems.$inferInsert> = { updatedAt: new Date() };
+    const expected = readExpectedVersion(body);
+    if (!expected.ok) return NextResponse.json({ error: expected.error, code: expected.code }, { status: expected.status });
+    const updates: PostUpdates = {};
 
     if (body.title !== undefined) {
       const title = str(body.title, 300, 'Title').trim();
@@ -58,16 +61,18 @@ export async function PATCH(request: NextRequest, context: Ctx) {
     }
     await assertOwnsFiles(user.uid, updates);
 
-    const where = and(eq(contentItems.id, itemId), eq(contentItems.userUid, user.uid));
-    const [before] = await db.select().from(contentItems).where(where);
-    if (!before) return NextResponse.json({ error: 'Item not found.' }, { status: 404 });
-
-    const [updated] = await db.update(contentItems).set(updates).where(where).returning();
+    const result = await updatePostVersioned(db, user.uid, itemId, expected.version, updates);
+    if (result.kind === 'not_found') return NextResponse.json({ error: 'Item not found.' }, { status: 404 });
+    if (result.kind === 'conflict') {
+      // The creator's own record: safe to return so the browser can show the latest version.
+      return NextResponse.json({ error: conflictMessage('post'), code: 'version_conflict', item: result.current }, { status: 409 });
+    }
+    if (result.kind === 'unchanged') return NextResponse.json({ item: result.row, unchanged: true });
 
     // Files that were replaced or removed by this edit.
-    await collectUnusedFiles(user.uid, keysIn(before));
+    await collectUnusedFiles(user.uid, keysIn(result.before));
 
-    return NextResponse.json({ item: updated });
+    return NextResponse.json({ item: result.row });
   } catch (error) {
     return errorResponse(error, 'Unable to update content item.');
   }
@@ -91,6 +96,10 @@ export async function DELETE(request: NextRequest, context: Ctx) {
     }
 
     await collectUnusedFiles(user.uid, keysIn(deleted));
+    // Derived search data goes with the post.
+    await db
+      .delete(slateEmbeddings)
+      .where(and(eq(slateEmbeddings.userUid, user.uid), eq(slateEmbeddings.targetType, 'post'), eq(slateEmbeddings.targetId, itemId)));
     return NextResponse.json({ deletedId: itemId });
   } catch (error) {
     return errorResponse(error, 'Unable to delete content item.');

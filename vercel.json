@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "functions": {
+    "app/api/chat/route.ts": { "maxDuration": 300 },
+    "app/api/internal/account-deletions/route.ts": { "maxDuration": 120 },
+    "app/api/internal/cleanup/route.ts": { "maxDuration": 180 }
+  }
+}

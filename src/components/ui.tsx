@@ -9,7 +9,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, MoreHorizontal, X } from 'lucide-react';
 import type { StatusKey } from '@/src/lib/content-logic';
 
 /* ------------------------------------------------------------------ */
@@ -68,7 +68,7 @@ export const cardStyles =
 
 export const STAGE_STYLES: Record<StatusKey, { dot: string; pill: string; label: string }> = {
   idea: {
-    label: 'Idea',
+    label: 'Planned',
     dot: 'bg-zinc-400',
     pill: 'bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700',
   },
@@ -366,4 +366,86 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       return false;
     }
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* ActionMenu: a small "more actions" (⋯) menu                         */
+/* ------------------------------------------------------------------ */
+
+export interface ActionMenuItem {
+  label: string;
+  icon: React.ElementType;
+  onSelect: () => void;
+  tone?: 'danger';
+}
+
+export function ActionMenu({ items, label = 'More actions', className }: { items: ActionMenuItem[]; label?: string; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    // Capture phase so Escape closes the menu before it reaches an open sheet.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className={cx('relative', className)}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        className={cx(buttonStyles.ghost, 'h-9 w-9 rounded-full p-0')}
+      >
+        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="animate-pop-in absolute right-0 top-full z-20 mt-1.5 w-44 rounded-xl border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          {items.map(({ label: itemLabel, icon: Icon, onSelect, tone }, i) => (
+            <button
+              key={itemLabel}
+              type="button"
+              role="menuitem"
+              autoFocus={i === 0}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                onSelect();
+              }}
+              className={cx(
+                'flex h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[13px] font-medium transition-colors',
+                tone === 'danger'
+                  ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40'
+                  : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800'
+              )}
+            >
+              <Icon className={cx('h-4 w-4', tone === 'danger' ? '' : 'text-zinc-400')} aria-hidden="true" />
+              {itemLabel}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }

@@ -51,6 +51,8 @@ export interface ContentItem {
   slides: MediaAsset[];
   attachedReferences: ReferenceAttachment[];
   sourceIdeaId?: number | null;
+  /** Server version for optimistic concurrency (absent in the demo). */
+  version?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -68,6 +70,8 @@ export interface IdeaItem {
   tags: string[];
   targetDate: string;
   convertedItemId?: number | null;
+  /** Server version for optimistic concurrency (absent in the demo). */
+  version?: number;
   createdAt: string;
 }
 
@@ -81,7 +85,7 @@ export const PLATFORM_OPTIONS: Array<{ key: PlatformKey; label: string; shortLab
 ];
 
 export const STATUS_OPTIONS: Array<{ key: StatusKey; label: string }> = [
-  { key: 'idea', label: 'Idea' },
+  { key: 'idea', label: 'Planned' },
   { key: 'scripting', label: 'Scripting' },
   { key: 'editing', label: 'Editing' },
   { key: 'ready', label: 'Ready' },
@@ -107,7 +111,39 @@ export function getPlatformShortLabel(platform: PlatformKey): string {
 }
 
 export function getStatusLabel(status: StatusKey): string {
-  return STATUS_OPTIONS.find((s) => s.key === status)?.label ?? 'Idea';
+  return STATUS_OPTIONS.find((s) => s.key === status)?.label ?? 'Planned';
+}
+
+export type LibrarySort = 'updated' | 'target' | 'created';
+
+export const SORT_OPTIONS: Array<{ key: LibrarySort; label: string }> = [
+  { key: 'updated', label: 'Recently updated' },
+  { key: 'target', label: 'Target date' },
+  { key: 'created', label: 'Newest first' },
+];
+
+/**
+ * Returns a sorted copy. "target" puts the soonest date first (target date, or
+ * post date when there is none) and undated posts last.
+ */
+export function sortContentItems(items: ContentItem[], sort: LibrarySort): ContentItem[] {
+  const time = (v: string) => {
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const copy = [...items];
+  if (sort === 'target') {
+    return copy.sort((a, b) => {
+      const da = a.targetDate || a.postDate;
+      const db = b.targetDate || b.postDate;
+      if (!da && !db) return time(b.updatedAt) - time(a.updatedAt);
+      if (!da) return 1;
+      if (!db) return -1;
+      return da.localeCompare(db);
+    });
+  }
+  const key = sort === 'created' ? 'createdAt' : 'updatedAt';
+  return copy.sort((a, b) => time(b[key]) - time(a[key]));
 }
 
 export interface LibraryFilters {

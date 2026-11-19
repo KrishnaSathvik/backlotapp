@@ -1,12 +1,12 @@
-import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.ts';
+import { isAccountLockedError } from '../db/account-guard.ts';
 import { contentItems, ideas, uploadedFiles } from '../db/schema.ts';
 import type { MediaAsset, PlatformKey, ReferenceAttachment, StatusKey } from './content-logic.ts';
 
-export const UPLOAD_ROOT = path.join(process.cwd(), '.uploads');
+import { getMediaStore } from './storage/index.ts';
 
 const PLATFORMS: PlatformKey[] = [
   'youtube_long',
@@ -191,17 +191,22 @@ export async function collectUnusedFiles(uid: string, candidateKeys: string[]): 
       .where(and(eq(uploadedFiles.userUid, uid), inArray(uploadedFiles.storageKey, unused)))
       .returning({ key: uploadedFiles.storageKey });
 
-    await Promise.all(
-      removed.map(({ key }) => fsp.rm(path.join(UPLOAD_ROOT, path.basename(key)), { force: true }))
-    );
+    const store = getMediaStore();
+    await Promise.all(removed.map(({ key }) => store.delete(path.basename(key))));
   } catch (error) {
     console.error('File cleanup failed:', error);
   }
 }
 
 /** Maps thrown errors to responses: BadRequest → 400, anything else → 500 with `fallback`. */
+/** The response for a write the account guard refused (the account is being deleted). */
+export function accountLockedResponse() {
+  return NextResponse.json({ error: 'This account is being deleted.', code: 'account_deleting' }, { status: 403 });
+}
+
 export function errorResponse(error: unknown, fallback: string) {
   if (error instanceof BadRequest) return badRequest(error.message);
+  if (isAccountLockedError(error)) return accountLockedResponse();
   console.error(fallback, error);
   return NextResponse.json({ error: fallback }, { status: 500 });
 }

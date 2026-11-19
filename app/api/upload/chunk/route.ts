@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'node:crypto';
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { db } from '@/src/db/index.ts';
-import { uploadedFiles } from '@/src/db/schema.ts';
 import { requireUser } from '@/src/lib/auth-server.ts';
-import { UPLOAD_ROOT } from '@/src/lib/api-utils.ts';
-import {
-  MAX_CHUNK_BYTES,
-  resolveMimeType,
-  validateUpload,
-} from '@/src/lib/upload-limits.ts';
+import { isAccountLockedError } from '@/src/db/account-guard.ts';
+import { accountLockedResponse } from '@/src/lib/api-utils.ts';
+import { errorKind, opsEvent } from '@/src/lib/ops-log.ts';
+import { getMediaStore } from '@/src/lib/storage/index.ts';
+import { receiveChunk, uploadPolicyFromEnv, uploadProgress } from '@/src/lib/storage/uploads.ts';
+import { MAX_CHUNK_BYTES, resolveMimeType, validateUpload } from '@/src/lib/upload-limits.ts';
 
 /**
- * Chunked, resumable upload.
+ * Chunked, resumable upload through the server. Used for the local development store (and the
+ * legacy Cloud Storage store). In production (R2) the browser uploads straight to the bucket via
+ * /api/upload/session, /parts and /complete, and this route refuses new uploads.
  *
  * Headers per chunk:
  *   x-upload-id     client-generated UUID for this upload
@@ -22,22 +20,15 @@ import {
  *   x-file-name     URI-encoded original file name
  *   x-mime-type     file type
  *
- * The server appends only when the offset equals the bytes already received, so
- * a retried chunk is acknowledged without being written twice. GET with the same
- * x-upload-id returns how many bytes have been received, for resuming.
+ * Each chunk (2 MB) is forwarded to storage as it arrives; no request holds a whole file.
+ * A retried chunk is acknowledged without being written twice; an out-of-order chunk gets 409
+ * with the byte count to resume from. GET with x-upload-id returns progress.
  */
 
-const TEMP_ROOT = path.join(UPLOAD_ROOT, '.partial');
-const STALE_PART_MS = 24 * 60 * 60 * 1000;
-let lastSweep = 0;
+export const runtime = 'nodejs';
 
-function userTempDir(uid: string) {
-  const hash = crypto.createHash('sha256').update(uid).digest('hex').slice(0, 24);
-  return path.join(TEMP_ROOT, hash);
-}
-
-function partPath(uid: string, uploadId: string) {
-  return path.join(userTempDir(uid), `${uploadId}.part`);
+function bad(message: string, status = 400, extra: Record<string, unknown> = {}) {
+  return NextResponse.json({ error: message, ...extra }, { status });
 }
 
 function readUploadId(request: NextRequest): string | null {
@@ -45,43 +36,12 @@ function readUploadId(request: NextRequest): string | null {
   return /^[a-zA-Z0-9-]{8,64}$/.test(id) ? id : null;
 }
 
-async function receivedBytes(file: string): Promise<number> {
-  try {
-    return (await fs.stat(file)).size;
-  } catch {
-    return 0;
-  }
-}
-
-/** Removes abandoned partial uploads, at most once an hour. */
-async function sweepStaleParts() {
-  const now = Date.now();
-  if (now - lastSweep < 60 * 60 * 1000) return;
-  lastSweep = now;
-  try {
-    for (const dir of await fs.readdir(TEMP_ROOT)) {
-      const full = path.join(TEMP_ROOT, dir);
-      for (const file of await fs.readdir(full)) {
-        const p = path.join(full, file);
-        const stat = await fs.stat(p);
-        if (now - stat.mtimeMs > STALE_PART_MS) await fs.rm(p, { force: true });
-      }
-    }
-  } catch {
-    // Nothing to sweep yet.
-  }
-}
-
-function bad(message: string, status = 400, extra: Record<string, unknown> = {}) {
-  return NextResponse.json({ error: message, ...extra }, { status });
-}
-
 export async function GET(request: NextRequest) {
   const { user, response } = await requireUser(request);
   if (!user) return response;
   const uploadId = readUploadId(request);
   if (!uploadId) return bad('Invalid upload id.');
-  return NextResponse.json({ received: await receivedBytes(partPath(user.uid, uploadId)) });
+  return NextResponse.json({ received: await uploadProgress(db, user.uid, uploadId) });
 }
 
 export async function POST(request: NextRequest) {
@@ -111,56 +71,17 @@ export async function POST(request: NextRequest) {
 
     const declaredLength = Number(request.headers.get('content-length') || '0');
     if (declaredLength > MAX_CHUNK_BYTES) return bad('Chunk is too large.', 413);
-
-    const chunk = Buffer.from(await request.arrayBuffer());
+    const chunk = new Uint8Array(await request.arrayBuffer());
     if (chunk.length === 0 || chunk.length > MAX_CHUNK_BYTES) return bad('Invalid chunk size.', 413);
     if (offset + chunk.length > totalSize) return bad('Chunk runs past the end of the file.');
 
-    if (offset === 0) await sweepStaleParts();
-    await fs.mkdir(userTempDir(user.uid), { recursive: true });
-    const part = partPath(user.uid, uploadId);
-    const received = await receivedBytes(part);
-
-    if (offset + chunk.length <= received) {
-      // Already have this chunk (the client retried after a lost response).
-    } else if (offset === received) {
-      await fs.appendFile(part, chunk);
-    } else {
-      return bad('Chunk out of order.', 409, { received });
-    }
-
-    const nowReceived = await receivedBytes(part);
-    if (nowReceived < totalSize) {
-      return NextResponse.json({ completed: false, received: nowReceived });
-    }
-
-    // Final name is generated here, so a client can never overwrite an existing file.
-    const ext = path.extname(fileName).replace(/[^a-zA-Z0-9.]/g, '').slice(0, 10).toLowerCase();
-    const storageKey = `${crypto.randomUUID()}${ext}`;
-    await fs.mkdir(UPLOAD_ROOT, { recursive: true });
-    await fs.rename(part, path.join(UPLOAD_ROOT, storageKey));
-
-    await db.insert(uploadedFiles).values({
-      userUid: user.uid,
-      storageKey,
-      fileName,
-      mimeType,
-      sizeBytes: totalSize,
-    });
-
-    return NextResponse.json({
-      completed: true,
-      received: totalSize,
-      asset: {
-        id: storageKey,
-        name: fileName,
-        url: `/api/files/${encodeURIComponent(storageKey)}`,
-        mimeType,
-        size: totalSize,
-      },
-    });
+    const result = await receiveChunk(db, getMediaStore(), user.uid, { uploadId, offset, totalSize, fileName, mimeType, chunk }, uploadPolicyFromEnv());
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
-    console.error('Chunk upload failed:', error);
+    // A chunk that was in flight when deletion started: the write guard refused it. The
+    // deletion job removes the session and any partial object.
+    if (isAccountLockedError(error)) return accountLockedResponse();
+    opsEvent('upload.failed', { error: errorKind(error) }, 'ERROR');
     return bad('Unable to upload file chunk.', 500);
   }
 }

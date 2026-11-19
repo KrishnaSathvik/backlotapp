@@ -11,6 +11,7 @@ import {
   parseTagsInput,
   prevWorkflowStatus,
   reorderSlides,
+  sortContentItems,
   type ContentItem,
   type IdeaItem,
 } from './content-logic.ts';
@@ -162,4 +163,28 @@ test('workflow status stepping and file size formatting work predictably', () =>
   assert.equal(prevWorkflowStatus('idea'), 'idea');
   assert.equal(formatFileSize(1536), '1.5 KB');
   assert.equal(formatFileSize(2 * 1024 * 1024 * 1024), '2.0 GB');
+});
+
+test('sortContentItems orders by target date with undated posts last', () => {
+  const base = sampleItems[0];
+  const mk = (id: number, targetDate: string, postDate = '', updatedAt = '2026-01-01T00:00:00Z'): ContentItem => ({
+    ...base,
+    id,
+    targetDate,
+    postDate,
+    updatedAt,
+  });
+  const items = [mk(1, ''), mk(2, '2026-12-01'), mk(3, '', '2026-11-10'), mk(4, '2026-11-20')];
+  assert.deepEqual(sortContentItems(items, 'target').map((i) => i.id), [3, 4, 2, 1]);
+  assert.deepEqual(items.map((i) => i.id), [1, 2, 3, 4], 'does not mutate input');
+});
+
+test('sortContentItems orders by most recently updated and newest created', () => {
+  const base = sampleItems[0];
+  const items: ContentItem[] = [
+    { ...base, id: 1, updatedAt: '2026-01-02T00:00:00Z', createdAt: '2026-01-03T00:00:00Z' },
+    { ...base, id: 2, updatedAt: '2026-01-05T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' },
+  ];
+  assert.deepEqual(sortContentItems(items, 'updated').map((i) => i.id), [2, 1]);
+  assert.deepEqual(sortContentItems(items, 'created').map((i) => i.id), [1, 2]);
 });

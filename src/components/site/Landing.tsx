@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import {
   ArrowRight,
   CalendarClock,
+  CalendarDays,
   Check,
   Clapperboard,
   Copy,
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react';
 import { SlateAvatar } from '../SlateAvatar';
 import { cx } from '../ui';
-import { BrowserFrame, HeroShowcase, PhoneFrame, Shot, type ScreenName } from './Showcase';
+import { HeroShowcase } from './Showcase';
 import { SiteFooter, SiteHeader } from './SiteChrome';
 
 const MARQUEE = [
@@ -36,7 +37,7 @@ const MARQUEE = [
 ];
 
 const FEATURES: Array<{
-  screen: ScreenName;
+  key: string;
   icon: React.ElementType;
   eyebrow: string;
   title: string;
@@ -45,7 +46,7 @@ const FEATURES: Array<{
   accent: 'electric' | 'cantaloupe';
 }> = [
   {
-    screen: 'library',
+    key: 'library',
     icon: Layers,
     eyebrow: 'Library',
     title: 'A library that looks like your feed.',
@@ -54,7 +55,7 @@ const FEATURES: Array<{
     accent: 'electric',
   },
   {
-    screen: 'ideas',
+    key: 'ideas',
     icon: Lightbulb,
     eyebrow: 'Ideas',
     title: 'An inbox for everything that inspires you.',
@@ -63,12 +64,21 @@ const FEATURES: Array<{
     accent: 'electric',
   },
   {
-    screen: 'detail',
+    key: 'detail',
     icon: Copy,
     eyebrow: 'Post details',
     title: 'Copy the caption, grab the files, post.',
     body: 'Open any post to copy the title, caption or hashtags in one tap, download the cover and video, and keep notes and references together.',
     points: ['One-tap copy for caption + tags', 'Download single files or everything as .zip', 'Ask Slate about any post'],
+    accent: 'cantaloupe',
+  },
+  {
+    key: 'calendar',
+    icon: CalendarDays,
+    eyebrow: 'Calendar',
+    title: 'See your whole month at a glance.',
+    body: 'Every post lands on its target or posted date, so gaps and pile-ups are obvious before they happen.',
+    points: ['Month view on phone and desktop', 'Filter by channel', 'Open any post straight from its day'],
     accent: 'cantaloupe',
   },
 ];
@@ -128,7 +138,7 @@ const PERSONAS = [
 const FAQ = [
   {
     q: 'Can I try it without signing up?',
-    a: 'Yes. Choose “Try the demo” to explore a full sample workspace with real posts and ideas. Sign in with Google when you want to build your own.',
+    a: 'Yes. Choose “Try the live demo” to explore a full sample workspace with example posts and ideas. It runs in your browser and saves nothing. Sign in with Google when you want to build your own.',
   },
   {
     q: 'Which platforms does it support?',
@@ -136,7 +146,7 @@ const FAQ = [
   },
   {
     q: 'Does it work on my phone?',
-    a: 'It’s built mobile-first. Install it to your home screen on iPhone or Android and it opens like a native app, even when you’re offline.',
+    a: 'It’s built mobile-first. Install it to your home screen on iPhone or Android and it opens like a native app. Its app files are cached, so it can open without a connection; saving and uploading need one.',
   },
   {
     q: 'Who is Slate?',
@@ -175,12 +185,12 @@ export function Landing() {
     <div className="relative min-h-dvh overflow-x-clip">
       <SiteHeader />
 
-      <main>
+      <main id="main" tabIndex={-1} className="outline-none">
         {/* ---------------- Hero ---------------- */}
         <section className="relative">
           <div className="mx-auto max-w-6xl px-4 pb-20 pt-10 text-center sm:px-6 sm:pt-16">
             <a
-              href="/app?autostart=1"
+              href="/slate"
               className="group inline-flex animate-rise items-center gap-2 rounded-full border border-zinc-200 bg-white/70 py-1 pl-1 pr-3 text-[12.5px] font-medium text-zinc-600 shadow-xs backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300"
             >
               <span className="rounded-full bg-cantaloupe-500 px-2 py-0.5 text-[11px] font-bold text-white">New</span>
@@ -255,7 +265,7 @@ export function Landing() {
                 <span
                   key={`${m}-${i}`}
                   aria-hidden={i >= MARQUEE.length}
-                  className="flex items-center gap-10 whitespace-nowrap font-display text-xl font-semibold tracking-tight text-zinc-400 dark:text-zinc-600"
+                  className="flex items-center gap-10 whitespace-nowrap font-display text-xl font-semibold tracking-tight text-zinc-500 dark:text-zinc-400"
                 >
                   {m}
                   <span className={cx('h-1.5 w-1.5 rounded-full', i % 2 ? 'bg-cantaloupe-400' : 'bg-electric-500')} />
@@ -274,9 +284,9 @@ export function Landing() {
               body="No spreadsheets, no notes app archaeology. One place for the files, the words and the status of every post."
             />
 
-            <div className="mt-16 space-y-24 sm:mt-24 sm:space-y-32">
+            <div className="mt-14 grid gap-4 sm:mt-20 sm:gap-5 md:grid-cols-2">
               {FEATURES.map((f, i) => (
-                <FeatureRow key={f.screen} feature={f} flip={i % 2 === 1} />
+                <FeatureCard key={f.key} feature={f} delay={i * 80} />
               ))}
             </div>
           </div>
@@ -302,12 +312,19 @@ export function Landing() {
                   {['Hooks for any post', 'Caption rewrites', 'Hashtag sets', 'Weekly posting plan'].map((t) => (
                     <li key={t} className="flex items-center gap-2">
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cantaloupe-100 dark:bg-white/10">
-                        <Check className="h-3 w-3 text-cantaloupe-600 dark:text-cantaloupe-400" />
+                        <Check className="h-3 w-3 text-cantaloupe-600 dark:text-cantaloupe-400" aria-hidden="true" />
                       </span>
                       {t}
                     </li>
                   ))}
                 </ul>
+                <a
+                  href="/slate"
+                  className="mt-7 inline-flex items-center gap-1.5 text-sm font-semibold text-electric-700 underline-offset-4 hover:underline dark:text-electric-400"
+                >
+                  How Slate works
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </a>
               </div>
 
               <div data-reveal style={{ '--reveal-delay': '120ms' } as React.CSSProperties} className="space-y-3">
@@ -488,54 +505,54 @@ function SectionHeading({
   );
 }
 
-function FeatureRow({ feature: f, flip }: { feature: (typeof FEATURES)[number]; flip: boolean }) {
+function FeatureCard({ feature: f, delay }: { feature: (typeof FEATURES)[number]; delay: number }) {
   const electric = f.accent === 'electric';
   return (
-    <div className={cx('grid items-center gap-10 lg:gap-16', flip ? 'lg:grid-cols-[1.2fr_0.8fr]' : 'lg:grid-cols-[0.8fr_1.2fr]')}>
-      <div data-reveal className={cx('max-w-lg', flip && 'lg:order-2')}>
-        <p
-          className={cx(
-            'flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em]',
-            electric ? 'text-electric-600 dark:text-electric-400' : 'text-cantaloupe-600 dark:text-cantaloupe-400'
-          )}
-        >
-          <f.icon className="h-4 w-4" aria-hidden="true" />
-          {f.eyebrow}
-        </p>
-        <h3 className="mt-3 font-display text-3xl font-bold leading-[1.08] tracking-tight text-balance sm:text-4xl">{f.title}</h3>
-        <p className="mt-4 text-base leading-relaxed text-zinc-600 dark:text-zinc-400">{f.body}</p>
-        <ul className="mt-6 space-y-2.5">
-          {f.points.map((pt) => (
-            <li key={pt} className="flex items-start gap-2.5 text-[15px] text-zinc-700 dark:text-zinc-300">
-              <span
-                className={cx(
-                  'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
-                  electric ? 'bg-electric-50 text-electric-600 dark:bg-electric-950 dark:text-electric-400' : 'bg-cantaloupe-50 text-cantaloupe-600 dark:bg-cantaloupe-950 dark:text-cantaloupe-400'
-                )}
-              >
-                <Check className="h-3 w-3" aria-hidden="true" />
-              </span>
-              {pt}
-            </li>
-          ))}
-        </ul>
+    <div
+      data-reveal
+      style={{ '--reveal-delay': `${delay}ms` } as React.CSSProperties}
+      className="group relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-6 transition-shadow hover:shadow-xl hover:shadow-zinc-950/5 sm:p-8 dark:border-zinc-800 dark:bg-zinc-900/50"
+    >
+      <div
+        aria-hidden="true"
+        className={cx(
+          'pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl transition-opacity group-hover:opacity-100',
+          electric ? 'bg-electric-400/15 dark:bg-electric-600/15' : 'bg-cantaloupe-300/20 dark:bg-cantaloupe-500/10'
+        )}
+      />
+      <div
+        className={cx(
+          'flex h-11 w-11 items-center justify-center rounded-2xl',
+          electric ? 'bg-electric-50 text-electric-600 dark:bg-electric-950/60 dark:text-electric-400' : 'bg-cantaloupe-50 text-cantaloupe-600 dark:bg-cantaloupe-950/60 dark:text-cantaloupe-400'
+        )}
+      >
+        <f.icon className="h-5 w-5" aria-hidden="true" />
       </div>
-
-      <div data-reveal style={{ '--reveal-delay': '120ms' } as React.CSSProperties} className={cx('relative', flip && 'lg:order-1')}>
-        <div
-          aria-hidden="true"
-          className={cx(
-            'absolute inset-6 -z-10 rounded-[40px] blur-3xl',
-            electric ? 'bg-electric-400/20 dark:bg-electric-600/20' : 'bg-cantaloupe-300/25 dark:bg-cantaloupe-500/15'
-          )}
-        />
-        <BrowserFrame className="hidden sm:block">
-          <Shot name={f.screen} kind="desktop" alt={`${f.eyebrow} screen`} sizes="(min-width: 1024px) 660px, 92vw" />
-        </BrowserFrame>
-        <PhoneFrame className="mx-auto w-[72%] max-w-[300px] sm:hidden">
-          <Shot name={f.screen} kind="mobile" alt={`${f.eyebrow} screen on a phone`} sizes="300px" />
-        </PhoneFrame>
-      </div>
+      <p
+        className={cx(
+          'mt-5 text-xs font-semibold uppercase tracking-[0.18em]',
+          electric ? 'text-electric-600 dark:text-electric-400' : 'text-cantaloupe-600 dark:text-cantaloupe-400'
+        )}
+      >
+        {f.eyebrow}
+      </p>
+      <h3 className="mt-2 font-display text-2xl font-bold leading-tight tracking-tight text-balance sm:text-[26px]">{f.title}</h3>
+      <p className="mt-3 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">{f.body}</p>
+      <ul className="mt-5 space-y-2">
+        {f.points.map((pt) => (
+          <li key={pt} className="flex items-start gap-2.5 text-sm text-zinc-700 dark:text-zinc-300">
+            <span
+              className={cx(
+                'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+                electric ? 'bg-electric-50 text-electric-600 dark:bg-electric-950 dark:text-electric-400' : 'bg-cantaloupe-50 text-cantaloupe-600 dark:bg-cantaloupe-950 dark:text-cantaloupe-400'
+              )}
+            >
+              <Check className="h-3 w-3" aria-hidden="true" />
+            </span>
+            {pt}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

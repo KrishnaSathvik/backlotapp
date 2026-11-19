@@ -1,0 +1,83 @@
+# Nightly encrypted logical backup of the Supabase database to a private R2 bucket.
+# docs/BACKUPS.md explains setup, retention, monitoring and restore. NOT ACTIVE until this file
+# is on the default branch and the secrets below exist.
+#
+# Secrets (repository → Settings → Secrets and variables → Actions):
+#   BACKUP_DATABASE_URL      session-pooler (5432) URL for the read-only `backlot_backup` role
+#   BACKUP_AGE_RECIPIENT     age PUBLIC key (age1…). The private key stays offline with the owner;
+#                            nothing in GitHub can decrypt a backup.
+#   BACKUP_R2_ENDPOINT       https://<account>.r2.cloudflarestorage.com
+#   BACKUP_R2_BUCKET         dedicated backups bucket (not the media bucket)
+#   BACKUP_R2_ACCESS_KEY_ID / BACKUP_R2_SECRET_ACCESS_KEY
+#                            R2 token scoped to the backups bucket only
+# Retention: an R2 lifecycle rule on the backups bucket deletes objects after 30 days.
+# Failures: GitHub sends scheduled-run notifications to the user who last changed the cron line
+# below, and only if that user has Actions email notifications on. The owner should be that user.
+name: db-backup
+
+on:
+  schedule:
+    - cron: '41 3 * * *' # 03:41 UTC daily
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PGCONNECT_TIMEOUT: '20'
+      # Newer AWS CLI versions add checksums R2 may not accept; send them only when required.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Check configuration
+        env:
+          DB: ${{ secrets.BACKUP_DATABASE_URL }}
+          AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+          BUCKET: ${{ secrets.BACKUP_R2_BUCKET }}
+        run: |
+          test -n "$DB" && test -n "$BUCKET" || { echo "Backup secrets are not configured."; exit 1; }
+          case "$AGE" in age1*) ;; *) echo "BACKUP_AGE_RECIPIENT must be an age public key."; exit 1;; esac
+
+      - name: Install pg_dump 17 and age
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common age >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      - name: Dump, encrypt, upload
+        env:
+          DB: ${{ secrets.BACKUP_DATABASE_URL }}
+          AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: ${{ secrets.BACKUP_R2_ENDPOINT }}
+          BUCKET: ${{ secrets.BACKUP_R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          umask 077
+          STAMP=$(date -u +%Y-%m-%dT%H%MZ)
+          OUT="$RUNNER_TEMP/backlot-$STAMP.dump.age"
+          # Custom format (pg_restore-able), public schema only (Backlot's tables), no owners/ACLs
+          # so it restores into a fresh project. Never written unencrypted to disk.
+          /usr/lib/postgresql/17/bin/pg_dump --format=custom --schema=public --no-owner --no-privileges "$DB" \
+            | age -r "$AGE" -o "$OUT"
+          SIZE=$(stat -c %s "$OUT")
+          test "$SIZE" -gt 1024 || { echo "Backup is suspiciously small ($SIZE bytes)."; exit 1; }
+          SHA=$(sha256sum "$OUT" | cut -d' ' -f1)
+          aws s3 cp "$OUT" "s3://$BUCKET/db/backlot-$STAMP.dump.age" --endpoint-url "$ENDPOINT" --only-show-errors \
+            --metadata "sha256=$SHA"
+          printf '{"at":"%s","bytes":%s,"sha256":"%s"}' "$STAMP" "$SIZE" "$SHA" > "$RUNNER_TEMP/latest.json"
+          aws s3 cp "$RUNNER_TEMP/latest.json" "s3://$BUCKET/db/latest.json" --endpoint-url "$ENDPOINT" --only-show-errors
+          echo "Uploaded backlot-$STAMP.dump.age ($SIZE bytes)"
+          rm -f "$OUT"
