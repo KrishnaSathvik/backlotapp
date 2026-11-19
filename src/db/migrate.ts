@@ -87,6 +87,61 @@ export async function appliedMigrations(client: SqlClient): Promise<AppliedMigra
   return rows.map((r) => ({ name: String(r.name), checksum: String(r.checksum) }));
 }
 
+/**
+ * Preflight schema-compatibility check for pending files.
+ *
+ * Every file uses `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`, which silently
+ * skip an object that already exists, even when it's a different design that happens to share
+ * the name (the Supabase `content-vault` project had its own `channels` table). So before
+ * anything runs:
+ * - an existing table must already have every column the pending file would create (extra
+ *   columns are fine: a later file or `db:push` may have added them);
+ * - an existing index with a pending file's index name must be on the same table.
+ * Returns one line per problem; empty means compatible.
+ */
+export function expectedObjects(sql: string) {
+  const tables: { table: string; columns: string[] }[] = [];
+  const tableRe = /CREATE TABLE IF NOT EXISTS\s+([a-z_][a-z0-9_]*)\s*\(([\s\S]*?)\n\);/gi;
+  const notColumns = ['constraint', 'primary', 'unique', 'foreign', 'check', 'exclude'];
+  for (const m of sql.matchAll(tableRe)) {
+    const columns = m[2]
+      .split('\n')
+      .map((l) => l.match(/^\s+([a-z_][a-z0-9_]*)\s+\S/i)?.[1]?.toLowerCase())
+      .filter((c): c is string => !!c && !notColumns.includes(c));
+    tables.push({ table: m[1].toLowerCase(), columns });
+  }
+  const indexRe = /CREATE (?:UNIQUE )?INDEX IF NOT EXISTS\s+([a-z_][a-z0-9_]*)\s+ON\s+([a-z_][a-z0-9_]*)/gi;
+  const indexes = [...sql.matchAll(indexRe)].map((m) => ({ index: m[1].toLowerCase(), table: m[2].toLowerCase() }));
+  return { tables, indexes };
+}
+
+export async function preflightConflicts(client: SqlClient, pending: MigrationFile[]): Promise<string[]> {
+  const problems: string[] = [];
+  for (const f of pending) {
+    const { tables, indexes } = expectedObjects(f.sql);
+    for (const t of tables) {
+      const { rows } = await client.query(
+        'SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1',
+        [t.table]
+      );
+      if (!rows.length) continue;
+      const have = new Set(rows.map((r) => String(r.column_name)));
+      const missing = t.columns.filter((c) => !have.has(c));
+      if (missing.length) problems.push(`${f.name}: table ${t.table} is missing columns: ${missing.join(', ')}`);
+    }
+    for (const i of indexes) {
+      const { rows } = await client.query(
+        'SELECT tablename FROM pg_indexes WHERE schemaname = current_schema() AND indexname = $1',
+        [i.index]
+      );
+      if (rows.length && String(rows[0].tablename) !== i.table) {
+        problems.push(`${f.name}: index ${i.index} already exists on ${String(rows[0].tablename)}, not ${i.table}`);
+      }
+    }
+  }
+  return problems;
+}
+
 export interface RunResult {
   applied: string[];
   plan: MigrationPlan;
@@ -111,6 +166,13 @@ export async function runMigrations(
       throw new Error(
         `Refusing to migrate. Changed since applied: [${plan.changed.join(', ')}]. Recorded but missing: [${plan.missing.join(', ')}]. ` +
           'Never edit an applied migration; add a new file.'
+      );
+    }
+    const conflicts = await preflightConflicts(client, plan.pending);
+    if (conflicts.length) {
+      throw new Error(
+        `Refusing to migrate: existing objects don't match the pending migrations. Nothing was changed.\n  ${conflicts.join('\n  ')}\n` +
+          'Move or rename the conflicting objects first (see docs/INFRA_SETUP.md, "Existing content-vault database").'
       );
     }
     for (const n of plan.upToDate) log(`  ok       ${n}`);

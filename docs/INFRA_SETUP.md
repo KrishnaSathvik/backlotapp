@@ -10,7 +10,7 @@ Related: [DEPLOYMENT.md](DEPLOYMENT.md) (env inventory, migrations, rollback), [
 | --- | --- |
 | Use | Personal, noncommercial, limited-access private beta. A commercial launch means moving off Vercel Hobby first. |
 | Hosting | Vercel Hobby, region `iad1` (Washington, D.C.) |
-| Database | Supabase Free, region **East US (North Virginia)** |
+| Database | Supabase Free. **Production reuses the existing project `content-vault`** (East US, Ohio, `us-east-2`; decision 2026-11-19). Staging is a separate, disposable `backlot-staging` project in the same region. Vercel stays `iad1` until staging measures the latency. |
 | Media | Private Cloudflare R2 bucket |
 | Authentication | Firebase Authentication with Google sign-in, in a **dedicated Backlot Firebase project** (if the check in §2 finds no real users in the old project) |
 | Slate | OpenAI GPT-6.1 Sol primary, Claude Opus 5.5 fallback. No other providers. |
@@ -85,6 +85,23 @@ Do **staging first** (§5), run the release checklist against it, then repeat fo
 6. **SQL editor:** run [`ops/supabase/roles.sql`](../ops/supabase/roles.sql) with two generated passwords. It removes the Data API roles' table access, creates the limited runtime role `backlot_app` (data access only; it can't alter the schema or disable the guard triggers), and creates the read-only `backlot_backup` role.
 7. `DATABASE_URL` = `postgresql://backlot_app.<project-ref>:<password>@<transaction-pooler-host>:6543/postgres`. Check it locally before putting it in Vercel: `DATABASE_URL=… npm run dev`, then sign in and load the library.
 8. **Advisors** (Database → Advisors): the security advisor should show no exposed tables, because the Data API is off.
+
+### 3.1a Existing `content-vault` database (production) [confirm]
+
+`content-vault` already has one Supabase-dashboard migration, `init_content_vault`, with three **empty** tables (`channels`, `items`, `files`: uuid keys, `auth.users` foreign keys, RLS) and a `set_updated_at()` function. That's an earlier design, not Backlot's. Its `channels` table and `channels_user_idx` index share Backlot's names, so the migration runner's preflight refuses to run against it, and nothing is changed. Backlot is **not** rewritten to fit it.
+
+Procedure: rehearse each step on staging first, with the same legacy objects created from the same SQL (`supabase_migrations.schema_migrations` of `content-vault`). Then do it on `content-vault`:
+
+1. **Pre-check (read-only):** the three tables still have 0 rows; no other objects in `public`; no views, other tables' foreign keys or other triggers depend on them. If anything unexpected turns up, stop and report it.
+2. **Move aside:** run [`ops/supabase/legacy-init-transition.sql`](../ops/supabase/legacy-init-transition.sql) in the SQL editor. It's one transaction. It re-checks the rows and dependencies and stops without changes if either check fails. Otherwise it moves the tables (with their indexes, constraints, policies and trigger) and the function into the schema `legacy_init`. It deletes nothing, and the Supabase migration history is left as it is.
+3. **Migrate:** `npm run db:migrate` (dry run: **8 pending**, no preflight error), then `-- --apply`. Expect `Account write guard triggers: 13`.
+4. **Roles:** `ops/supabase/roles.sql`, then its verification queries.
+5. **Verify:** the security advisor is clean; `legacy_init` isn't exposed through the Data API.
+
+**Rollback:**
+- **Before step 3:** the rollback block at the end of the transition file moves everything back to `public` and drops the then-empty `legacy_init`.
+- **After step 3:** only while Backlot's tables are still empty, drop them first (the rollback comment in the baseline migration, plus `backlot_schema_migrations`), then run the same rollback block.
+- Both paths are tested in `src/db/migrations.test.ts`.
 
 ### 3.2 Cloudflare R2 [confirm: adds a payment method]
 
