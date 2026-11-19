@@ -35,22 +35,7 @@ Cautions:
 
 1. **Key pair**, on the owner's machine: `age-keygen -o backlot-backup.key`. Store the key file offline (password manager or hardware), with a second copy somewhere separate. The printed `age1…` public key becomes `BACKUP_AGE_RECIPIENT`.
 2. **Backups bucket** in R2 (for example `backlot-db-backups`): private, no public URL. Add the lifecycle rule "delete after 30 days". Create an API token with *Object Read & Write* on this bucket only.
-3. **Read-only role** (Supabase SQL editor, as `postgres`):
-
-   ```sql
-   CREATE ROLE backlot_backup LOGIN PASSWORD '<generated 32+ character password>';
-   GRANT pg_read_all_data TO backlot_backup;
-   ```
-
-   Verify that Supabase allows granting `pg_read_all_data`. If it doesn't, use:
-
-   ```sql
-   GRANT USAGE ON SCHEMA public TO backlot_backup;
-   GRANT SELECT ON ALL TABLES IN SCHEMA public TO backlot_backup;
-   GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backlot_backup;
-   ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO backlot_backup;
-   ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON SEQUENCES TO backlot_backup;
-   ```
+3. **Read-only role:** created by `ops/supabase/manual-setup/09_roles.sql` (or `ops/supabase/roles.sql`), password set as in that folder's README, step 10. It gets `SELECT` on the `public` schema only, which is all the dump reads. It is deliberately not given `pg_read_all_data`, which would also expose Supabase's `auth` schema.
 
 4. **GitHub secrets:** `BACKUP_DATABASE_URL` (session pooler URL for `backlot_backup`), `BACKUP_AGE_RECIPIENT`, `BACKUP_R2_ENDPOINT`, `BACKUP_R2_BUCKET`, `BACKUP_R2_ACCESS_KEY_ID`, `BACKUP_R2_SECRET_ACCESS_KEY`.
 5. Run the workflow once manually, then do the restore test.

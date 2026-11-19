@@ -81,8 +81,8 @@ Do **staging first** (§5), run the release checklist against it, then repeat fo
 4. **Connect** (top bar): copy
    - the **Session pooler** URI (port 5432) → `DATABASE_MIGRATION_URL`, kept in the owner's local `.env.local` only;
    - the **Transaction pooler** host (port 6543), for `DATABASE_URL` below.
-5. Migrations, from the owner's machine: `npm run db:migrate` (dry run: 8 pending), then `npm run db:migrate -- --apply`. Expect `Account write guard triggers: 13 (expected 13)`.
-6. **SQL editor:** run [`ops/supabase/roles.sql`](../ops/supabase/roles.sql) with two generated passwords. It removes the Data API roles' table access, creates the limited runtime role `backlot_app` (data access only; it can't alter the schema or disable the guard triggers), and creates the read-only `backlot_backup` role.
+5. Migrations: either in the SQL Editor with [`ops/supabase/manual-setup/`](../ops/supabase/manual-setup/README.md) (steps 00–11, including roles and verification; no database password on the owner's machine; chosen 2026-11-19), or from the owner's machine with `npm run db:migrate` (dry run: 8 pending), then `-- --apply`. Both record the same migration history.
+6. **SQL editor** (skip if you used manual-setup, whose steps 09–10 do this): run [`ops/supabase/roles.sql`](../ops/supabase/roles.sql) with two generated passwords. It removes the Data API roles' table access, creates the limited runtime role `backlot_app` (data access only; it can't alter the schema or disable the guard triggers), and creates the read-only `backlot_backup` role.
 7. `DATABASE_URL` = `postgresql://backlot_app.<project-ref>:<password>@<transaction-pooler-host>:6543/postgres`. Check it locally before putting it in Vercel: `DATABASE_URL=… npm run dev`, then sign in and load the library.
 8. **Advisors** (Database → Advisors): the security advisor should show no exposed tables, because the Data API is off.
 

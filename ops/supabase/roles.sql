@@ -1,6 +1,8 @@
 -- Backlot: one-time Supabase role setup. Run AFTER `npm run db:migrate -- --apply`, in the
 -- Supabase SQL editor (as postgres), once per project (staging and production separately).
 -- Not a migration: it uses Supabase-only roles and creates login roles with passwords.
+-- For setup entirely in the SQL Editor (no local database password), use
+-- ops/supabase/manual-setup/ instead: same grants, idempotent, no password in the script.
 -- docs/INFRA_SETUP.md, "Supabase". Nothing here has been run.
 --
 -- 1. Backlot never uses Supabase's Data API (PostgREST). Supabase grants its API roles
@@ -27,10 +29,15 @@ REVOKE ALL ON public.backlot_schema_migrations FROM backlot_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO backlot_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO backlot_app;
 
--- 3. Read-only role for the nightly backup (docs/BACKUPS.md). If Supabase refuses
---    pg_read_all_data, use the per-schema SELECT grants listed there instead.
+-- 3. Read-only role for the nightly backup (docs/BACKUPS.md), public schema only (the backup
+--    dumps only public). Explicit grants rather than pg_read_all_data, which would also expose
+--    Supabase's auth schema.
 CREATE ROLE backlot_backup LOGIN PASSWORD 'REPLACE_WITH_ANOTHER_GENERATED_PASSWORD';
-GRANT pg_read_all_data TO backlot_backup;
+GRANT USAGE ON SCHEMA public TO backlot_backup;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO backlot_backup;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backlot_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO backlot_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON SEQUENCES TO backlot_backup;
 
 -- Checks (expected results in docs/RELEASE_CHECKLIST.md, S-DB5):
 --   SELECT has_table_privilege('anon', 'public.content_items', 'SELECT');              -- false
