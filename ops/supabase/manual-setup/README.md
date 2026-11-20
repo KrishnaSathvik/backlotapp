@@ -2,7 +2,9 @@
 
 These scripts initialize Backlot's database through the Supabase SQL Editor, without a database password on your machine. They do exactly what `npm run db:migrate -- --apply` followed by the role setup would do. Afterwards, `db:migrate` sees every migration as applied.
 
-**Order of use:** `backlot-staging` (`rzgfyzsjbfvdallduxio`) first. `content-vault` only after staging's verification passes and the owner approves (INFRA_SETUP.md §3.1a). Both databases have already had their legacy tables moved into `legacy_init` (`ops/supabase/legacy-init-transition.sql`). Step 00 confirms that.
+**Status:** production `backlot` (`pdhymiqjlzaanarleucv`, formerly `content-vault`) completed steps 00–11 on 2026-11-20, with all 33 verification checks `ok`. The first staging project was deleted the same day.
+
+**Before step 00:** a database created from the old `content-vault` design must first run `ops/supabase/legacy-init-transition.sql`. Step 00 fails rows 4–8 until it has. A brand-new project (for example a new staging one) has no legacy tables, so step 00 rows 4–5 fail by design. Check that rows 6–9 say `ok`, then go on.
 
 ## Run order
 

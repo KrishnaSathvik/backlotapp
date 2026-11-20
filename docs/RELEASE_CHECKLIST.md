@@ -2,6 +2,8 @@
 
 The single checklist for the final verification cycle. It replaces the earlier VERIFICATION.md.
 
+**Status 2026-11-20:** the production database is set up and verified (INFRA_SETUP.md "Status"). There's no staging environment right now: the first staging database was deleted. Items that pause the database or break credentials must run on a staging environment, never on production, so creating one again is an open owner decision.
+
 **Prepared, not executed.** Only local checks have passed so far: typecheck, lint, build and `npm test` (unit tests and PGlite migrations). Run this checklist against the **staging** environment (INFRA_SETUP.md §5), and only once the owner authorizes final verification. Then re-run the items marked **P** against production before inviting anyone.
 
 Ground rules:

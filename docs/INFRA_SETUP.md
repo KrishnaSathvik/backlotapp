@@ -1,6 +1,18 @@
 # Infrastructure setup: staging first, then production
 
-**Nothing in this guide has been done.** It's the exact procedure for the owner to follow, or to authorize step by step. Every step marked **[confirm]** creates a resource, adds billing details, stores a secret or deploys, so the owner confirms it at the time it's done. Approval of this document is not approval of the steps.
+This is the exact procedure for the owner to follow, or to authorize step by step. Every step marked **[confirm]** creates a resource, adds billing details, stores a secret or deploys, so the owner confirms it at the time it's done. Approval of this document is not approval of the steps.
+
+## Status (2026-11-20)
+
+**Done:**
+- **Production database.** The Supabase project formerly named `content-vault` was renamed **`backlot`** (`pdhymiqjlzaanarleucv`, `us-east-2`). The owner set it up in the SQL Editor on 2026-11-20: legacy tables moved into `legacy_init` (§3.1a), all 8 migrations applied with exact checksums, roles `backlot_app` and `backlot_backup` created with passwords, and `ops/supabase/manual-setup/11_verify_readonly.sql` passed all 33 checks.
+- **Staging database deleted.** `backlot-staging` (`rzgfyzsjbfvdallduxio`) only ever held the legacy-table rehearsal. The owner deleted it on 2026-11-20. No staging Firebase, Vercel, R2 or Worker resources were ever created.
+
+**Left:**
+1. `backlot` dashboard: Data API off (§3.1 step 3); SSL enforcement on and CA certificate saved (§3.1 step 2); security advisor clean (§3.1 step 8).
+2. **Owner decision: a staging environment or not.** The release checklist's failure tests (pausing the database, a wrong CA, broken R2 credentials) must not run against production. Keeping staging means creating a new free Supabase staging project (§3.1, then manual-setup 00–11 without the legacy transition) plus the rest of §5. Without staging, those tests are skipped or need a recorded decision.
+3. Firebase production project (§2), R2 (§3.2), Worker scheduler (§3.3), Vercel (§3.4), backups (§3.5), Slate provider keys (§3.6), domain (§3.7).
+4. RELEASE_CHECKLIST.md, then the owner's explicit release approval.
 
 Related: [DEPLOYMENT.md](DEPLOYMENT.md) (env inventory, migrations, rollback), [STORAGE.md](STORAGE.md) (R2 CORS JSON), [WORKERS.md](WORKERS.md) (scheduler), [BACKUPS.md](BACKUPS.md) (backups, key custody, restore), [COSTS.md](COSTS.md) (allowances), [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) (final verification).
 
@@ -10,7 +22,7 @@ Related: [DEPLOYMENT.md](DEPLOYMENT.md) (env inventory, migrations, rollback), [
 | --- | --- |
 | Use | Personal, noncommercial, limited-access private beta. A commercial launch means moving off Vercel Hobby first. |
 | Hosting | Vercel Hobby, region `iad1` (Washington, D.C.) |
-| Database | Supabase Free. **Production reuses the existing project `content-vault`** (East US, Ohio, `us-east-2`; decision 2026-11-19). Staging is a separate, disposable `backlot-staging` project in the same region. Vercel stays `iad1` until staging measures the latency. |
+| Database | Supabase Free. **Production reuses the existing project formerly named `content-vault`, renamed `backlot` on 2026-11-20** (`pdhymiqjlzaanarleucv`, East US, Ohio, `us-east-2`; decision 2026-11-19). Staging, if used, is a separate, disposable project in the same region (the first one was deleted on 2026-11-20). Vercel stays `iad1` until staging measures the latency. |
 | Media | Private Cloudflare R2 bucket |
 | Authentication | Firebase Authentication with Google sign-in, in a **dedicated Backlot Firebase project** (if the check in §2 finds no real users in the old project) |
 | Slate | OpenAI GPT-6.1 Sol primary, Claude Opus 5.5 fallback. No other providers. |
@@ -86,7 +98,9 @@ Do **staging first** (§5), run the release checklist against it, then repeat fo
 7. `DATABASE_URL` = `postgresql://backlot_app.<project-ref>:<password>@<transaction-pooler-host>:6543/postgres`. Check it locally before putting it in Vercel: `DATABASE_URL=… npm run dev`, then sign in and load the library.
 8. **Advisors** (Database → Advisors): the security advisor should show no exposed tables, because the Data API is off.
 
-### 3.1a Existing `content-vault` database (production) [confirm]
+### 3.1a Existing `content-vault` database (production, now named `backlot`) [done 2026-11-20]
+
+**Done on 2026-11-20** through the SQL Editor: the transition, then manual-setup steps 00–11 (in place of steps 3–4 below). Step 11 passed all 33 checks. The staging rehearsal covered only the transition. Kept for the record and for rollback.
 
 `content-vault` already has one Supabase-dashboard migration, `init_content_vault`, with three **empty** tables (`channels`, `items`, `files`: uuid keys, `auth.users` foreign keys, RLS) and a `set_updated_at()` function. That's an earlier design, not Backlot's. Its `channels` table and `channels_user_idx` index share Backlot's names, so the migration runner's preflight refuses to run against it, and nothing is changed. Backlot is **not** rewritten to fit it.
 

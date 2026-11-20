@@ -40,8 +40,11 @@ export const columnsFingerprint = (t: string) =>
   `(SELECT md5(coalesce(string_agg(column_name || ' ' || data_type || ' ' || is_nullable || ' ' || coalesce(column_default, ''), ',' ORDER BY column_name), '')) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ${lit(t)})`;
 export const indexesFingerprint = (t: string) =>
   `(SELECT md5(coalesce(string_agg(indexdef, ',' ORDER BY indexname), '')) FROM pg_indexes WHERE schemaname = 'public' AND tablename = ${lit(t)})`;
+// contype 'n' is excluded: Postgres 18 (PGlite, which computes the expected values) records each
+// NOT NULL as a pg_constraint row, Postgres 17 (Supabase) does not. Nullability is already part of
+// the columns fingerprint (is_nullable), so nothing is lost.
 export const constraintsFingerprint = (t: string) =>
-  `(SELECT md5(coalesce(string_agg(k.conname || ' ' || pg_get_constraintdef(k.oid), ',' ORDER BY k.conname), '')) FROM pg_constraint k JOIN pg_class c ON c.oid = k.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = ${lit(t)})`;
+  `(SELECT md5(coalesce(string_agg(k.conname || ' ' || pg_get_constraintdef(k.oid), ',' ORDER BY k.conname), '')) FROM pg_constraint k JOIN pg_class c ON c.oid = k.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = ${lit(t)} AND k.contype <> 'n')`;
 
 export interface TableFingerprint {
   table: string;

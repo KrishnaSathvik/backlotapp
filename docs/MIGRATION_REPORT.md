@@ -246,3 +246,11 @@ Local checks, re-run on the whole uncommitted tree:
 Live account state, checked read-only: no Backlot Vercel project; no Backlot Supabase project (the unrelated `content-vault` project is still the only active one). **Nothing has been provisioned, deployed, committed or migrated.** No item in RELEASE_CHECKLIST.md has run yet.
 
 Release blockers: every item in RELEASE_CHECKLIST.md, legal review (S-PR3) before any public launch, and the owner's explicit release approval.
+
+## Production database setup (2026-11-20)
+
+- The Supabase project `content-vault` was renamed **`backlot`** (`pdhymiqjlzaanarleucv`) by the owner.
+- The owner ran, in its SQL Editor: `legacy-init-transition.sql`, then `ops/supabase/manual-setup` steps 00–11. Result: 8 migrations recorded with exact checksums, 15 tables, 13 account guard triggers, `backlot_app` and `backlot_backup` with passwords, legacy objects kept in `legacy_init`. Step 11: 33/33 `ok`.
+- **Fix found during verification:** step 11 first reported `constraints differ` on all 15 tables. The expected values come from PGlite, which is Postgres 18, and Postgres 18 records each `NOT NULL` as a `pg_constraint` row. Supabase runs Postgres 17. The constraints fingerprint in `src/db/manual-setup.ts` now excludes `contype = 'n'` (nullability is already in the columns fingerprint), and step 11 was regenerated. The migration files and steps 01–09 are unchanged.
+- `backlot-staging` (`rzgfyzsjbfvdallduxio`) had only the legacy-table rehearsal, never Backlot's migrations. The owner deleted it on 2026-11-20.
+- Still not provisioned: Firebase, R2, Worker, Vercel, backups, provider keys, domain. Whether to have a staging environment is an open owner decision (INFRA_SETUP.md "Status").
