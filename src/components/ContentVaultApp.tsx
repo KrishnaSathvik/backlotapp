@@ -19,7 +19,6 @@ import {
 import { supabaseBrowser, takeReauthIntent, type AuthUser } from '@/src/lib/supabase/browser';
 import { hasLinkPreview } from '@/src/lib/link-preview';
 import { fetchLinkPreview } from '@/src/lib/link-preview-client';
-import { Pencil, Trash2 } from 'lucide-react';
 import { AccountSettingsSheet } from './AccountSettingsSheet';
 import { DEMO_CHANNELS, DEMO_IDEAS, DEMO_ITEMS } from '@/src/lib/demo-data';
 import { useTheme } from '@/src/hooks/useTheme';
@@ -38,7 +37,7 @@ import { StudioChatPanel, type ChatFocus } from './StudioChatPanel';
 import { CalendarView } from './CalendarView';
 import { DELETION_STATUS_KEY } from './DeletionStatus';
 import type { IdeaFieldsPatch } from './IdeaDetailSheet';
-import { ActionMenu, buttonStyles, cx, FeedbackProvider, sizes, useFeedback } from './ui';
+import { buttonStyles, cx, FeedbackProvider, sizes, useFeedback } from './ui';
 
 
 const PAGE_COPY: Record<ActiveTab, { title: string; subtitle?: string }> = {
@@ -1040,13 +1039,6 @@ const VaultShell: React.FC = () => {
                     .join(' · ')}
                 </p>
               </div>
-              <ActionMenu
-                label={`More for ${activeChannel.name}`}
-                items={[
-                  { label: 'Edit channel', icon: Pencil, onSelect: () => setEditingChannel(activeChannel) },
-                  { label: 'Delete channel', icon: Trash2, onSelect: () => handleDeleteChannel(activeChannel), tone: 'danger' },
-                ]}
-              />
             </div>
           ) : (
             <div className="min-w-0 flex-1">

@@ -58,20 +58,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const currentPage = Math.min(page, pageCount);
   const pageItems = sortedItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  if (totalItemsCount === 0) {
-    return (
-      <section aria-label="Content library" className="space-y-4">
-        <div data-testid="library-empty-state" className="flex flex-col items-center rounded-3xl border border-dashed border-border-strong px-6 py-20 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-2 text-muted">
-            <Sparkles className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <h2 className="mt-4 text-lg font-bold tracking-tight">Your library is empty</h2>
-          <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">Your posts will appear here once you add them.</p>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section aria-label="Content library" className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -95,6 +81,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       </div>
 
+      {totalItemsCount === 0 ? (
+        <div data-testid="library-empty-state" className="flex flex-col items-center rounded-3xl border border-dashed border-border-strong px-6 py-20 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-2 text-muted">
+            <Sparkles className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <h2 className="mt-4 text-lg font-bold tracking-tight">Your library is empty</h2>
+          <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">Your posts will appear here once you add them.</p>
+        </div>
+      ) : (
+      <>
       <div role="tablist" aria-label="Filter by stage" className="flex flex-wrap items-center gap-2">
         {([{ key: 'all' as const, label: 'All' }, ...STATUS_OPTIONS] as const).map((s) => {
           const active = filters.status === s.key;
@@ -224,6 +220,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       )}
       <Pager page={currentPage} pageCount={pageCount} onPage={setPage} label="Library pages" />
+      </>
+      )}
     </section>
   );
 };

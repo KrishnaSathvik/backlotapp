@@ -33,11 +33,11 @@ export function useAppBreakpoint(): AppBreakpoint | null {
   return bp;
 }
 
-export const TABS: Array<{ key: ActiveTab; label: string; short: string; icon: React.ElementType }> = [
-  { key: 'library', label: 'Library', short: 'Library', icon: LayoutGrid },
-  { key: 'ideas', label: 'Ideas', short: 'Ideas', icon: Lightbulb },
-  { key: 'calendar', label: 'Calendar', short: 'Calendar', icon: CalendarDays },
-  { key: 'chat', label: 'Slate', short: 'Slate', icon: MessageSquare },
+export const TABS: Array<{ key: ActiveTab; label: string; short: string; icon: React.ElementType; iconClass: string }> = [
+  { key: 'library', label: 'Library', short: 'Library', icon: LayoutGrid, iconClass: 'text-electric-500' },
+  { key: 'ideas', label: 'Ideas', short: 'Ideas', icon: Lightbulb, iconClass: 'text-cantaloupe-500' },
+  { key: 'calendar', label: 'Calendar', short: 'Calendar', icon: CalendarDays, iconClass: 'text-emerald-500' },
+  { key: 'chat', label: 'Slate', short: 'Slate', icon: MessageSquare, iconClass: '' },
 ];
 
 interface ShellProps {
@@ -97,7 +97,7 @@ function SidebarBody({
   return (
     <>
       <nav aria-label="Sections" className="mt-2 space-y-0.5 px-3">
-        {TABS.map(({ key, label, icon: Icon }) => {
+        {TABS.map(({ key, label, icon: Icon, iconClass }) => {
           const on = activeTab === key && !(key === 'library' && activeChannel !== 'all');
           const count = counts[key];
           return (
@@ -115,9 +115,9 @@ function SidebarBody({
             >
               {on ? <span className="absolute -left-3 top-2 h-5 w-1 rounded-r-full bg-accent" aria-hidden="true" /> : null}
               {key === 'chat' ? (
-                <SlateAvatar size={18} chip={false} className={on ? '' : 'opacity-70 grayscale'} />
+                <SlateAvatar size={18} chip={false} />
               ) : (
-                <Icon className={cx('h-4 w-4', on ? 'text-link' : 'text-faint')} aria-hidden="true" />
+                <Icon className={cx('h-4 w-4', iconClass)} aria-hidden="true" />
               )}
               {label}
               {count !== null ? (
@@ -327,7 +327,7 @@ export function TabletRail({
         <LogoMark />
       </div>
       <nav aria-label="Sections" className="flex flex-col items-center gap-1">
-        {TABS.map(({ key, label, icon: Icon }) => {
+        {TABS.map(({ key, label, icon: Icon, iconClass }) => {
           const on = activeTab === key && !(key === 'library' && activeChannel !== 'all');
           return (
             <button
@@ -340,15 +340,15 @@ export function TabletRail({
               className={cx(
                 'relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors',
                 on
-                  ? 'bg-surface text-link shadow-sm ring-1 ring-border'
+                  ? 'bg-surface text-text shadow-sm ring-1 ring-border'
                   : 'text-muted hover:bg-surface-2 hover:text-text'
               )}
             >
               {on ? <span className="absolute -left-2.5 top-3 h-5 w-1 rounded-r-full bg-accent" aria-hidden="true" /> : null}
               {key === 'chat' ? (
-                <SlateAvatar size={20} chip={false} className={on ? '' : 'opacity-70 grayscale'} />
+                <SlateAvatar size={20} chip={false} />
               ) : (
-                <Icon className="h-5 w-5" aria-hidden="true" />
+                <Icon className={cx('h-5 w-5', iconClass)} aria-hidden="true" />
               )}
             </button>
           );
@@ -461,7 +461,7 @@ export function MobileTopBar(shell: ShellProps) {
 export function PhoneTabBar({ activeTab, onTab, onNew }: { activeTab: ActiveTab; onTab: (t: ActiveTab) => void; onNew: () => void }) {
   const left = TABS.filter((t) => t.key === 'library' || t.key === 'ideas');
   const right = TABS.filter((t) => t.key === 'calendar' || t.key === 'chat');
-  const tab = (key: ActiveTab, label: string, Icon: React.ElementType) => {
+  const tab = (key: ActiveTab, label: string, Icon: React.ElementType, iconClass: string) => {
     const on = activeTab === key;
     return (
       <button
@@ -471,7 +471,7 @@ export function PhoneTabBar({ activeTab, onTab, onNew }: { activeTab: ActiveTab;
         aria-current={on ? 'page' : undefined}
         className={cx('flex min-h-11 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold', on ? 'text-text' : 'text-muted')}
       >
-        {key === 'chat' ? <SlateAvatar size={20} chip={false} className={on ? '' : 'opacity-70 grayscale'} /> : <Icon className="h-5 w-5" aria-hidden="true" />}
+        {key === 'chat' ? <SlateAvatar size={20} chip={false} /> : <Icon className={cx('h-5 w-5', iconClass)} aria-hidden="true" />}
         {label}
       </button>
     );
@@ -479,13 +479,13 @@ export function PhoneTabBar({ activeTab, onTab, onNew }: { activeTab: ActiveTab;
   return (
     <nav aria-label="Sections" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg pb-[env(safe-area-inset-bottom)] md:hidden">
       <div className="grid grid-cols-5 items-center px-1">
-        {left.map(({ key, label, icon }) => tab(key, label, icon))}
+        {left.map(({ key, label, icon, iconClass }) => tab(key, label, icon, iconClass))}
         <div className="flex items-center justify-center">
           <button type="button" onClick={onNew} aria-label="Create" className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent text-white shadow-sm">
             <Plus className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
-        {right.map(({ key, short, icon }) => tab(key, short, icon))}
+        {right.map(({ key, short, icon, iconClass }) => tab(key, short, icon, iconClass))}
       </div>
     </nav>
   );
