@@ -74,6 +74,12 @@ const SAMPLE_THREAD: ChatTurn[] = [
     text: 'Here are three, based on your desk setup video:\n\n1. “I rebuilt my desk for one reason.”\n2. “This $40 light changed every shot.”\n3. “Stop filming at eye level.”',
     refs: [{ type: 'post', id: 100, title: 'Minimalist Desk Camera Rig Breakdown 2026' }],
   },
+  { id: 'demo-3', role: 'user', text: 'Use the second one as the caption, with my usual tags.' },
+  {
+    id: 'demo-4',
+    role: 'model',
+    text: 'This $40 light changed every shot. Here’s the full desk, under $300.\n\n#desksetup #creatorgear',
+  },
 ];
 
 /** What Slate is working on: one attached post or idea. */
@@ -316,13 +322,18 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
     if (saved) Promise.resolve(saved).then(openConversation);
   }, [authToken, historyKey, openKey, openConversation]);
 
-  // Auto-grow the composer up to ~5 lines.
+  // Auto-grow the composer up to ~5 lines. A hidden panel reports a tiny scrollHeight,
+  // which clips the placeholder on phones, so measure again when the chat is shown.
   useEffect(() => {
     const el = inputRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-  }, [input]);
+    if (!el || !active) return;
+    el.style.height = '0px';
+    const styles = getComputedStyle(el);
+    const line = Number.parseFloat(styles.lineHeight) || 24;
+    const pad = (Number.parseFloat(styles.paddingTop) || 0) + (Number.parseFloat(styles.paddingBottom) || 0);
+    const min = line + pad + 4;
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, min), 200)}px`;
+  }, [input, active]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -611,14 +622,15 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
           </div>
         ) : null}
 
-        <div className="flex items-end gap-1 p-1.5 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:p-0">
+        <div className="flex items-center gap-1 p-1.5 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-end md:p-0">
         <button
           type="button"
+          disabled={sample}
           onClick={() => setPickerOpen((v) => !v)}
-          aria-expanded={pickerOpen}
+          aria-expanded={sample ? undefined : pickerOpen}
           aria-label="Attach a post or idea"
           title="Attach a post or idea"
-          className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 md:col-start-1 md:row-start-2 md:mb-2.5 md:ml-2.5 md:mt-1 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+          className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 disabled:pointer-events-none disabled:hover:bg-transparent md:col-start-1 md:row-start-2 md:mb-2.5 md:ml-2.5 md:mt-1 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
         >
           <Plus className="h-[18px] w-[18px]" aria-hidden="true" />
         </button>
@@ -627,25 +639,44 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
           ref={inputRef}
           rows={1}
           value={input}
+          readOnly={sample}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
+            if (sample) {
+              e.preventDefault();
+              return;
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               sendMessage();
             }
           }}
           placeholder={
-            post || idea
-              ? `Ask about “${clip(attachedTitle, 40)}”…`
-              : 'Message Slate'
+            sample
+              ? 'Sign up to chat'
+              : post || idea
+                ? `Ask about “${clip(attachedTitle, 40)}”…`
+                : 'Message Slate'
           }
-          aria-label="Message Slate"
+          aria-label={sample ? 'Sign up to chat' : 'Message Slate'}
           maxLength={8000}
-          className="block max-h-[200px] min-w-0 flex-1 resize-none bg-transparent px-2 py-2.5 text-[16px] leading-6 text-zinc-950 placeholder:text-zinc-400 focus:outline-none disabled:cursor-not-allowed md:col-span-3 md:row-start-1 md:w-full md:flex-none md:px-5 md:pb-1 md:pt-4 lg:text-[15px] dark:text-zinc-50 dark:placeholder:text-zinc-500"
+          className={cx(
+            'block max-h-[200px] min-h-11 min-w-0 flex-1 resize-none overflow-hidden bg-transparent px-2 py-2.5 text-[16px] leading-6 text-zinc-950 placeholder:text-zinc-400 focus:outline-none disabled:cursor-not-allowed md:col-span-3 md:row-start-1 md:min-h-0 md:w-full md:flex-none md:overflow-y-auto md:px-5 md:pb-1 md:pt-4 lg:text-[15px] dark:text-zinc-50 dark:placeholder:text-zinc-500',
+            sample && 'pointer-events-none'
+          )}
         />
 
         <div className="mb-0.5 flex shrink-0 items-center gap-1.5 md:col-start-3 md:row-start-2 md:mb-2.5 md:mr-2.5 md:mt-1 md:justify-self-end">
-          {locked ? (
+          {sample ? (
+            <button
+              type="button"
+              disabled
+              aria-label="Send message"
+              className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+            >
+              <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          ) : locked ? (
             onSignIn && input.trim() ? (
               <button
                 type="submit"

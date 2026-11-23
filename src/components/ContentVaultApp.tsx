@@ -326,6 +326,8 @@ const VaultShell: React.FC = () => {
   };
 
   const handleSignOut = async () => {
+    // The demo is the demo. Signing out here would drop the sample workspace.
+    if (previewMode) return;
     let uid = authUser?.uid ?? null;
     if (!uid) {
       try {

@@ -62,7 +62,10 @@ export function SlateConversation({ className }: { className?: string }) {
         <br />
         3. “Stop filming at eye level.”
       </Bubble>
-      <Bubble me>Use #2 in the caption, with my usual tags.</Bubble>
+      <Bubble me>Use the second one as the caption, with my usual tags.</Bubble>
+      <Bubble>
+        This $40 light changed every shot. Here’s the full desk, under $300. #desksetup #creatorgear
+      </Bubble>
       <SuggestionCard />
     </figure>
   );

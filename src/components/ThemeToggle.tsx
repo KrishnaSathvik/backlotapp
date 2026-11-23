@@ -13,7 +13,7 @@ const OPTIONS: Array<{ key: ThemePreference; label: string; icon: React.ElementT
 ];
 
 /** Segmented Light / System / Dark switch. `compact` shows a single cycling button. */
-export function ThemeToggle({ compact = false, className }: { compact?: boolean; className?: string }) {
+export function ThemeToggle({ compact = false, className, disabled = false }: { compact?: boolean; className?: string; disabled?: boolean }) {
   const { theme, setTheme } = useTheme();
 
   if (compact) {
@@ -24,11 +24,12 @@ export function ThemeToggle({ compact = false, className }: { compact?: boolean;
     return (
       <button
         type="button"
+        disabled={disabled}
         onClick={() => setTheme(next.key)}
         aria-label={`${current.label}. Switch to ${next.label.toLowerCase()}`}
         title={current.label}
         className={cx(
-          'flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition-colors hover:text-zinc-950 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-white',
+          'flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition-colors hover:text-zinc-950 disabled:pointer-events-none disabled:hover:text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-white dark:disabled:hover:text-zinc-300',
           className
         )}
       >
@@ -41,8 +42,10 @@ export function ThemeToggle({ compact = false, className }: { compact?: boolean;
     <div
       role="radiogroup"
       aria-label="Theme"
+      aria-disabled={disabled || undefined}
       className={cx(
         'relative flex items-center rounded-full border border-zinc-200 bg-zinc-100/80 p-0.5 dark:border-zinc-800 dark:bg-zinc-900',
+        disabled && 'pointer-events-none',
         className
       )}
     >
@@ -56,6 +59,7 @@ export function ThemeToggle({ compact = false, className }: { compact?: boolean;
             aria-checked={active}
             aria-label={label}
             title={label}
+            disabled={disabled}
             onClick={() => setTheme(key)}
             className={cx(
               'flex h-7 w-7 items-center justify-center rounded-full transition-all',

@@ -1,8 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import React, { useEffect, useState } from 'react';
-import { CalendarDays, FileText, LayoutGrid, Lightbulb, MessageSquare } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { CalendarDays, ChevronRight, FileText, LayoutGrid, Lightbulb, MessageSquare } from 'lucide-react';
 import { cx } from '../ui';
 
 export type ScreenName = 'library' | 'ideas' | 'calendar' | 'chat' | 'detail';
@@ -36,7 +36,7 @@ export function Shot({
   return (
     <>
       <Image
-        src={`/screens/${kind}-${name}-light.jpg?v=4`}
+        src={`/screens/${kind}-${name}-light.jpg?v=7`}
         alt={alt}
         width={w}
         height={h}
@@ -45,7 +45,7 @@ export function Shot({
         className={cx('block h-auto w-full dark:hidden', className)}
       />
       <Image
-        src={`/screens/${kind}-${name}-dark.jpg?v=4`}
+        src={`/screens/${kind}-${name}-dark.jpg?v=7`}
         alt={alt}
         width={w}
         height={h}
@@ -125,6 +125,9 @@ export function HeroShowcase() {
   const [paused, setPaused] = useState(false);
   // Once someone picks a screen, stop rotating (WCAG 2.2.2: moving content can be stopped).
   const [chosen, setChosen] = useState(false);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // Phones clip the last chip. True while Details is still off to the right.
+  const [more, setMore] = useState(true);
 
   useEffect(() => {
     if (paused || chosen) return;
@@ -132,6 +135,28 @@ export function HeroShowcase() {
     const id = window.setTimeout(() => setActive((a) => (a + 1) % TABS.length), INTERVAL);
     return () => window.clearTimeout(id);
   }, [active, paused, chosen]);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const update = () => setMore(el.scrollWidth - el.clientWidth - el.scrollLeft > 12);
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener('scroll', update);
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    const tab = scroller?.querySelector<HTMLElement>(`[data-screen="${TABS[active].key}"]`);
+    if (!scroller || !tab) return;
+    const left = tab.offsetLeft - (scroller.clientWidth - tab.offsetWidth) / 2;
+    scroller.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+  }, [active]);
 
   return (
     <div
@@ -143,38 +168,58 @@ export function HeroShowcase() {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPaused(false);
       }}
     >
-      {/* Tabs */}
-      <div role="tablist" aria-label="Product screens" className="mx-auto mb-6 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-zinc-200 bg-white/80 p-1 backdrop-blur no-scrollbar dark:border-zinc-800 dark:bg-zinc-900/80">
-        {TABS.map((t, i) => {
-          const on = i === active;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => {
-                setActive(i);
-                setChosen(true);
-              }}
-              className={cx(
-                'relative flex h-9 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
-                on ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
-              )}
-            >
-              <t.icon className="h-3.5 w-3.5" aria-hidden="true" />
-              {t.label}
-              {on && !paused && !chosen ? (
-                <span
-                  key={`p-${active}`}
-                  aria-hidden="true"
-                  className="absolute inset-x-3 bottom-1 h-0.5 origin-left rounded-full bg-cantaloupe-400"
-                  style={{ animation: `progress ${INTERVAL}ms linear both` }}
-                />
-              ) : null}
-            </button>
-          );
-        })}
+      {/* Tabs. On a phone the row scrolls; the hint is the only sign that Details is past the edge. */}
+      <div className="mx-auto mb-6 w-full sm:w-fit">
+        <div className="relative">
+          <div
+            ref={scrollerRef}
+            role="tablist"
+            aria-label="Product screens"
+            className="flex w-full gap-1 overflow-x-auto rounded-full border border-zinc-200 bg-white/80 p-1 backdrop-blur no-scrollbar sm:w-fit dark:border-zinc-800 dark:bg-zinc-900/80"
+          >
+            {TABS.map((t, i) => {
+              const on = i === active;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  data-screen={t.key}
+                  aria-selected={on}
+                  onClick={() => {
+                    setActive(i);
+                    setChosen(true);
+                  }}
+                  className={cx(
+                    'relative flex h-9 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
+                    on ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
+                  )}
+                >
+                  <t.icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t.label}
+                  {on && !paused && !chosen ? (
+                    <span
+                      key={`p-${active}`}
+                      aria-hidden="true"
+                      className="absolute inset-x-3 bottom-1 h-0.5 origin-left rounded-full bg-cantaloupe-400"
+                      style={{ animation: `progress ${INTERVAL}ms linear both` }}
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          {more ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-px right-px w-10 rounded-r-full bg-gradient-to-l from-white via-white/90 to-transparent dark:from-zinc-900 dark:via-zinc-900/90 sm:hidden"
+            />
+          ) : null}
+        </div>
+        <p className={cx('mt-2 flex items-center justify-center gap-0.5 text-[12px] font-medium text-zinc-400 sm:hidden', !more && 'invisible')}>
+          Swipe to see Details
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </p>
       </div>
 
       <div className="relative mx-auto max-w-5xl">

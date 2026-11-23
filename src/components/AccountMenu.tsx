@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import BoringAvatar from 'boring-avatars';
-import { ArrowLeft, Check, Download, LogOut, Trash2 } from 'lucide-react';
+import { Check, Download, LogOut, Trash2 } from 'lucide-react';
 import { creatorIdentity } from '@/src/lib/identity';
 import { usePWAInstall } from '@/src/hooks/usePWAInstall';
 import { ThemeToggle } from './ThemeToggle';
@@ -34,7 +33,7 @@ export function Avatar({ account, size = 32 }: { account: AccountInfo; size?: nu
 }
 
 /** "Install app": adds Backlot to the home screen / dock. Hidden once installed or where unsupported. */
-function InstallAppButton({ className, onDone }: { className?: string; onDone?: () => void }) {
+function InstallAppButton({ className, onDone, disabled = false }: { className?: string; onDone?: () => void; disabled?: boolean }) {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [guide, setGuide] = useState(false);
   if (isInstalled || !(isInstallable || isIOS)) return null;
@@ -42,7 +41,9 @@ function InstallAppButton({ className, onDone }: { className?: string; onDone?: 
     <>
       <button
         type="button"
+        disabled={disabled}
         onClick={async () => {
+          if (disabled) return;
           if (isInstallable) {
             await install();
             onDone?.();
@@ -94,8 +95,11 @@ export function SidebarAccount({ account, onSignOut, onOpenSettings }: { account
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 px-1">
-        <ThemeToggle />
-        <InstallAppButton className="ml-auto flex h-9 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 text-[12.5px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-950 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white" />
+        <ThemeToggle disabled={account.isPreview} />
+        <InstallAppButton
+          disabled={account.isPreview}
+          className="ml-auto flex h-9 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 text-[12.5px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-950 disabled:pointer-events-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+        />
       </div>
       <div className="flex items-center gap-3 rounded-xl p-2">
         <Avatar account={account} size={38} />
@@ -103,8 +107,9 @@ export function SidebarAccount({ account, onSignOut, onOpenSettings }: { account
           <p className="truncate text-[14px] font-semibold text-zinc-900 dark:text-white">{id.name}</p>
           <button
             type="button"
+            disabled={account.isPreview}
             onClick={onSignOut}
-            className="-ml-1 mt-0.5 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[12.5px] font-medium text-zinc-500 transition-colors hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400"
+            className="-ml-1 mt-0.5 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[12.5px] font-medium text-zinc-500 transition-colors hover:text-red-600 disabled:pointer-events-none dark:text-zinc-400 dark:hover:text-red-400"
           >
             <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
             Log out
@@ -195,23 +200,13 @@ export function AccountMenu({
             <p className="min-w-0 truncate text-sm font-semibold text-zinc-950 dark:text-white">{id.name}</p>
           </div>
           <div className="px-2.5 pb-2.5">
-            <ThemeToggle className="w-fit" />
+            <ThemeToggle disabled={account.isPreview} className="w-fit" />
           </div>
           <div className="mb-1 h-px bg-zinc-100 dark:bg-zinc-800" />
-          {account.isPreview ? (
-            <Link
-              href="/"
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-[13.5px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Back to site
-            </Link>
-          ) : null}
           <InstallAppButton
+            disabled={account.isPreview}
             onDone={() => setOpen(false)}
-            className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-[13.5px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-[13.5px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:pointer-events-none dark:text-zinc-200 dark:hover:bg-zinc-800"
           />
           {onOpenSettings ? (
             <button
@@ -230,11 +225,12 @@ export function AccountMenu({
           <button
             type="button"
             role="menuitem"
+            disabled={account.isPreview}
             onClick={() => {
               setOpen(false);
               onSignOut();
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-[13.5px] font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+            className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-[13.5px] font-medium text-red-600 transition-colors hover:bg-red-50 disabled:pointer-events-none dark:text-red-400 dark:hover:bg-red-950/40"
           >
             <LogOut className="h-4 w-4" aria-hidden="true" />
             Log out

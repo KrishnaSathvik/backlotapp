@@ -325,16 +325,6 @@ export function TabletRail({
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-16 flex-col items-center border-r border-border bg-bg pb-[env(safe-area-inset-bottom)] pt-[calc(0.5rem+env(safe-area-inset-top))] md:flex lg:hidden">
       <div className="mb-3 mt-1 flex flex-col items-center gap-2">
         <LogoMark />
-        {account.isPreview ? (
-          <Link
-            href="/"
-            aria-label="Back to home"
-            title="Back to home"
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-text"
-          >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          </Link>
-        ) : null}
       </div>
       <nav aria-label="Sections" className="flex flex-col items-center gap-1">
         {TABS.map(({ key, label, icon: Icon }) => {
@@ -449,15 +439,6 @@ export function MobileTopBar(shell: ShellProps) {
           <LogoMark />
           <span className="text-[16px] font-bold tracking-tight">Backlot</span>
         </div>
-        {shell.account.isPreview ? (
-          <Link
-            href="/"
-            className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-[13px] font-semibold text-text"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            Back
-          </Link>
-        ) : null}
         <div className="ml-auto flex items-center gap-2">
           <AccountMenu
             account={shell.account}
