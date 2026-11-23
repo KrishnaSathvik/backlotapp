@@ -9,8 +9,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { AlertTriangle, CheckCircle2, Info, MoreHorizontal, X } from 'lucide-react';
-import type { StatusKey } from '@/src/lib/content-logic';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, MoreHorizontal, X } from 'lucide-react';
+import { normalizeStatus, type StatusKey } from '@/src/lib/content-logic';
 
 /* ------------------------------------------------------------------ */
 /* Class helpers                                                       */
@@ -26,15 +26,15 @@ const buttonBase =
 export const buttonStyles = {
   primary: cx(
     buttonBase,
-    'bg-electric-600 text-white shadow-sm shadow-electric-600/20 hover:bg-electric-700 dark:bg-electric-500 dark:hover:bg-electric-400 dark:text-white'
+    'bg-accent text-white shadow-sm shadow-accent/20 hover:bg-electric-700 dark:hover:bg-electric-400'
   ),
   secondary: cx(
     buttonBase,
-    'border border-zinc-200 bg-white text-zinc-800 shadow-xs hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-700 dark:hover:bg-zinc-800'
+    'border border-border bg-surface text-text shadow-xs hover:border-border-strong hover:bg-surface-2'
   ),
   ghost: cx(
     buttonBase,
-    'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'
+    'text-muted hover:bg-surface-2 hover:text-text'
   ),
   danger: cx(
     buttonBase,
@@ -55,47 +55,151 @@ export const sizes = {
 };
 
 export const inputStyles =
-  'w-full rounded-xl border border-zinc-200 bg-white px-3.5 text-sm text-zinc-950 shadow-xs transition-colors placeholder:text-zinc-400 hover:border-zinc-300 focus:border-electric-500 focus:outline-none focus:ring-4 focus:ring-electric-500/15 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:hover:border-zinc-700';
+  'w-full rounded-xl border border-border bg-surface-2 px-3.5 text-base text-text lg:text-sm shadow-xs transition-colors placeholder:text-faint hover:border-border-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15';
 
-export const labelStyles = 'mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300';
+export const labelStyles = 'mb-1.5 block text-xs font-semibold text-muted';
 
-export const cardStyles =
-  'rounded-2xl border border-zinc-200/80 bg-white shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60';
+/** Solid card: one step above the page, in both themes. */
+export const cardStyles = 'rounded-2xl border border-border bg-surface shadow-xs';
+
+/** Filter chips. Selected is solid text-on-page, inverted. */
+export function chipClass(active: boolean) {
+  return cx(
+    active ? 'bg-text text-bg' : 'bg-surface-2 text-muted hover:text-text'
+  );
+}
+
+export const PAGE_SIZE = 10;
+
+/** Page numbers with gaps when the list is long. */
+export function pageWindow(page: number, pageCount: number): Array<number | 'gap'> {
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i + 1);
+  const wanted = [1, pageCount, page - 1, page, page + 1].filter((n) => n >= 1 && n <= pageCount);
+  const sorted = [...new Set(wanted)].sort((a, b) => a - b);
+  const out: Array<number | 'gap'> = [];
+  for (const n of sorted) {
+    const prev = out[out.length - 1];
+    if (typeof prev === 'number' && n - prev > 1) out.push('gap');
+    out.push(n);
+  }
+  return out;
+}
+
+/** Previous, numbered pages, and next. Hidden when everything fits on one page. */
+export function Pager({
+  page,
+  pageCount,
+  onPage,
+  label,
+}: {
+  page: number;
+  pageCount: number;
+  onPage: (page: number) => void;
+  label: string;
+}) {
+  if (pageCount <= 1) return null;
+  const item = 'flex h-9 min-w-9 items-center justify-center rounded-full px-2.5 text-[13px] font-semibold tabular-nums';
+  return (
+    <nav aria-label={label} className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
+      <button
+        type="button"
+        onClick={() => onPage(page - 1)}
+        disabled={page <= 1}
+        className={cx(buttonStyles.secondary, item, 'gap-1 px-3')}
+      >
+        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        Previous
+      </button>
+      {pageWindow(page, pageCount).map((entry, i) =>
+        entry === 'gap' ? (
+          <span key={`gap-${i}`} className="px-1 text-sm text-faint" aria-hidden="true">
+            …
+          </span>
+        ) : (
+          <button
+            key={entry}
+            type="button"
+            onClick={() => onPage(entry)}
+            aria-current={entry === page ? 'page' : undefined}
+            className={cx(item, chipClass(entry === page))}
+          >
+            {entry}
+          </button>
+        )
+      )}
+      <button
+        type="button"
+        onClick={() => onPage(page + 1)}
+        disabled={page >= pageCount}
+        className={cx(buttonStyles.secondary, item, 'gap-1 px-3')}
+      >
+        Next
+        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+      </button>
+    </nav>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Stage badge                                                         */
 /* ------------------------------------------------------------------ */
 
+const neutralStage = {
+  dot: 'bg-faint',
+  pill: 'bg-surface-2 text-muted ring-border',
+};
+
 export const STAGE_STYLES: Record<StatusKey, { dot: string; pill: string; label: string }> = {
-  idea: {
-    label: 'Planned',
-    dot: 'bg-zinc-400',
-    pill: 'bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700',
-  },
-  scripting: {
-    label: 'Scripting',
-    dot: 'bg-violet-500',
-    pill: 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:ring-violet-900',
-  },
-  editing: {
-    label: 'Editing',
-    dot: 'bg-cantaloupe-500',
-    pill: 'bg-cantaloupe-50 text-cantaloupe-800 ring-cantaloupe-200 dark:bg-cantaloupe-950/40 dark:text-cantaloupe-300 dark:ring-cantaloupe-900',
-  },
+  idea: { label: 'Planned', ...neutralStage },
+  scripting: { label: 'Planned', ...neutralStage },
+  editing: { label: 'Planned', ...neutralStage },
+  // `ready` is the Made stage. Cantaloupe is reserved for Made and Slate.
   ready: {
-    label: 'Ready',
-    dot: 'bg-electric-500',
-    pill: 'bg-electric-50 text-electric-700 ring-electric-200 dark:bg-electric-950/50 dark:text-electric-300 dark:ring-electric-900',
+    label: 'Made',
+    dot: 'bg-cantaloupe-500',
+    pill: 'bg-cantaloupe-50 text-cantaloupe-700 ring-cantaloupe-200 dark:bg-cantaloupe-500/15 dark:text-cantaloupe-400 dark:ring-cantaloupe-500/30',
   },
   posted: {
     label: 'Posted',
-    dot: 'bg-emerald-500',
-    pill: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900',
+    dot: 'bg-accent',
+    pill: 'bg-[#EAF0FF] text-link ring-[#D6E1FF] dark:bg-accent/18 dark:text-link dark:ring-accent/30',
   },
 };
 
-export function StagePill({ status, className }: { status: StatusKey; className?: string }) {
-  const s = STAGE_STYLES[status] ?? STAGE_STYLES.idea;
+/** Planned / Made / Posted. Lives with the post's details. */
+export function StageSwitch({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (stage: 'idea' | 'ready' | 'posted') => void;
+  className?: string;
+}) {
+  const current = normalizeStatus(value);
+  return (
+    <div role="radiogroup" aria-label="Stage" className={cx('inline-flex rounded-full bg-surface-2 p-0.5', className)}>
+      {(['idea', 'ready', 'posted'] as const).map((key) => {
+        const on = current === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(key)}
+            className={cx('h-8 rounded-full px-3 text-xs font-semibold transition-colors', on ? 'bg-text text-bg' : 'text-muted hover:text-text')}
+          >
+            {STAGE_STYLES[key].label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function StagePill({ status, className }: { status: StatusKey | string; className?: string }) {
+  const s = STAGE_STYLES[normalizeStatus(status)] ?? STAGE_STYLES.idea;
   return (
     <span
       className={cx(
@@ -119,18 +223,12 @@ const FOCUSABLE =
 
 let openSheets = 0;
 
-export function Sheet({
-  onClose,
-  label,
-  children,
-  size = 'lg',
-}: {
-  onClose: () => void;
-  label: string;
-  children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
-}) {
-  const panelRef = useRef<HTMLDivElement>(null);
+/**
+ * Modal layer behaviour shared by sheets and the navigation drawer: locks page scroll, moves
+ * focus into the panel, traps Tab inside it, closes on Escape (top-most layer only) and puts
+ * focus back where it was when the layer closes.
+ */
+export function useModalLayer(panelRef: React.RefObject<HTMLElement | null>, onClose: () => void) {
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -147,7 +245,7 @@ export function Sheet({
 
     const onKey = (e: KeyboardEvent) => {
       if (!panel) return;
-      // Only the top-most sheet reacts.
+      // Only the top-most layer reacts.
       const sheets = document.querySelectorAll('[data-sheet-panel]');
       if (sheets[sheets.length - 1] !== panel) return;
       if (e.key === 'Escape') {
@@ -178,12 +276,41 @@ export function Sheet({
       if (openSheets === 0) document.documentElement.style.overflow = '';
       previouslyFocused?.focus?.({ preventScroll: true });
     };
-  }, []);
+  }, [panelRef]);
+
+  return onCloseRef;
+}
+
+export function Sheet({
+  onClose,
+  label,
+  children,
+  size = 'lg',
+  fullscreenOnMobile = false,
+  floatOnMobile = false,
+}: {
+  onClose: () => void;
+  label: string;
+  children: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** Phones: fill the screen (header and footer stay put, the body scrolls) instead of a bottom sheet. */
+  fullscreenOnMobile?: boolean;
+  /** Phones: a centered card with space around it, instead of a full screen or a bottom sheet. */
+  floatOnMobile?: boolean;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useModalLayer(panelRef, onClose);
 
   const width = { sm: 'sm:max-w-md', md: 'sm:max-w-xl', lg: 'sm:max-w-3xl', xl: 'sm:max-w-5xl' }[size];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
+    // Below lg the layer tracks the visual viewport, so it stays above the on-screen keyboard.
+    <div
+      className={cx(
+        'fixed inset-0 z-50 flex justify-center max-lg:bottom-auto max-lg:top-[var(--vv-top,0px)] max-lg:h-[var(--vv-height,100dvh)]',
+        floatOnMobile ? 'items-center p-4 sm:p-6' : 'items-end sm:items-center sm:p-6'
+      )}
+    >
       <div
         className="animate-fade-in absolute inset-0 bg-zinc-950/50 backdrop-blur-[2px] dark:bg-black/70"
         onClick={() => onCloseRef.current()}
@@ -197,13 +324,21 @@ export function Sheet({
         tabIndex={-1}
         data-sheet-panel
         className={cx(
-          'animate-sheet-in relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-zinc-200/80 bg-white shadow-2xl outline-none sm:max-h-[90dvh] sm:rounded-3xl dark:border-zinc-800 dark:bg-zinc-950',
+          'animate-sheet-in relative flex w-full flex-col overflow-hidden overscroll-contain border border-border bg-surface shadow-2xl outline-none',
+          floatOnMobile
+            ? 'max-h-full rounded-3xl'
+            : 'max-h-[94%] rounded-t-3xl sm:max-h-[90%] sm:rounded-3xl',
+          fullscreenOnMobile &&
+            !floatOnMobile &&
+            'max-sm:h-full max-sm:max-h-none max-sm:rounded-none max-sm:border-0 max-sm:pt-[env(safe-area-inset-top)]',
           width
         )}
       >
-        <div className="flex justify-center pt-2.5 sm:hidden" aria-hidden="true">
-          <span className="h-1 w-10 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-        </div>
+        {fullscreenOnMobile || floatOnMobile ? null : (
+          <div className="flex justify-center pt-2.5 sm:hidden" aria-hidden="true">
+            <span className="h-1 w-10 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+          </div>
+        )}
         {children}
       </div>
     </div>
@@ -281,16 +416,16 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
 
       <div
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[60] flex flex-col items-center gap-2 px-4 md:bottom-6"
+        className="pointer-events-none fixed inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-[60] flex flex-col items-center gap-2 px-4 md:bottom-6"
       >
         {toasts.map((t) => (
           <div
             key={t.id}
             role={t.tone === 'error' ? 'alert' : 'status'}
-            className="animate-toast-in pointer-events-auto flex max-w-md items-center gap-2.5 rounded-2xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-xl shadow-zinc-950/20 ring-1 ring-white/10 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-900/10"
+            className="animate-toast-in pointer-events-auto flex w-fit max-w-full items-center sm:max-w-md gap-2.5 rounded-2xl bg-text px-4 py-3 text-sm font-medium text-bg shadow-xl ring-1 ring-border"
           >
             {t.tone === 'success' ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 dark:text-emerald-600" aria-hidden="true" />
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
             ) : t.tone === 'error' ? (
               <AlertTriangle className="h-4 w-4 shrink-0 text-red-400 dark:text-red-600" aria-hidden="true" />
             ) : (
@@ -420,7 +555,7 @@ export function ActionMenu({ items, label = 'More actions', className }: { items
       {open ? (
         <div
           role="menu"
-          className="animate-pop-in absolute right-0 top-full z-20 mt-1.5 w-44 rounded-xl border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+          className="animate-pop-in absolute right-0 top-full z-20 mt-1.5 w-44 rounded-xl border border-border bg-surface p-1 shadow-xl"
         >
           {items.map(({ label: itemLabel, icon: Icon, onSelect, tone }, i) => (
             <button
@@ -437,7 +572,7 @@ export function ActionMenu({ items, label = 'More actions', className }: { items
                 'flex h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[13px] font-medium transition-colors',
                 tone === 'danger'
                   ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40'
-                  : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                  : 'text-text hover:bg-surface-2'
               )}
             >
               <Icon className={cx('h-4 w-4', tone === 'danger' ? '' : 'text-zinc-400')} aria-hidden="true" />

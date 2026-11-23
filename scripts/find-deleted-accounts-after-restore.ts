@@ -1,36 +1,32 @@
-// After a database restore: lists accounts in the RESTORED database that no longer have a Firebase
+// After a database restore: lists accounts in the RESTORED database that no longer have a Supabase
 // Authentication user, as review candidates for re-deletion. Read-only: it changes nothing.
 //
-//   node scripts/find-deleted-accounts-after-restore.ts > firebase-missing-candidates.txt
+//   node scripts/find-deleted-accounts-after-restore.ts > auth-missing-candidates.txt
 //
 // Needs: DATABASE_MIGRATION_URL (or SQL_*) pointing at the restored database (never production),
-// and Firebase Admin credentials that can read users (FIREBASE_SERVICE_ACCOUNT_JSON, or ADC).
-// To actually re-apply ledger-confirmed deletions, use scripts/reapply-deletions-after-restore.ts.
+// plus NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY of the project the app signs in with
+// (only auth.admin.getUserById is called). To actually re-apply ledger-confirmed deletions, use
+// scripts/reapply-deletions-after-restore.ts.
 //
-// What it reports is a list of CANDIDATES FOR REVIEW, never a deletion list. A missing Firebase
-// user is consistent with a completed Backlot deletion (which removes the Firebase user last, and
-// Firebase isn't restored with the database), but it isn't proof: the uid can also be missing
-// after a sign-in migration, a Firebase project or tenant mismatch, or a user removed in the
-// Firebase console. Only re-delete a uid that is also in the deletion ledger or the current
-// database's account_deletions (docs/OPERATIONS.md "Restore procedure"). Disabled Firebase users
-// still exist, so they're never reported.
+// What it reports is a list of CANDIDATES FOR REVIEW, never a deletion list. A missing Auth user
+// is consistent with a completed Backlot deletion (which removes the Auth user last, and Supabase
+// Auth isn't part of Backlot's database backup), but it isn't proof: the uid can also be missing
+// after a sign-in migration (uids from before the move off Firebase are never Supabase users), a
+// project mismatch, or a user removed in the Supabase dashboard. Only re-delete a uid that is also
+// in the deletion ledger or the current database's account_deletions (docs/BACKUPS.md "Restore
+// procedure"). Banned users still exist, so they're never reported.
 //
 // Safety: if more than MAX_MISSING_SHARE of accounts (default 5%) are missing, it stops without a
 // list, because that pattern points to a configuration or migration problem, not to deletions.
 import pg from 'pg';
 import * as dotenv from 'dotenv';
-import { cert, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import { resolveDbConfig } from '../src/db/connection-config.ts';
-import { firebaseProjectId, readFirebaseAdminCredential } from '../src/lib/firebase-admin-config.ts';
+import { supabaseIdentityProvider } from '../src/lib/account/supabase-identity.ts';
+import { supabaseAdmin } from '../src/lib/supabase/admin.ts';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
-const projectId = firebaseProjectId();
-const { credential } = readFirebaseAdminCredential();
-initializeApp(credential ? { credential: cert({ ...credential, projectId }), projectId } : { projectId });
-const firebaseConfig = { projectId };
-const auth = getAuth();
+const identity = supabaseIdentityProvider(() => supabaseAdmin(process.env));
 const pool = new pg.Pool(resolveDbConfig(process.env, 'migration').pool);
 
 try {
@@ -39,17 +35,15 @@ try {
     'select u.uid from users u where not exists (select 1 from account_deletions d where d.user_uid = u.uid) order by u.uid'
   );
   const missing: string[] = [];
-  for (let i = 0; i < rows.length; i += 100) {
-    const batch = rows.slice(i, i + 100).map((r) => ({ uid: r.uid }));
-    const res = await auth.getUsers(batch);
-    for (const id of res.notFound) if ('uid' in id) missing.push(id.uid);
+  for (const { uid } of rows) {
+    if (!(await identity.exists(uid))) missing.push(uid);
   }
   const maxShare = Number(process.env.MAX_MISSING_SHARE ?? '0.05');
-  console.error(`firebase project: ${firebaseConfig.projectId}; checked ${rows.length} accounts; ${missing.length} have no Firebase user`);
+  console.error(`supabase auth: ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? '(unset)'}; checked ${rows.length} accounts; ${missing.length} have no Auth user`);
   if (rows.length > 0 && missing.length / rows.length > maxShare) {
     console.error(
-      `STOP: ${Math.round((missing.length / rows.length) * 100)}% of accounts are missing from Firebase. Check the Firebase project, ` +
-        'tenant and any sign-in migration before going further. No list printed.'
+      `STOP: ${Math.round((missing.length / rows.length) * 100)}% of accounts are missing from Supabase Auth. Check the project ` +
+        'and any sign-in migration before going further. No list printed.'
     );
     process.exitCode = 2;
   } else {

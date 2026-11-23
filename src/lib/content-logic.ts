@@ -27,10 +27,20 @@ export interface ReferenceAttachment {
   screenshotUrl: string;
 }
 
+/** A post's reference screenshot or link to show when it has no cover or slides of its own. */
+export function referencePreview(refs: ReferenceAttachment[]): { screenshotUrl: string; link: string } {
+  return {
+    screenshotUrl: refs.find((r) => r.screenshotUrl)?.screenshotUrl ?? '',
+    link: refs.find((r) => /^https?:\/\//i.test(r.url))?.url ?? '',
+  };
+}
+
 export interface ChannelItem {
   id: number;
   name: string;
   handle: string;
+  /** Chosen when the channel is added; 'other' (or missing) for channels added before that. */
+  platform?: PlatformKey;
 }
 
 export interface ContentItem {
@@ -63,7 +73,10 @@ export interface IdeaItem {
   linkUrl: string;
   linkTitle: string;
   linkDomain: string;
+  /** The first reference image (kept for older code paths); see `images`. */
   screenshotUrl: string;
+  /** Reference images, max MAX_IDEA_IMAGES. Missing on ideas saved before images existed. */
+  images?: string[];
   notes: string;
   platform: PlatformKey;
   channelName: string;
@@ -84,16 +97,32 @@ export const PLATFORM_OPTIONS: Array<{ key: PlatformKey; label: string; shortLab
   { key: 'other', label: 'Other', shortLabel: 'Other' },
 ];
 
-export const STATUS_OPTIONS: Array<{ key: StatusKey; label: string }> = [
+/** The three stages the product shows. Older stored values fold into Planned. */
+export type StageKey = 'idea' | 'ready' | 'posted';
+
+/** scripting and editing were retired. Anything else that is not Made or Posted is Planned. */
+export function normalizeStatus(status: string): StageKey {
+  if (status === 'ready' || status === 'posted') return status;
+  return 'idea';
+}
+
+export const STATUS_OPTIONS: Array<{ key: StageKey; label: string }> = [
   { key: 'idea', label: 'Planned' },
-  { key: 'scripting', label: 'Scripting' },
-  { key: 'editing', label: 'Editing' },
-  { key: 'ready', label: 'Ready' },
+  { key: 'ready', label: 'Made' },
   { key: 'posted', label: 'Posted' },
 ];
 
 export function getPlatformLabel(platform: PlatformKey): string {
   return PLATFORM_OPTIONS.find((p) => p.key === platform)?.label ?? 'Other';
+}
+
+/**
+ * A channel's platform: the one saved on the channel, else the one its posts use most (channels
+ * added before platforms were saved). Null when neither is known.
+ */
+export function platformOfChannel(channels: ChannelItem[], items: ContentItem[], channelName: string): PlatformKey | null {
+  const saved = channels.find((c) => c.name === channelName)?.platform;
+  return saved && saved !== 'other' ? saved : channelPlatform(items, channelName);
 }
 
 /** The platform a channel posts to most, for showing its logo. Null if it has no posts yet. */
@@ -110,8 +139,8 @@ export function getPlatformShortLabel(platform: PlatformKey): string {
   return PLATFORM_OPTIONS.find((p) => p.key === platform)?.shortLabel ?? 'Other';
 }
 
-export function getStatusLabel(status: StatusKey): string {
-  return STATUS_OPTIONS.find((s) => s.key === status)?.label ?? 'Planned';
+export function getStatusLabel(status: string): string {
+  return STATUS_OPTIONS.find((s) => s.key === normalizeStatus(status))?.label ?? 'Planned';
 }
 
 export type LibrarySort = 'updated' | 'target' | 'created';
@@ -146,11 +175,29 @@ export function sortContentItems(items: ContentItem[], sort: LibrarySort): Conte
   return copy.sort((a, b) => time(b[key]) - time(a[key]));
 }
 
+/** Same order as posts. Ideas have no separate edit time, so "updated" uses when they were saved. */
+export function sortIdeas(items: IdeaItem[], sort: LibrarySort): IdeaItem[] {
+  const time = (v: string) => {
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const copy = [...items];
+  if (sort === 'target') {
+    return copy.sort((a, b) => {
+      if (!a.targetDate && !b.targetDate) return time(b.createdAt) - time(a.createdAt);
+      if (!a.targetDate) return 1;
+      if (!b.targetDate) return -1;
+      return a.targetDate.localeCompare(b.targetDate);
+    });
+  }
+  return copy.sort((a, b) => time(b.createdAt) - time(a.createdAt));
+}
+
 export interface LibraryFilters {
   platform: PlatformKey | 'all';
   channel: string;
-  /** A single stage, every stage, or 'in_progress' (scripting + editing). */
-  status: StatusKey | 'all' | 'in_progress';
+  /** A single stage, or every stage. */
+  status: StageKey | 'all';
   search: string;
 }
 
@@ -171,9 +218,7 @@ export function filterContentItems(
     ) {
       return false;
     }
-    if (filters.status === 'in_progress') {
-      if (item.status !== 'scripting' && item.status !== 'editing') return false;
-    } else if (filters.status !== 'all' && item.status !== filters.status) {
+    if (filters.status !== 'all' && normalizeStatus(item.status) !== filters.status) {
       return false;
     }
     if (query) {
@@ -206,8 +251,7 @@ export function groupItemsByStatus(
   };
 
   for (const item of items) {
-    const bucket = grouped[item.status] ?? grouped.idea;
-    bucket.push(item);
+    grouped[normalizeStatus(item.status)].push(item);
   }
 
   return grouped;
@@ -295,10 +339,13 @@ export function extractDomainAndTitle(rawUrl: string): {
         : 'Instagram Post Reference';
     }
 
-    const suggestedTitle =
-      cleanedSegment && cleanedSegment.length > 3 && cleanedSegment.length < 48
-        ? `${platformHint}: ${cleanedSegment}`
-        : platformHint;
+    // Skip path words ("watch", "reel") and video ids: they aren't titles.
+    const meaningful =
+      cleanedSegment.length > 3 &&
+      cleanedSegment.length < 48 &&
+      !/^(watch|reels?|p|tv|shorts|video|live|embed)$/i.test(cleanedSegment) &&
+      !(/^[\w-]{6,}$/.test(lastSegment) && /\d/.test(lastSegment));
+    const suggestedTitle = meaningful ? `${platformHint}: ${cleanedSegment}` : platformHint;
 
     return {
       validUrl: parsed.toString(),
@@ -310,20 +357,33 @@ export function extractDomainAndTitle(rawUrl: string): {
   }
 }
 
+export const MAX_IDEA_IMAGES = 6;
+
+/** An idea's reference images; older ideas only have `screenshotUrl`. */
+export function ideaImages(idea: Pick<IdeaItem, 'images' | 'screenshotUrl'>): string[] {
+  if (idea.images && idea.images.length) return idea.images;
+  return idea.screenshotUrl ? [idea.screenshotUrl] : [];
+}
+
 export function convertIdeaToPostDraft(idea: IdeaItem): Omit<
   ContentItem,
   'id' | 'createdAt' | 'updatedAt'
 > {
   const references: ReferenceAttachment[] = [];
-  if (idea.linkUrl || idea.screenshotUrl || idea.notes) {
+  const images = ideaImages(idea);
+  if (idea.linkUrl || images.length || idea.notes) {
     references.push({
       id: `ref-${idea.id}-${Date.now()}`,
       url: idea.linkUrl,
       title: idea.linkTitle || idea.title,
       note: idea.notes,
-      screenshotUrl: idea.screenshotUrl,
+      screenshotUrl: images[0] ?? '',
     });
   }
+  // Every further reference image becomes its own reference on the post.
+  images.slice(1).forEach((url, i) => {
+    references.push({ id: `ref-${idea.id}-img${i + 2}-${Date.now()}`, url: '', title: `Reference image ${i + 2}`, note: '', screenshotUrl: url });
+  });
 
   return {
     title: idea.title.trim() || idea.linkTitle || 'Untitled Post',
@@ -345,16 +405,38 @@ export function convertIdeaToPostDraft(idea: IdeaItem): Omit<
   };
 }
 
-export function nextWorkflowStatus(current: StatusKey): StatusKey {
-  const index = STATUS_OPTIONS.findIndex((s) => s.key === current);
-  if (index === -1 || index >= STATUS_OPTIONS.length - 1) return 'posted';
-  return STATUS_OPTIONS[index + 1].key;
+const WORKFLOW: StageKey[] = ['idea', 'ready', 'posted'];
+
+export function nextWorkflowStatus(current: string): StageKey {
+  const index = WORKFLOW.indexOf(normalizeStatus(current));
+  return WORKFLOW[Math.min(index + 1, WORKFLOW.length - 1)];
 }
 
-export function prevWorkflowStatus(current: StatusKey): StatusKey {
-  const index = STATUS_OPTIONS.findIndex((s) => s.key === current);
-  if (index <= 0) return 'idea';
-  return STATUS_OPTIONS[index - 1].key;
+export function prevWorkflowStatus(current: string): StageKey {
+  const index = WORKFLOW.indexOf(normalizeStatus(current));
+  return WORKFLOW[Math.max(index - 1, 0)];
+}
+
+/**
+ * Dropped files land on the post: a video replaces the video, a single image with nothing
+ * else on the post becomes the cover, and every other image is appended as a slide.
+ */
+export function placeUploadedAssets(
+  current: { coverAsset: MediaAsset | null; videoAsset: MediaAsset | null; slides: MediaAsset[] },
+  incoming: MediaAsset[]
+): { coverAsset: MediaAsset | null; videoAsset: MediaAsset | null; slides: MediaAsset[] } {
+  let cover = current.coverAsset;
+  let video = current.videoAsset;
+  const slides = current.slides.map((s, i) => ({ ...s, order: i }));
+  const images = incoming.filter((a) => a.mimeType.startsWith('image/'));
+  const videos = incoming.filter((a) => a.mimeType.startsWith('video/'));
+  if (videos[0]) video = videos[0];
+  if (images.length === 1 && !cover && slides.length === 0) {
+    cover = images[0];
+  } else {
+    for (const image of images) slides.push({ ...image, order: slides.length });
+  }
+  return { coverAsset: cover, videoAsset: video, slides };
 }
 
 export function formatFileSize(bytes: number): string {

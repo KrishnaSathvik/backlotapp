@@ -1,7 +1,8 @@
-import { and, asc, count, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { PgDatabase } from 'drizzle-orm/pg-core';
 import { channels, contentItems, ideas, slatePreferences } from '../../db/schema.ts';
 import type { ChannelRecord, IdeaRecord, PostRecord, SlateStore } from './types.ts';
+import { normalizeStatus } from '../content-logic.ts';
 import { tsQueryText } from './search.ts';
 
 /**
@@ -23,7 +24,7 @@ const toPost = (r: PostRow): PostRecord => ({
   platform: r.platform,
   channelId: r.channelId ?? null,
   channelName: r.channelName,
-  status: r.status,
+  status: normalizeStatus(r.status),
   caption: r.caption,
   tags: Array.isArray(r.tags) ? r.tags : [],
   notes: r.notes,
@@ -168,7 +169,8 @@ export function createDbSlateStore(db: Db): SlateStore {
       ]);
       const filters: SQL[] = [eq(contentItems.userUid, uid), sql`${s} > 0`];
       if (q.channel) filters.push(postInChannel(q.channel));
-      if (q.status) filters.push(eq(contentItems.status, q.status));
+      if (q.status === 'idea') filters.push(inArray(contentItems.status, ['idea', 'scripting', 'editing']));
+      else if (q.status) filters.push(eq(contentItems.status, q.status));
       if (q.platform) filters.push(eq(contentItems.platform, q.platform));
       const rows = await db
         .select()

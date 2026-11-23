@@ -4,8 +4,10 @@ import { db } from '@/src/db/index.ts';
 import { ideas, slateEmbeddings } from '@/src/db/schema.ts';
 import { requireUser } from '@/src/lib/auth-server.ts';
 import {
+  assertOwnsFiles,
   badRequest,
   collectUnusedFiles,
+  ideaImagesInput,
   errorResponse,
   keysIn,
   parseId,
@@ -49,7 +51,8 @@ export async function POST(request: NextRequest, context: Ctx) {
     const expected = readExpectedVersion(body);
     if (!expected.ok) return NextResponse.json({ error: expected.error, code: expected.code }, { status: expected.status });
 
-    const result = await convertIdeaVersioned(db, user.uid, ideaId, expected.version);
+    const chosen = body.platform !== undefined ? platform(body.platform) : null;
+    const result = await convertIdeaVersioned(db, user.uid, ideaId, expected.version, chosen);
     if (result.kind === 'not_found') return NextResponse.json({ error: 'Idea not found.' }, { status: 404 });
     if (result.kind === 'conflict') {
       return NextResponse.json({ error: conflictMessage('idea'), code: 'version_conflict', idea: result.current }, { status: 409 });
@@ -91,6 +94,12 @@ export async function PATCH(request: NextRequest, context: Ctx) {
     if (body.channelName !== undefined) updates.channelName = str(body.channelName, 200, 'Channel');
     if (body.tags !== undefined) updates.tags = tags(body.tags);
     if (body.targetDate !== undefined) updates.targetDate = str(body.targetDate, 40, 'Target date');
+    if (body.images !== undefined) {
+      const images = ideaImagesInput(body.images);
+      await assertOwnsFiles(user.uid, images);
+      updates.images = images;
+      updates.screenshotUrl = images[0] ?? '';
+    }
 
     if (!Object.keys(updates).length) return badRequest('Nothing to update.');
 
@@ -98,6 +107,10 @@ export async function PATCH(request: NextRequest, context: Ctx) {
     if (result.kind === 'not_found') return NextResponse.json({ error: 'Idea not found.' }, { status: 404 });
     if (result.kind === 'conflict') {
       return NextResponse.json({ error: conflictMessage('idea'), code: 'version_conflict', idea: result.current }, { status: 409 });
+    }
+    // Removed images: delete their files unless something else still uses them.
+    if (result.kind === 'updated' && body.images !== undefined) {
+      await collectUnusedFiles(user.uid, keysIn([result.before.images, result.before.screenshotUrl]));
     }
     return NextResponse.json({ idea: result.row, ...(result.kind === 'unchanged' ? { unchanged: true } : {}) });
   } catch (error) {

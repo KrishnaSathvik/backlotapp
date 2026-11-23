@@ -89,7 +89,7 @@ test('filterContentItems filters by platform, channel, status, and search across
   );
 });
 
-test('groupItemsByStatus groups items into all 5 workflow columns', () => {
+test('groupItemsByStatus groups items into the three stages', () => {
   const grouped = groupItemsByStatus(sampleItems);
   assert.equal(grouped.idea.length, 0);
   assert.equal(grouped.ready.length, 1);
@@ -157,9 +157,11 @@ test('convertIdeaToPostDraft carries attached references, platform, channel, tag
 });
 
 test('workflow status stepping and file size formatting work predictably', () => {
-  assert.equal(nextWorkflowStatus('idea'), 'scripting');
+  assert.equal(nextWorkflowStatus('idea'), 'ready');
+  assert.equal(nextWorkflowStatus('scripting'), 'ready');
   assert.equal(nextWorkflowStatus('posted'), 'posted');
-  assert.equal(prevWorkflowStatus('ready'), 'editing');
+  assert.equal(prevWorkflowStatus('ready'), 'idea');
+  assert.equal(prevWorkflowStatus('editing'), 'idea');
   assert.equal(prevWorkflowStatus('idea'), 'idea');
   assert.equal(formatFileSize(1536), '1.5 KB');
   assert.equal(formatFileSize(2 * 1024 * 1024 * 1024), '2.0 GB');

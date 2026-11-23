@@ -47,7 +47,7 @@ const file = (prefix: string) => {
   assert.ok(f, prefix);
   return f.content;
 };
-const steps = generated.filter((g) => /^0[1-8]_/.test(g.path)).map((g) => g.content);
+const steps = generated.filter((g) => /^\d\d_migration_/.test(g.path)).map((g) => g.content);
 
 async function transitionedDb() {
   const pg = new PGlite();
@@ -59,7 +59,7 @@ async function transitionedDb() {
 test('the checked-in scripts are exactly what the generator produces', async () => {
   const names = (await fsp.readdir(DIR)).filter((n) => n.endsWith('.sql')).sort();
   assert.deepEqual(names, generated.map((g) => g.path).sort());
-  assert.equal(names.length, 11, '00, 01-08, 09, 11');
+  assert.equal(names.length, 14, '00, 01-08, 09, 11, 12, 13, 14');
   for (const g of generated) assert.equal(await fsp.readFile(new URL(g.path, DIR), 'utf8'), g.content, `${g.path} is stale: run node scripts/generate-manual-setup.ts`);
 });
 
@@ -89,7 +89,7 @@ test('preflight, steps 01-09 and verification, in order; then db:migrate sees no
   // The migration runner agrees: every file applied with the same checksum, nothing pending.
   const plan = await runMigrations(adapter(pg), { apply: false, sessionLock: false });
   assert.equal(plan.plan.pending.length, 0);
-  assert.equal(plan.plan.upToDate.length, 8);
+  assert.equal(plan.plan.upToDate.length, 11);
 
   // The preflight now reports the database as no longer fresh.
   const again = await lastRows(pg, file('00_'));

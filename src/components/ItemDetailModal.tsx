@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import {
   Check,
@@ -11,26 +11,24 @@ import {
   ExternalLink,
   Files,
   MessageSquare,
-  Pencil,
   Trash2,
   X,
 } from 'lucide-react';
 import {
-  formatFileSize,
   formatTagsForCopy,
   getPlatformLabel,
   parseTagsInput,
   PLATFORM_OPTIONS,
-  STATUS_OPTIONS,
   type ChannelItem,
   type ContentItem,
   type PlatformKey,
   type MediaAsset,
   type StatusKey,
+  referencePreview,
 } from '@/src/lib/content-logic';
 import { fetchAssetAsBlob, resolveAssetUrl } from '@/src/lib/local-vault';
 import { FormSelect } from './CustomSelect';
-import { PlatformIcon } from './PlatformIcon';
+import { LinkThumbnail } from './LinkThumbnail';
 import { MediaImage } from './MediaImage';
 import {
   ActionMenu,
@@ -42,25 +40,40 @@ import {
   Sheet,
   SheetCloseButton,
   sizes,
-  StagePill,
+  StageSwitch,
   useFeedback,
 } from './ui';
+import { PostFiles } from './PostFiles';
 
 const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
 
 export type ItemFieldsPatch = Partial<
   Pick<
     ContentItem,
-    'title' | 'caption' | 'tags' | 'status' | 'platform' | 'channelName' | 'targetDate' | 'postDate' | 'liveLink' | 'notes'
+    | 'title'
+    | 'caption'
+    | 'tags'
+    | 'status'
+    | 'platform'
+    | 'channelName'
+    | 'targetDate'
+    | 'postDate'
+    | 'liveLink'
+    | 'notes'
+    | 'coverAsset'
+    | 'videoAsset'
+    | 'slides'
   >
 >;
 
 interface ItemDetailModalProps {
   item: ContentItem | null;
   channels: ChannelItem[];
+  /** For TikTok link thumbnails (YouTube's need nothing). */
+  authToken?: string | null;
   onClose: () => void;
-  /** Opens the full editor, used for changing the post's files. */
-  onEditFiles: (item: ContentItem) => void;
+  sourceIdea?: { id: number; title: string } | null;
+  onOpenIdea?: (id: number) => void;
   onDelete: (item: ContentItem) => Promise<void>;
   onDuplicate: (item: ContentItem) => Promise<void>;
   onUpdateFields: (itemId: number, patch: ItemFieldsPatch) => Promise<boolean>;
@@ -70,8 +83,10 @@ interface ItemDetailModalProps {
 export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   item,
   channels,
+  authToken = null,
   onClose,
-  onEditFiles,
+  sourceIdea = null,
+  onOpenIdea,
   onDelete,
   onDuplicate,
   onUpdateFields,
@@ -100,9 +115,19 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   });
   const [draft, setDraft] = useState(() => draftFrom(item));
   const [saving, setSaving] = useState(false);
+  const liveLinkRef = useRef<HTMLInputElement>(null);
   const { toast, confirm } = useFeedback();
   const set = <K extends keyof typeof draft>(key: K) => (value: (typeof draft)[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
+  const setStage = (next: 'idea' | 'ready' | 'posted') => {
+    setDraft((d) => {
+      if (next !== 'posted' || d.postDate) return { ...d, status: next };
+      const t = new Date();
+      const postDate = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+      return { ...d, status: next, postDate };
+    });
+    if (next === 'posted') requestAnimationFrame(() => liveLinkRef.current?.focus());
+  };
 
   const rawVideoUrl = item?.videoAsset?.url ?? '';
   const isIdbVideo = rawVideoUrl.startsWith('idb://');
@@ -296,25 +321,15 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     : [draft.channelName, ...channels.map((c) => c.name)];
 
   return (
-    <Sheet onClose={requestClose} label={`Details for ${item.title}`} size="xl">
-        <div className="border-b border-zinc-100 px-5 pb-4 pt-3 sm:px-6 sm:pt-5 dark:border-zinc-800">
+    <Sheet onClose={requestClose} label={`Details for ${item.title}`} size="lg" fullscreenOnMobile>
+        <div className="shrink-0 border-b border-zinc-100 px-5 pb-4 pt-3 sm:px-6 sm:pt-5 dark:border-zinc-800">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                <StagePill status={item.status} />
-                <span className="flex items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-200">
-                  <PlatformIcon platform={item.platform} size={16} />
-                  {getPlatformLabel(item.platform)}
-                </span>
-                {item.channelName ? <span>· {item.channelName}</span> : null}
-              </div>
-              <h2 className="mt-2 text-lg font-bold leading-snug tracking-tight sm:text-xl">{item.title}</h2>
-            </div>
+            <h2 className="min-w-0 pt-1 text-lg font-bold leading-snug tracking-tight sm:text-xl">{item.title}</h2>
             <SheetCloseButton onClick={requestClose} label="Close" />
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => leave(() => onAskAI(item))} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
-              <MessageSquare className="h-3.5 w-3.5 text-electric-600 dark:text-electric-400" aria-hidden="true" />
+              <MessageSquare className="h-3.5 w-3.5 text-cantaloupe-500" aria-hidden="true" />
               Ask Slate
             </button>
             <ActionMenu
@@ -327,22 +342,22 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
-        <div className="grid grid-cols-1 gap-5 p-5 sm:p-6 lg:grid-cols-12">
-          {/* Left Column: Media Preview & Downloads */}
-          <div className="space-y-4 lg:col-span-7">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[env(safe-area-inset-bottom)]">
+        <div className="grid grid-cols-1 items-start gap-5 p-5 sm:p-6">
+          {/* Media and files, then the form. One scrolling column on phone, tablet and desktop. */}
+          <div className="min-w-0 space-y-4">
             {videoSrc ? (
               <div className="overflow-hidden rounded-xl border border-zinc-200 bg-black dark:border-zinc-800">
                 <video
                   src={videoSrc}
                   controls
                   playsInline
-                  className="max-h-[360px] w-full"
+                  className="max-h-56 w-full sm:max-h-64 md:max-h-[300px]"
                 />
               </div>
             ) : item.slides.length > 0 ? (
               <div className="space-y-3">
-                <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="relative aspect-video max-h-56 w-full overflow-hidden rounded-xl border border-border bg-surface-2 sm:max-h-64 md:aspect-[4/3] md:max-h-none">
                   <MediaImage
                     src={item.slides[slideIndex]?.url}
                     alt={`Slide ${slideIndex + 1}`}
@@ -397,82 +412,44 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   ))}
                 </div>
               </div>
-            ) : (
-              <div className="aspect-[16/10] overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
-                <MediaImage
-                  src={item.coverAsset?.url}
-                  alt={item.title}
-                  fallbackLabel="No video or cover uploaded yet"
-                />
+            ) : item.coverAsset?.url || referencePreview(item.attachedReferences).screenshotUrl || referencePreview(item.attachedReferences).link ? (
+              <div className="aspect-video max-h-56 w-full overflow-hidden rounded-xl border border-border bg-surface-2 sm:max-h-64 md:aspect-[16/10] md:max-h-72">
+                {(() => {
+                  const ref = referencePreview(item.attachedReferences);
+                  const fallback = <MediaImage src={null} alt={item.title} fallbackLabel="No video or cover uploaded yet" />;
+                  if (item.coverAsset?.url || ref.screenshotUrl) return <MediaImage src={item.coverAsset?.url || ref.screenshotUrl} alt={item.title} />;
+                  return <LinkThumbnail link={ref.link} authToken={authToken} className="h-full w-full object-cover" fallback={fallback} />;
+                })()}
               </div>
-            )}
+            ) : null}
 
-            {/* Files & ZIP Download */}
-            <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                    Files ({allAssets.length})
-                  </h3>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Save one file, or everything plus the caption as a .zip.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => leave(() => onEditFiles(item))}
-                    className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}
-                  >
-                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                    {allAssets.length ? 'Change files' : 'Add files'}
-                  </button>
-                  {allAssets.length ? (
-                    <button
-                      type="button"
-                      onClick={handleDownloadAllZip}
-                      disabled={zipProgress}
-                      className={cx(buttonStyles.primary, sizes.sm, 'h-9')}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      {zipProgress ? 'Zipping…' : 'Download all'}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              {allAssets.length > 0 ? (
-                <ul className="mt-3 divide-y divide-zinc-200 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-                  {allAssets.map(({ label, asset }) => (
-                    <li
-                      key={`${label}-${asset.id}`}
-                      className="flex items-center justify-between gap-3 py-2.5 text-xs"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-semibold text-zinc-900 dark:text-zinc-100">{label}</p>
-                        <p className="truncate text-zinc-500 dark:text-zinc-400">
-                          {asset.name} · <span className="tabular-nums">{formatFileSize(asset.size)}</span>
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => downloadSingleAsset(asset)}
-                        aria-label={`Download ${asset.name}`}
-                        className={cx(buttonStyles.secondary, sizes.sm, 'shrink-0')}
-                      >
-                        <Download className="h-3 w-3" />
-                        Save
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
+            {sourceIdea ? (
+              <button
+                type="button"
+                onClick={() => onOpenIdea?.(sourceIdea.id)}
+                className="flex w-full items-center justify-between rounded-2xl border border-border bg-surface-2 px-3 py-2 text-left text-sm"
+              >
+                <span>
+                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">From idea</span>
+                  <span className="font-semibold">{sourceIdea.title}</span>
+                </span>
+                <span className="text-xs font-semibold text-link">Open</span>
+              </button>
+            ) : null}
+            <PostFiles
+              item={item}
+              authToken={authToken}
+              onPatch={(patch) => onUpdateFields(item.id, patch)}
+              onDownload={downloadSingleAsset}
+              onDownloadAll={handleDownloadAllZip}
+              zipBusy={zipProgress}
+            />
           </div>
 
           {/* Right Column: the post's copy and details, edited in place */}
-          <form id="post-inline-form" onSubmit={handleSave} className="space-y-5 lg:col-span-5">
-            <div className="space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <form id="post-inline-form" onSubmit={handleSave} className="min-w-0 space-y-5">
+            <div className="min-w-0 space-y-5">
+            <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <label htmlFor="detail-title" className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Title</label>
@@ -488,12 +465,12 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <label htmlFor="detail-caption" className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Caption</label>
+                  <label htmlFor="detail-caption" className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{draft.platform === 'youtube_long' ? 'Description' : 'Caption'}</label>
                   {copyButton('caption', draft.caption)}
                 </div>
                 <textarea
                   id="detail-caption"
-                  rows={5}
+                  rows={4}
                   value={draft.caption}
                   onChange={(e) => set('caption')(e.target.value)}
                   placeholder="Write the caption…"
@@ -510,22 +487,63 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   value={draft.tags}
                   onChange={(e) => set('tags')(e.target.value)}
                   placeholder="#travel #cinematic"
-                  className={cx(inputStyles, 'h-11 font-mono text-xs')}
+                  className={cx(inputStyles, 'h-11 font-mono lg:text-xs')}
                 />
               </div>
             </div>
 
-            <div className="space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
-              <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Details</h3>
-              <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
-                <div>
-                  <label htmlFor="detail-status" className={labelStyles}>Stage</label>
-                  <FormSelect id="detail-status" value={draft.status} onChange={(e) => set('status')(e.target.value as StatusKey)}>
-                    {STATUS_OPTIONS.map((o) => (
-                      <option key={o.key} value={o.key}>{o.label}</option>
-                    ))}
-                  </FormSelect>
+            {/* Attached References */}
+            {item.attachedReferences.length > 0 ? (
+              <div className="space-y-2.5 rounded-2xl border border-border bg-surface p-4">
+                <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  Attached References ({item.attachedReferences.length})
+                </h3>
+                <div className="space-y-2">
+                  {item.attachedReferences.map((ref) => (
+                    <div
+                      key={ref.id}
+                      className="flex gap-3 rounded-lg border border-zinc-100 bg-zinc-50 p-2.5 dark:border-zinc-800 dark:bg-zinc-950"
+                    >
+                      {ref.screenshotUrl ? (
+                        <div className="h-12 w-16 shrink-0 overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800">
+                          <MediaImage src={ref.screenshotUrl} alt={ref.title} />
+                        </div>
+                      ) : null}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                          {ref.title}
+                        </p>
+                        {ref.note ? (
+                          <p className="mt-0.5 line-clamp-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                            {ref.note}
+                          </p>
+                        ) : null}
+                        {isWebLink(ref.url) ? (
+                          <a
+                            href={ref.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-link hover:underline"
+                          >
+                            Open Reference
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              </div>
+            ) : null}
+            </div>
+
+            <div className="min-w-0 space-y-3 rounded-2xl border border-border bg-surface p-4">
+              <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Details</h3>
+              <div>
+                <p className={labelStyles}>Stage</p>
+                <StageSwitch value={draft.status} onChange={setStage} />
+              </div>
+              <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
                 <div>
                   <label htmlFor="detail-platform" className={labelStyles}>Platform</label>
                   <FormSelect id="detail-platform" value={draft.platform} onChange={(e) => set('platform')(e.target.value as PlatformKey)}>
@@ -570,6 +588,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 <div className="flex items-center gap-2">
                   <input
                     id="detail-live-link"
+                    ref={liveLinkRef}
                     type="url"
                     value={draft.liveLink}
                     onChange={(e) => set('liveLink')(e.target.value)}
@@ -582,7 +601,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="Open live link"
-                      className={cx(buttonStyles.secondary, 'h-11 w-11 shrink-0 text-electric-600 dark:text-electric-400')}
+                      className={cx(buttonStyles.secondary, 'h-11 w-11 shrink-0 text-link')}
                     >
                       <ExternalLink className="h-4 w-4" />
                     </a>
@@ -594,7 +613,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 <label htmlFor="detail-notes" className={labelStyles}>Production notes</label>
                 <textarea
                   id="detail-notes"
-                  rows={3}
+                  rows={2}
                   value={draft.notes}
                   onChange={(e) => set('notes')(e.target.value)}
                   className={cx(inputStyles, 'py-2.5')}
@@ -602,57 +621,24 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               </div>
             </div>
 
-            {/* Attached References */}
-            {item.attachedReferences.length > 0 ? (
-              <div className="space-y-2.5 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
-                <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Attached References ({item.attachedReferences.length})
-                </h3>
-                <div className="space-y-2">
-                  {item.attachedReferences.map((ref) => (
-                    <div
-                      key={ref.id}
-                      className="flex gap-3 rounded-lg border border-zinc-100 bg-zinc-50 p-2.5 dark:border-zinc-800 dark:bg-zinc-950"
-                    >
-                      {ref.screenshotUrl ? (
-                        <div className="h-12 w-16 shrink-0 overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800">
-                          <MediaImage src={ref.screenshotUrl} alt={ref.title} />
-                        </div>
-                      ) : null}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                          {ref.title}
-                        </p>
-                        {ref.note ? (
-                          <p className="mt-0.5 line-clamp-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                            {ref.note}
-                          </p>
-                        ) : null}
-                        {isWebLink(ref.url) ? (
-                          <a
-                            href={ref.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-electric-600 hover:underline dark:text-electric-400"
-                          >
-                            Open Reference
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </form>
         </div>
         </div>
 
+        <div className="flex items-center gap-2 border-t border-border bg-surface px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden">
+          <button type="button" onClick={() => copyText('caption', draft.caption)} className={cx(buttonStyles.secondary, sizes.md, 'flex-1')}>
+            <Copy className="h-4 w-4" />
+            Copy caption
+          </button>
+          <button type="button" onClick={handleDownloadAllZip} disabled={zipProgress || !allAssets.length} className={cx(buttonStyles.primary, sizes.md, 'flex-1')}>
+            <Download className="h-4 w-4" />
+            {zipProgress ? 'Zipping…' : 'Download all'}
+          </button>
+        </div>
         {dirty ? (
           <div className="animate-pop-in flex items-center justify-between gap-3 border-t border-zinc-100 bg-white px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400">Unsaved changes</p>
-            <div className="flex gap-2">
+            <p className="min-w-0 truncate text-[13px] font-medium text-zinc-500 max-[359px]:sr-only dark:text-zinc-400">Unsaved changes</p>
+            <div className="ml-auto flex shrink-0 gap-2">
               <button
                 type="button"
                 onClick={() => setDraft(draftFrom(item))}

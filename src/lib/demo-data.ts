@@ -7,16 +7,19 @@ import type { ChannelItem, ContentItem, IdeaItem } from './content-logic';
 export const DEMO_CHANNELS: ChannelItem[] = [
   {
     "name": "Main Studio",
+    "platform": "youtube_long",
     "handle": "@mainstudio",
     "id": 1
   },
   {
     "name": "Design Feed",
+    "platform": "instagram_reel",
     "handle": "@designfeed",
     "id": 2
   },
   {
     "name": "Field Notes",
+    "platform": "tiktok",
     "handle": "@fieldnotes",
     "id": 3
   }
@@ -36,7 +39,7 @@ export const DEMO_ITEMS: ContentItem[] = [
     "platform": "youtube_long",
     "channelId": 1,
     "channelName": "Main Studio",
-    "status": "editing",
+    "status": "idea",
     "caption": "45 minutes of neon, rain and 35mm through Shibuya after midnight. Shot handheld on a gimbal with no lights.",
     "tags": [
       "tokyo",
@@ -100,7 +103,7 @@ export const DEMO_ITEMS: ContentItem[] = [
     "channelId": 2,
     "channelName": "Design Feed",
     "status": "posted",
-    "caption": "Alarm at 3:40. Worth it. 🌄 Full gear list in the comments.",
+    "caption": "Alarm at 3:40. Worth it. Full gear list in the comments.",
     "tags": [
       "sunrise",
       "hiking",
@@ -162,8 +165,8 @@ export const DEMO_ITEMS: ContentItem[] = [
     "platform": "tiktok",
     "channelId": 3,
     "channelName": "Field Notes",
-    "status": "scripting",
-    "caption": "POV: you fixed your desk posture in 15 minutes 🧘 6 moves, no equipment. Save it for tomorrow.",
+    "status": "idea",
+    "caption": "POV: you fixed your desk posture in 15 minutes. 6 moves, no equipment. Save it for tomorrow.",
     "tags": [
       "mobility",
       "fitness",
@@ -257,7 +260,7 @@ export const DEMO_ITEMS: ContentItem[] = [
     "platform": "instagram_reel",
     "channelId": 2,
     "channelName": "Design Feed",
-    "status": "editing",
+    "status": "idea",
     "caption": "Why a compact cage + top mic beats heavy mirrorless rigs when shooting fast street reels. Full parts list pinned below.",
     "tags": [
       "reels",
@@ -346,7 +349,7 @@ export const DEMO_ITEMS: ContentItem[] = [
     "platform": "tiktok",
     "channelId": 3,
     "channelName": "Field Notes",
-    "status": "scripting",
+    "status": "idea",
     "caption": "Shooting twilight winding roads at 1/50 shutter on 35mm. Color grade breakdown in the pinned comment.",
     "tags": [
       "shorts",

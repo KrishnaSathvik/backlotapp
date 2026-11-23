@@ -11,7 +11,7 @@
  * again. Run it BEFORE the restored database takes traffic.
  *
  * Evidence rule: only the ledger (or the old database's account_deletions) proves Backlot was
- * asked to delete an account. A missing Firebase user is never enough on its own
+ * asked to delete an account. A missing Supabase Auth user is never enough on its own
  * (scripts/find-deleted-accounts-after-restore.ts lists those for review only).
  *
  * Needs: DATABASE_MIGRATION_URL pointing at the RESTORED database, and the R2 settings

@@ -16,8 +16,8 @@ export type ActionStatus = 'pending' | 'applied' | 'dismissed' | 'expired' | 'co
 export const ACTION_TTL_MS = 24 * 60 * 60 * 1000;
 export const ACTION_LIMITS = { perReply: 6, perBatch: 5 } as const;
 
-export const STAGE_KEYS = ['idea', 'scripting', 'editing', 'ready', 'posted'] as const;
-export const STAGE_LABEL: Record<string, string> = { idea: 'Planned', scripting: 'Scripting', editing: 'Editing', ready: 'Ready', posted: 'Posted' };
+export const STAGE_KEYS = ['idea', 'ready', 'posted'] as const;
+export const STAGE_LABEL: Record<string, string> = { idea: 'Planned', scripting: 'Planned', editing: 'Planned', ready: 'Made', posted: 'Posted' };
 const PLATFORM_KEYS = PLATFORM_OPTIONS.map((p) => p.key);
 
 /** Post fields Slate may propose changing. */
@@ -121,8 +121,10 @@ export function validDate(v: unknown): string {
 }
 
 export function validStage(v: unknown): string {
-  if (typeof v !== 'string' || !(STAGE_KEYS as readonly string[]).includes(v)) throw new ActionInputError(`stage must be one of: ${STAGE_KEYS.join(', ')}.`);
-  return v;
+  if (typeof v !== 'string') throw new ActionInputError(`stage must be one of: ${STAGE_KEYS.join(', ')}.`);
+  const stage = v === 'scripting' || v === 'editing' ? 'idea' : v;
+  if (!(STAGE_KEYS as readonly string[]).includes(stage)) throw new ActionInputError(`stage must be one of: ${STAGE_KEYS.join(', ')}.`);
+  return stage;
 }
 
 export function validPlatform(v: unknown): PlatformKey {

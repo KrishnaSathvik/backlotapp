@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { JsonLd } from '@/src/components/site/JsonLd';
-import { SiteFooter, SiteHeader } from '@/src/components/site/SiteChrome';
+import { ContactLink, DocLayout, PublicPage, Section } from '@/src/components/site/PublicPage';
 import { breadcrumbJsonLd, pageMetadata } from '@/src/lib/seo';
 
 export function generateMetadata(): Metadata {
@@ -9,14 +8,14 @@ export function generateMetadata(): Metadata {
     path: '/privacy',
     title: 'Privacy Policy',
     description:
-      'What Backlot stores, what Slate sends to OpenAI and Anthropic, how uploaded files, conversations and backups are kept, and how to delete your account.',
+      'What Backlot stores, what Slate sends to OpenAI and Anthropic, how uploaded files and conversations are kept, and how to delete your account.',
   });
 }
 
 /**
  * Backlot's privacy policy. Every statement here describes behavior implemented in this
  * codebase; update this page whenever data handling changes (see README "Privacy").
- * The contact address comes from PRIVACY_CONTACT_EMAIL so it isn't hard-coded.
+ * The contact address is SUPPORT_EMAIL (src/lib/site.ts), or PRIVACY_CONTACT_EMAIL when set.
  *
  * LEGAL REVIEW REQUIRED before launch (see docs/LAUNCH_PUBLIC.md): the operating entity, legal
  * bases and regional rights (e.g. GDPR/UK GDPR, CCPA), international transfers (Vercel, Supabase,
@@ -26,9 +25,11 @@ export function generateMetadata(): Metadata {
  * once backups are actually running), the processor agreements (DPAs) with each provider, and the
  * minimum age.
  *
- * Infrastructure (Vercel + Supabase + Cloudflare R2 migration): hosting on Vercel, the database
- * on Supabase (PostgreSQL), files in a private Cloudflare R2 bucket with no soft delete, the job
- * scheduler on Cloudflare Workers, encrypted database backups created by GitHub Actions.
+ * Infrastructure: hosting on Vercel, sign-in with Supabase Auth (Google, or email and password), the
+ * database on Supabase (PostgreSQL), files in a private Cloudflare R2 bucket with no soft delete.
+ * Account deletion starts right after the request and is resumed by an hourly Vercel Cron run.
+ * Backlot runs NO database backups of its own (docs/BACKUPS.md). Statements below that changed
+ * for these reasons are marked OWNER REVIEW.
  */
 
 /** Same rule as ledgerRetentionDaysFromEnv (src/lib/account/ledger.ts), without importing storage code. */
@@ -37,66 +38,29 @@ function ledgerDays(): number {
   return Number.isInteger(n) && n >= 30 && n <= 3650 ? n : 90;
 }
 
-const EFFECTIVE = 'November 17, 2026';
-
-function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
-  return (
-    <section id={id} className="scroll-mt-24 space-y-3">
-      <h2 className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{title}</h2>
-      <div className="space-y-3 text-[15px] leading-7 text-zinc-700 dark:text-zinc-300">{children}</div>
-    </section>
-  );
-}
+const EFFECTIVE = 'November 20, 2026';
 
 export default function PrivacyPage() {
-  const contact = process.env.PRIVACY_CONTACT_EMAIL?.trim();
-  const contactLine = contact ? (
-    <a className="font-medium text-electric-700 underline-offset-2 hover:underline dark:text-electric-400" href={`mailto:${contact}`}>
-      {contact}
-    </a>
-  ) : (
-    <span className="font-medium">the contact address listed on this page once it is published</span>
-  );
+  const contactLine = <ContactLink />;
 
   return (
-    <div className="min-h-screen bg-white text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
-      <SiteHeader />
+    <PublicPage>
       <JsonLd data={breadcrumbJsonLd('/privacy')} />
-      <main id="main" tabIndex={-1} className="mx-auto max-w-3xl px-4 pb-20 pt-10 outline-none sm:px-6">
-        <p className="text-sm font-medium text-electric-700 dark:text-electric-400">Effective {EFFECTIVE}</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Privacy Policy</h1>
-        <p className="mt-4 text-[15px] leading-7 text-zinc-700 dark:text-zinc-300">
-          Backlot is a private workspace for creators to keep posts, captions, files and ideas. This page explains what Backlot stores,
-          how it is used, which service providers process it, and how you can delete it.
-        </p>
-
-        <nav aria-label="On this page" className="mt-8 rounded-2xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
-          <ul className="grid gap-1.5 sm:grid-cols-2">
-            {[
-              ['stores', 'What Backlot stores'],
-              ['use', 'How your content is used'],
-              ['slate', 'Slate and AI providers'],
-              ['conversations', 'Slate conversations'],
-              ['files', 'Uploaded media'],
-              ['cookies', 'Cookies and browser storage'],
-              ['providers', 'Service providers'],
-              ['deletion', 'Deleting your content or account'],
-              ['contact', 'Contact and privacy requests'],
-            ].map(([id, label]) => (
-              <li key={id}>
-                <a href={`#${id}`} className="text-zinc-700 hover:text-electric-700 dark:text-zinc-300 dark:hover:text-electric-400">
-                  {label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <div className="mt-10 space-y-10">
+      <DocLayout
+        title="Privacy Policy"
+        effective={EFFECTIVE}
+        intro={
+          <p>
+            Backlot is a private workspace for creators to keep posts, captions, files and ideas. This page explains what Backlot stores,
+            how it is used, which service providers process it, and how you can delete it.
+          </p>
+        }
+      >
           <Section id="stores" title="What Backlot stores">
             <p>When you sign in, Backlot stores:</p>
             <ul className="list-disc space-y-1.5 pl-5">
-              <li><strong>Your account:</strong> the user id and email address from your Google sign-in.</li>
+              {/* OWNER REVIEW: sign-in is now Google or email and password (was: emailed sign-in links). */}
+              <li><strong>Your account:</strong> your account id and email address, from Google sign-in or the address you sign up with. If you use a password, Supabase Authentication stores it in hashed form; your browser sends it straight to Supabase, and Backlot’s servers never receive or store it.</li>
               <li><strong>Your workspace:</strong> channels (name and handle), posts (title, platform, stage, caption, hashtags, notes, dates, live link and attached references), and ideas (title, notes, reference link and screenshot).</li>
               <li><strong>Files you upload:</strong> covers, videos, slides and idea screenshots, with their file name, type and size.</li>
               <li><strong>Slate data:</strong> your Slate conversations (see below), search index entries for your posts and ideas, the creative preferences you save, and the changes Slate suggests (the proposed text or dates, and whether you applied or dismissed them), plus a record of those decisions that contains ids, versions and outcomes but not your content.</li>
@@ -113,7 +77,7 @@ export default function PrivacyPage() {
               Server logs record operational details such as request timing, which AI provider answered and token counts. They are designed
               not to contain your captions, notes, messages or files. When you delete your account, Backlot also keeps a separate deletion
               record outside its database, holding only your account id and the date you asked (not your email or content), so the deletion
-              can be applied again if Backlot ever has to restore its database from a backup (see “Deleting your content or account”).
+              can be applied again if Backlot’s database is ever restored from a backup (see “Deleting your content or account”).
             </p>
           </Section>
 
@@ -143,9 +107,9 @@ export default function PrivacyPage() {
             </ul>
             <p>
               Each provider handles the data under its own terms (see{' '}
-              <a className="underline underline-offset-2" href="https://openai.com/policies/privacy-policy" rel="noopener noreferrer" target="_blank">OpenAI’s privacy policy</a>{' '}
+              <a className="font-medium text-electric-700 underline underline-offset-2 dark:text-electric-400" href="https://openai.com/policies/privacy-policy" rel="noopener noreferrer" target="_blank">OpenAI’s privacy policy</a>{' '}
               and{' '}
-              <a className="underline underline-offset-2" href="https://www.anthropic.com/legal/privacy" rel="noopener noreferrer" target="_blank">Anthropic’s privacy policy</a>
+              <a className="font-medium text-electric-700 underline underline-offset-2 dark:text-electric-400" href="https://www.anthropic.com/legal/privacy" rel="noopener noreferrer" target="_blank">Anthropic’s privacy policy</a>
               ). Backlot does not use Google AI models for Slate.
             </p>
             <p>
@@ -192,8 +156,7 @@ export default function PrivacyPage() {
 
           <Section id="cookies" title="Cookies and browser storage">
             <ul className="list-disc space-y-1.5 pl-5">
-              <li><strong>Sign-in:</strong> Google’s Firebase Authentication keeps you signed in using your browser’s storage.</li>
-              <li><strong><code>cv_session</code> cookie:</strong> a short-lived (one hour) cookie holding your sign-in token, sent only when your browser loads your own files. It’s required for the app to work.</li>
+              <li><strong>Sign-in cookies (<code>sb-…</code>):</strong> Supabase Authentication keeps you signed in with first-party cookies holding your sign-in session (a short-lived access token, renewed automatically, and a refresh token). They’re required for the app to work and are removed when you sign out.</li>
               <li><strong>Browser storage:</strong> your theme choice and which Slate conversation you had open. If you delete your account, the private link to its status page is kept in this browser so you can reopen it.</li>
               <li><strong>Offline support:</strong> when installed as an app, Backlot caches its own app files so it opens faster.</li>
             </ul>
@@ -202,11 +165,12 @@ export default function PrivacyPage() {
 
           <Section id="providers" title="Service providers">
             <ul className="list-disc space-y-1.5 pl-5">
-              <li><strong>Google (Firebase Authentication)</strong> for Google sign-in.</li>
+              <li><strong>Google</strong> for Google sign-in. Google’s sign-in button loads from Google on the sign-in screen and is subject to Google’s privacy policy.</li>
               <li><strong>Vercel</strong> to host and run the Backlot website and app.</li>
-              <li><strong>Supabase</strong> to host Backlot’s database (your workspace, Slate conversations and settings).</li>
-              <li><strong>Cloudflare</strong> to store uploaded files (R2) and to start Backlot’s scheduled background jobs.</li>
-              <li><strong>GitHub</strong> to run Backlot’s database backups, which are encrypted before they’re stored.</li>
+              <li><strong>Supabase</strong> to manage sign-in (Supabase Authentication) and to host Backlot’s database (your workspace, Slate conversations and settings).</li>
+              {/* OWNER REVIEW: removed the Cloudflare scheduler (deletion now runs on Vercel) and the GitHub backups line
+                  (no backup workflow runs). */}
+              <li><strong>Cloudflare</strong> to store uploaded files (R2).</li>
               <li><strong>OpenAI</strong> and <strong>Anthropic</strong> for Slate, as described above.</li>
             </ul>
           </Section>
@@ -219,16 +183,17 @@ export default function PrivacyPage() {
             </p>
             <p>
               <strong>Deleting your account.</strong> In the app, open <strong>Settings</strong> and choose <strong>Delete account</strong>.
-              You type a confirmation and sign in with Google again to confirm it’s you. Then:
+              You type a confirmation and confirm it’s you again (with Google, or with your password). Then:
             </p>
             <ul className="list-disc space-y-1.5 pl-5">
               <li><strong>Immediately:</strong> you’re signed out and the account is locked. Nothing in it can be opened or changed from then on, by you or anyone else.</li>
               <li>
-                <strong>Usually within 15 minutes:</strong> Backlot deletes your account record, channels, posts (including captions,
+                {/* OWNER REVIEW: was "Usually within 15 minutes". Deletion starts promptly; no duration is promised. */}
+                <strong>Then, in the background:</strong> Backlot deletes your account record, channels, posts (including captions,
                 hashtags, notes and dates), ideas and their links, every uploaded file and any unfinished uploads, Slate conversations,
                 messages and Slate’s notes on them, saved preferences, search index entries, Slate’s suggested changes and the record of your
-                decisions, and your Slate usage records. Backlot’s sign-in record for you in Firebase Authentication is removed last. Your
-                Google account itself isn’t affected.
+                decisions, and your Slate usage records. Backlot’s sign-in record for you in Supabase Authentication is removed last. Your
+                Google account or email account itself isn’t affected.
               </li>
               <li>
                 <strong>Confirmation:</strong> the deletion is only marked complete after a final check finds nothing left. If a service Backlot
@@ -242,11 +207,13 @@ export default function PrivacyPage() {
               <li><strong>Uploaded files</strong> are erased from storage when the deletion runs; there’s no recovery copy (see “Uploaded media”).</li>
               <li><strong>A deletion record</strong> holding your account id and the dates of each step, but no content and no email address, is kept for 30 days so the status page works and the deletion can be confirmed. It’s then removed.</li>
               <li><strong>A deletion ledger entry</strong> holding only your account id and the date you asked is kept outside Backlot’s database for {ledgerDays()} days, so that your deletion can be applied again if a backup is ever restored. It’s then removed.</li>
-              <li><strong>Backups</strong> of Backlot’s database are encrypted and used only to recover from failures. They can contain deleted data until they expire on their regular schedule. If a backup is ever restored, accounts deleted after it was taken are locked again before Backlot is back in service, and then deleted again.</li>
+              {/* OWNER REVIEW: was a description of Backlot's own encrypted backups, which aren't configured. Confirm what
+                  Supabase's plan keeps for this project before launch. */}
+              <li><strong>Backups:</strong> Backlot doesn’t currently make its own backups of its database. Backlot’s database provider (Supabase) may keep backups as part of its service, which can contain deleted data until they expire. If Backlot’s database is ever restored from a backup, accounts deleted after it was taken are locked again before Backlot is back in service, and then deleted again.</li>
             </ul>
             <p>
               Deleting an account can’t be undone, and Backlot can’t restore a deleted account’s content. If you can’t sign in, or prefer to
-              ask, you can also request deletion by contacting {contactLine} from the email address you sign in with.
+              ask, you can also request deletion by email from the address you sign in with (see “Contact and privacy requests”).
             </p>
           </Section>
 
@@ -256,13 +223,7 @@ export default function PrivacyPage() {
             </p>
             <p>If this policy changes, the updated version will be posted on this page with a new effective date.</p>
           </Section>
-        </div>
-
-        <p className="mt-12 text-sm text-zinc-600 dark:text-zinc-400">
-          <Link href="/" className="underline-offset-2 hover:text-zinc-900 hover:underline dark:hover:text-zinc-200">← Back to Backlot</Link>
-        </p>
-      </main>
-      <SiteFooter />
-    </div>
+      </DocLayout>
+    </PublicPage>
   );
 }

@@ -44,7 +44,7 @@ function Step({ done, active, title, detail }: { done: boolean; active: boolean;
   return (
     <li className="flex gap-3">
       {done ? (
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-link" aria-hidden="true" />
       ) : active ? (
         <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-electric-600 dark:text-electric-400" aria-hidden="true" />
       ) : (
@@ -117,15 +117,38 @@ export function DeletionStatus() {
   const files = !!view?.filesDeleted;
   const signIn = !!view?.signInRemoved;
   const complete = view?.state === 'completed';
+  const status = !view
+    ? null
+    : complete
+      ? 'Deletion completed'
+      : view.delayed
+        ? 'Processing delayed'
+        : view.state === 'in_progress'
+          ? 'Deletion in progress'
+          : 'Request accepted · Account locked';
 
   return (
     <div>
+      {status ? (
+        <p
+          className={cx(
+            'mb-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold',
+            complete
+              ? 'bg-surface-2 text-text'
+              : view?.delayed
+                ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                : 'bg-accent/10 text-link'
+          )}
+        >
+          {status}
+        </p>
+      ) : null}
       <h1 className="text-3xl font-bold tracking-tight">{complete ? 'Your account has been deleted' : 'Deleting your account'}</h1>
       <p className="mt-3 text-[15px] leading-7 text-zinc-700 dark:text-zinc-300" aria-live="polite">
         {complete
           ? 'Everything in your Backlot account has been deleted, and the account can’t be used again.'
           : view?.state === 'scheduled'
-            ? 'Your account is locked and you’ve been signed out. Deletion starts in a few minutes, once any requests that were already running have finished.'
+            ? 'Your account is locked and you’ve been signed out. Deletion starts shortly, once any requests that were already running have finished. You can close this page.'
             : 'Your account is locked and you’ve been signed out. Your data is being deleted now. You can close this page; it continues without you.'}
       </p>
 
@@ -139,12 +162,12 @@ export function DeletionStatus() {
         <>
           {view.delayed && !complete ? (
             <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
-              This is taking longer than usual because a service didn’t respond. Backlot keeps retrying automatically, and it won’t be marked
-              complete until everything is gone.
+              This is taking longer than usual because a service didn’t respond. Backlot keeps retrying automatically, at least once an hour,
+              and it won’t be marked complete until everything is gone.
             </p>
           ) : null}
           <ol className="mt-8 space-y-5">
-            <Step done active={false} title="Access removed" detail={`Signed out and locked ${fmt(view.requestedAt)}. No new changes can be made.`} />
+            <Step done active={false} title="Request accepted, account locked" detail={`Signed out and locked ${fmt(view.requestedAt)}. No new changes can be made.`} />
             <Step
               done={content}
               active={!content && view.state === 'in_progress'}
@@ -167,7 +190,7 @@ export function DeletionStatus() {
                 )
               }
             />
-            <Step done={signIn} active={files && !signIn} title="Backlot sign-in removed" detail={signIn ? 'Your Google account itself isn’t affected.' : undefined} />
+            <Step done={signIn} active={files && !signIn} title="Backlot sign-in removed" detail={signIn ? 'Your Google or email account itself isn’t affected.' : undefined} />
             <Step
               done={complete}
               active={signIn && !complete}

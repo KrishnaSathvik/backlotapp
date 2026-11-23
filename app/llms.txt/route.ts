@@ -17,7 +17,7 @@ export function GET() {
 
 > ${SITE_DESCRIPTION}
 
-Backlot is a web app (installable as a progressive web app on phones and desktops) for solo creators and small studios who make their own content. Sign-in is with a Google account. A demo with sample data runs entirely in the browser without signing in.
+Backlot is a web app (installable as a progressive web app on phones and desktops) for solo creators and small studios who make their own content. Sign-in is with a Google account or an email address and password. A demo with sample data runs entirely in the browser without signing in.
 
 ## What it does
 
@@ -39,14 +39,14 @@ Backlot is a web app (installable as a progressive web app on phones and desktop
 
 - Workspaces and uploaded files are private to the account that created them. No advertising, no analytics or tracking scripts, no sale of data.
 - Slate requests are processed by OpenAI, with Anthropic as a fallback when OpenAI is unavailable. Search by meaning uses OpenAI embeddings. Google AI models aren't used for Slate.
-- Creators can delete their account in Settings; deletion usually completes within 15 minutes.
+- Creators can delete their account in Settings; the account is locked immediately and its data is deleted in the background.
 
 ## Pages
 
 ${page('/', 'overview, features, who it is for and FAQ')}
 ${page('/slate', 'what Slate does, what it sees, its limits and providers')}
 ${page('/support', 'getting started, supported platforms, file limits, installing, account deletion and contact')}
-${page('/privacy', 'what is stored, AI processing, retention, deletion and backups')}
+${page('/privacy', 'what is stored, AI processing, retention and deletion')}
 ${page('/terms', 'terms of use')}
 `;
   return new Response(body, { headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });

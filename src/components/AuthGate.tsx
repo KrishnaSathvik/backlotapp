@@ -1,132 +1,55 @@
 'use client';
 
-import React from 'react';
-import { ArrowRight, Lock } from 'lucide-react';
-import type { PlatformKey } from '@/src/lib/content-logic';
-import { PlatformIcon } from './PlatformIcon';
-import { LogoMark } from './site/Logo';
+import React, { useState } from 'react';
+import { ArrowRight } from 'lucide-react';
+import { AuthPanel, type AuthMode } from './auth/AuthPanel';
 import { SiteFooter, SiteHeader } from './site/SiteChrome';
 
 interface AuthGateProps {
-  onGoogleSignIn: () => Promise<void>;
-  onPreview: () => void;
-  isSigningIn: boolean;
+  /** Shown first, e.g. a failed or cancelled sign-in redirect (?auth_error=…). */
   errorMessage: string | null;
+  onPreview: () => void;
 }
 
-const PLATFORMS: Array<{ key: PlatformKey; label: string }> = [
-  { key: 'youtube_long', label: 'YouTube' },
-  { key: 'instagram_reel', label: 'Instagram' },
-  { key: 'tiktok', label: 'TikTok' },
-];
-
-function GoogleG() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09z" />
-      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.98.66-2.24 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z" />
-      <path fill="#FBBC05" d="M5.84 14.11A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.11V7.05H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.95l3.66-2.84z" />
-      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z" />
-    </svg>
+/**
+ * Full-page sign-in: /app (and /login, which redirects there) when signed out. Direct links,
+ * expired sessions and sign-in redirects land here. The landing page uses the same panel in a dialog.
+ */
+export const AuthGate: React.FC<AuthGateProps> = ({ errorMessage, onPreview }) => {
+  const [mode, setMode] = useState<AuthMode>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mode') === 'signup' ? 'signup' : 'signin'
   );
-}
 
-export const AuthGate: React.FC<AuthGateProps> = ({ onGoogleSignIn, onPreview, isSigningIn, errorMessage }) => {
   return (
     <div className="flex min-h-dvh flex-col">
       <SiteHeader />
 
-      <main className="relative flex flex-1 flex-col justify-center">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px] overflow-hidden">
-          <div className="absolute -left-24 -top-40 h-80 w-[520px] rounded-full bg-electric-400/15 blur-3xl dark:bg-electric-600/15" />
-          <div className="absolute -top-48 right-0 h-72 w-96 rounded-full bg-cantaloupe-300/15 blur-3xl dark:bg-cantaloupe-500/10" />
-        </div>
-
-        <div className="flex min-h-full items-center justify-center px-4 py-10 sm:px-6 sm:py-16">
-          {/* Sign-in card */}
+      <main id="main" tabIndex={-1} className="relative flex flex-1 flex-col justify-center outline-none">
+        <div className="px-4 py-10 sm:px-6 sm:py-16">
           <div className="mx-auto w-full max-w-md animate-rise">
-            <div className="rounded-[28px] border border-zinc-200 bg-white/90 p-7 shadow-[0_30px_80px_-40px_rgba(10,20,60,0.35)] backdrop-blur sm:p-9 dark:border-zinc-800 dark:bg-zinc-900/80">
-              <LogoMark className="h-12 w-12" />
-              <h1 className="mt-6 text-[34px] font-extrabold leading-[1.02] sm:text-[40px]">
-                Welcome to your <span className="text-electric-600 dark:text-electric-400">backlot.</span>
-              </h1>
-              <p className="mt-3 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-                Sign in to keep every video, Short, Reel, TikTok and post, with its caption and files, in one private place.
-              </p>
-
-              {/* Platforms */}
-              <div className="mt-5 flex items-center gap-2">
-                {PLATFORMS.map((p) => (
-                  <span
-                    key={p.key}
-                    className="flex h-8 items-center gap-1.5 rounded-full border border-zinc-200 bg-white pl-1.5 pr-3 text-[12px] font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300"
-                  >
-                    <PlatformIcon platform={p.key} size={18} />
-                    {p.label}
-                  </span>
-                ))}
-              </div>
-
-              {errorMessage ? (
-                <div
-                  role="alert"
-                  className="mt-6 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
-                >
-                  {errorMessage}
-                </div>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={onGoogleSignIn}
-                disabled={isSigningIn}
-                className="mt-7 flex w-full items-center justify-center gap-3 rounded-2xl bg-zinc-950 py-3.5 text-[15px] font-semibold text-white shadow-lg shadow-zinc-950/20 transition-all hover:-translate-y-0.5 hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100"
-              >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white">
-                  <GoogleG />
-                </span>
-                {isSigningIn ? (
-                  <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                    Signing in…
-                  </>
-                ) : (
-                  'Continue with Google'
-                )}
-              </button>
-
-              <div className="my-6 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
-                or
-                <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
-              </div>
-
-              <button
-                type="button"
-                onClick={onPreview}
-                className="group flex w-full items-center justify-between rounded-2xl border border-zinc-200 px-4 py-3.5 text-left transition-all hover:border-electric-400 hover:bg-electric-50/60 dark:border-zinc-800 dark:hover:border-electric-700 dark:hover:bg-electric-950/30"
-              >
-                <span>
-                  <span className="block text-[15px] font-semibold">Try the demo</span>
-                  <span className="block text-[13px] text-zinc-500">Explore a sample creator workspace</span>
-                </span>
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cantaloupe-500 text-white transition-transform group-hover:translate-x-0.5">
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </span>
-              </button>
-
-              <p className="mt-6 flex items-center justify-center gap-1.5 text-xs text-zinc-500">
-                <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-                Your backlot is private to your Google account.
-              </p>
-              <p className="mt-2 text-center text-xs text-zinc-500">
-                <a href="/privacy" className="underline underline-offset-2 hover:text-zinc-800 dark:hover:text-zinc-200">
-                  Privacy Policy
-                </a>
-              </p>
+            <div className="rounded-[28px] border border-border bg-surface p-6 shadow-[0_30px_80px_-40px_rgba(10,20,60,0.35)] sm:p-8">
+              <AuthPanel
+                key={errorMessage ?? ''}
+                mode={mode}
+                onModeChange={setMode}
+                next={typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/app'}
+                // The app's auth listener loads the workspace once the session exists.
+                onSignedIn={() => undefined}
+                initialError={errorMessage}
+                titleAs="h1"
+                titleId="auth-page-title"
+              />
             </div>
-          </div>
 
+            <button
+              type="button"
+              onClick={onPreview}
+              className="group mx-auto mt-5 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-link transition-colors hover:underline"
+            >
+              Or explore the demo workspace
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </main>
 

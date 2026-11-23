@@ -1,7 +1,6 @@
 import { checkDbConfig } from '../db/connection-config.ts';
 import { ledgerPrefixFromEnv } from './account/ledger.ts';
-import { firebaseClientProjectId, firebaseProjectId, readFirebaseAdminCredential } from './firebase-admin-config.ts';
-import { parseFirebasePublicConfig } from './firebase-public-config.ts';
+import { checkSupabaseAuthConfig } from './supabase/config.ts';
 import { internalAuthConfig, type InternalJob } from './internal-auth.ts';
 import { checkPrimary, readProviderConfig } from './slate/providers.ts';
 import { readSiteUrl } from './site.ts';
@@ -59,19 +58,11 @@ export function checkProductionConfig(env: Env = process.env): ConfigReport {
     warnings.push('STORAGE_DELIVERY=proxy streams every file through Vercel Functions (payload and duration limits apply to large videos).');
   }
 
-  // Firebase Admin: account deletion revokes sessions and deletes the sign-in, which needs a
-  // credential. Vercel has no Google Application Default Credentials.
-  const fb = readFirebaseAdminCredential(env);
-  if (fb.error) need(false, fb.error);
-  else if (!fb.credential && env.VERCEL) need(false, 'Firebase Admin has no credential on Vercel (set FIREBASE_SERVICE_ACCOUNT_JSON); account deletion cannot remove sign-ins.');
-  if (fb.credential?.projectId && fb.credential.projectId !== firebaseProjectId(env)) {
-    need(false, 'The Firebase service account belongs to a different project than the app signs in with.');
-  }
-  const publicConfig = parseFirebasePublicConfig(env.NEXT_PUBLIC_FIREBASE_CONFIG);
-  if (publicConfig.error) need(false, publicConfig.error);
-  if (env.FIREBASE_PROJECT_ID?.trim() && env.FIREBASE_PROJECT_ID.trim() !== firebaseClientProjectId(env)) {
-    need(false, 'FIREBASE_PROJECT_ID differs from the project the browser signs in to (NEXT_PUBLIC_FIREBASE_CONFIG or firebase-applet-config.json); every sign-in would be rejected.');
-  }
+  // Supabase Auth: sign-in (URL + publishable key, public) and account deletion (secret key,
+  // server only: it revokes sign-ins and deletes the Auth user).
+  const auth = checkSupabaseAuthConfig(env);
+  for (const e of auth.errors) need(false, e);
+  warnings.push(...auth.warnings);
   const sessionKey = readSessionKey(env);
   if (sessionKey.error) need(false, sessionKey.error);
 
@@ -80,12 +71,14 @@ export function checkProductionConfig(env: Env = process.env): ConfigReport {
   if (!primary.ok) need(false, primary.error);
   else if (primary.warning) warnings.push(primary.warning);
 
-  // Scheduled jobs: without the deletion worker, account deletions never finish.
+  // Jobs. Deletions: Vercel Cron's hourly recovery run needs CRON_SECRET, or interrupted
+  // deletions never finish. Maintenance has no schedule, so its credentials are optional.
   for (const job of JOBS) {
     const cfg = internalAuthConfig(job, env);
     if (cfg.weakSecret) need(false, `The ${job} job secret must be at least 32 characters.`);
-    need(!!cfg.oidc || !!cfg.secret, `No credentials for the ${job} job (set its secret, or INTERNAL_OIDC_AUDIENCE and its invoker).`);
   }
+  const deletionAuth = internalAuthConfig('deletions', env);
+  need(!!deletionAuth.oidc || !!deletionAuth.secret, 'CRON_SECRET is not set: the hourly account-deletion recovery run (Vercel Cron) is refused.');
   if (set('INTERNAL_OIDC_AUDIENCE') && !/^https:\/\//.test(env.INTERNAL_OIDC_AUDIENCE!.trim())) {
     need(false, 'INTERNAL_OIDC_AUDIENCE must be the https:// URL the scheduler jobs call.');
   }
@@ -95,8 +88,6 @@ export function checkProductionConfig(env: Env = process.env): ConfigReport {
   if (d.oidc && m.oidc && d.oidc.invoker === m.oidc.invoker) {
     warnings.push('The deletions and maintenance jobs use the same invoker service account; separate ones limit what each can trigger.');
   }
-
-  need(set('PRIVACY_CONTACT_EMAIL'), 'PRIVACY_CONTACT_EMAIL is not set (shown on /privacy).');
 
   // Public site: canonical URLs, sitemap, social previews and JSON-LD need the real origin.
   const site = readSiteUrl(env);

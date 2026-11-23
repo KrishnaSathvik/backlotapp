@@ -303,8 +303,10 @@ export function verifySql(ref: Reference): string {
 
 /** Restricted roles and Data API lockdown (same grants as ops/supabase/roles.sql), no passwords. */
 export function rolesSql(ref: Reference): string {
-  const expectedRecords = `(VALUES ${ref.files.map((f) => `(${lit(f.name)}, ${lit(f.checksum)})`).join(', ')}) AS e(name, checksum)`;
-  const n = ref.files.length;
+  // Roles need the original setup's 8 migrations; later ones (steps 12+) run after this step.
+  const setupFiles = ref.files.slice(0, 8);
+  const expectedRecords = `(VALUES ${setupFiles.map((f) => `(${lit(f.name)}, ${lit(f.checksum)})`).join(', ')}) AS e(name, checksum)`;
+  const n = setupFiles.length;
   return `${header('Backlot manual setup, step 09: restricted roles and Data API access', [
     'Run in the Supabase SQL Editor after step 08. One transaction; safe to re-run (it only',
     'creates what is missing and re-applies the same grants).',
@@ -387,10 +389,13 @@ export interface GeneratedFile {
 export async function generateManualSetup(): Promise<GeneratedFile[]> {
   const ref = await buildReference();
   const out: GeneratedFile[] = [{ path: '00_preflight_readonly.sql', content: preflightSql(ref) }];
+  // The first 8 migrations are steps 01-08 (the original setup). Later migrations come after
+  // roles (09) and verification (11), as steps 12, 13, ...; each still checks the earlier ones ran.
+  if (ref.files.length < 8) throw new Error(`Step numbers assume at least 8 migrations; found ${ref.files.length}.`);
   ref.files.forEach((f, i) => {
-    out.push({ path: `${String(i + 1).padStart(2, '0')}_migration_${f.name}`, content: stepSql(ref.files, i, i + 1) });
+    const step = i < 8 ? i + 1 : i + 4;
+    out.push({ path: `${String(step).padStart(2, '0')}_migration_${f.name}`, content: stepSql(ref.files, i, step) });
   });
-  if (ref.files.length !== 8) throw new Error(`Step numbers assume 8 migrations; found ${ref.files.length}. Renumber steps 09 to 11.`);
   out.push({ path: '09_roles.sql', content: rolesSql(ref) });
   out.push({ path: '11_verify_readonly.sql', content: verifySql(ref) });
   return out;

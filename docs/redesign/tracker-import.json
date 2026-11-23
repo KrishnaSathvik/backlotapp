@@ -1,0 +1,520 @@
+{
+ "source": "Content Tracker artifact, 2026-11-20",
+ "statusMap": {
+  "Planned": "idea",
+  "Made": "ready",
+  "Posted": "posted"
+ },
+ "items": [
+  {
+   "title": "RAG end to end",
+   "platform": "instagram_carousel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "5 SQL window functions",
+   "platform": "instagram_carousel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "Gemini 4: Hydrogen, Argon, Carbon",
+   "platform": "instagram_carousel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "My AI engineering stack, 2027",
+   "platform": "instagram_carousel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "AI Weekly #01",
+   "platform": "instagram_carousel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "Claude Meetings vs Grok Bot",
+   "platform": "instagram_carousel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "Prompts that actually work",
+   "platform": "instagram_carousel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "Auto Loader",
+   "platform": "instagram_carousel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "Which AI model should you use?",
+   "platform": "instagram_carousel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "ChatGPT Wallet",
+   "platform": "instagram_carousel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "GitHub explained + Universe '26",
+   "platform": "instagram_carousel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "How ChatGPT stores data for 1B people",
+   "platform": "instagram_carousel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "Adobe MAX 2026: Photoshop takes orders from AI",
+   "platform": "instagram_carousel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "PySpark: keep the latest row per key",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Stop re-explaining your project: Claude Projects and ChatGPT custom instructions",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI Weekly #02",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "What is an AI agent?",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "SQL CTEs vs subqueries",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Make the AI ask you questions first",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI Weekly #03",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Medallion architecture",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Delta Lake time travel",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Debug code with Claude/ChatGPT",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI Weekly #04",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "MCP explained",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "PySpark joins and data skew",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Review your SQL with AI before it hits prod",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI Weekly #05",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Data Engineering stack, 2020 → 2027",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "FDE (Forward Deployed Engineer) stack",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Claude Duet explained",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "ChatGPT Dots explained",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Grok Bot explained",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Meta Muse explained",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "Model cards and benchmarks, explained simply",
+   "platform": "instagram_carousel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "E1: What does a data engineer actually do?",
+   "platform": "youtube_long",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "E2: Databases and tables",
+   "platform": "youtube_long",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "E3: SQL from zero",
+   "platform": "youtube_long",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "E4: SQL JOINs and join bugs",
+   "platform": "youtube_long",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "E5: OLTP vs OLAP, and why Parquet is fast",
+   "platform": "youtube_long",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "E6: Warehouse vs lake vs lakehouse",
+   "platform": "youtube_long",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "E7: First data pipeline in Python (ETL vs ELT, safe to rerun)",
+   "platform": "youtube_long",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "E8: Scheduling pipelines with Airflow",
+   "platform": "youtube_long",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "E9: LLMs, tokens and embeddings",
+   "platform": "youtube_long",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "E10: RAG from scratch",
+   "platform": "youtube_long",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S1: Where does your order go?",
+   "platform": "youtube_shorts",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "S2: Whose order is this?",
+   "platform": "youtube_shorts",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "S3: You can read SQL",
+   "platform": "youtube_shorts",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "S4: How many of each? GROUP BY",
+   "platform": "youtube_shorts",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "S5: SQL runs out of order",
+   "platform": "youtube_shorts",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "S6: What a LEFT JOIN actually keeps",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S7: NULL is not zero",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S8: Same data, two databases",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S9: Why Parquet is fast",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S10: DISTINCT in 45 seconds",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S11: CASE WHEN",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S12: Warehouse vs lake vs lakehouse",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S13: JSON in 45 seconds",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S14: You reran the job. Now revenue is doubled.",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S15: ETL vs ELT in 50 seconds",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S16: What is an API?",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S17: ROW_NUMBER: each customer's latest order",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S18: Why pipelines need a scheduler",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S19: How AI knows “car” and “truck” are close",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "S20: RAG in 45 seconds",
+   "platform": "youtube_shorts",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI 1: What is an LLM?",
+   "platform": "instagram_reel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "AI 2: What is a transformer?",
+   "platform": "instagram_reel",
+   "status": "posted",
+   "notes": ""
+  },
+  {
+   "title": "AI 3: Tokens & embeddings",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 4: What is prompt engineering?",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 5: Zero-shot vs few-shot prompting",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 6: What is an LLM context window?",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 7: What is temperature in AI?",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 8: Why do LLMs hallucinate?",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 9: How do LLM APIs work?",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 10: What is RAG?",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 11: What is a vector database?",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 12: Document chunking",
+   "platform": "instagram_reel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI 13: Keyword vs semantic vs hybrid search",
+   "platform": "instagram_reel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI 14: RAG pipeline",
+   "platform": "instagram_reel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI 15: Evaluating RAG",
+   "platform": "instagram_reel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI 16: LLM vs AI agent",
+   "platform": "instagram_reel",
+   "status": "ready",
+   "notes": ""
+  },
+  {
+   "title": "AI 17: Tool calling",
+   "platform": "instagram_reel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI 18: AI agent workflows",
+   "platform": "instagram_reel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI 19: AI memory",
+   "platform": "instagram_reel",
+   "status": "idea",
+   "notes": ""
+  },
+  {
+   "title": "AI 20: MCP",
+   "platform": "instagram_reel",
+   "status": "idea",
+   "notes": ""
+  }
+ ]
+}

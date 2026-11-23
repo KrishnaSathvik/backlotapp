@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { JsonLd } from '@/src/components/site/JsonLd';
-import { A, ContactLink, PageIntro, PublicPage, Section, Toc } from '@/src/components/site/PublicPage';
+import { A, ContactLink, DocLayout, PublicPage, Section } from '@/src/components/site/PublicPage';
 import { breadcrumbJsonLd, pageMetadata } from '@/src/lib/seo';
 
 /**
@@ -12,7 +12,8 @@ import { breadcrumbJsonLd, pageMetadata } from '@/src/lib/seo';
  * docs/LAUNCH_PUBLIC.md lists them.
  */
 
-const EFFECTIVE = 'November 17, 2026';
+// OWNER REVIEW: moved from November 17 when "Your account" changed from Google-only to Google or email and password.
+const EFFECTIVE = 'November 20, 2026';
 
 export function generateMetadata(): Metadata {
   return pageMetadata({
@@ -26,32 +27,24 @@ export default function TermsPage() {
   return (
     <PublicPage>
       <JsonLd data={breadcrumbJsonLd('/terms')} />
-      <PageIntro eyebrow={`Effective ${EFFECTIVE}`} title="Terms of Service">
-        <p>
-          These terms apply when you use Backlot, including the demo, the web app and the installed app. By signing in, you agree to them.
-          The <A href="/privacy">Privacy Policy</A> explains how your data is handled.
-        </p>
-      </PageIntro>
-
-      <Toc
-        items={[
-          ['account', 'Your account'],
-          ['content', 'Your content'],
-          ['slate', 'Slate and AI suggestions'],
-          ['use', 'Acceptable use'],
-          ['service', 'The service and its limits'],
-          ['ending', 'Ending your use'],
-          ['disclaimers', 'Disclaimers and liability'],
-          ['changes', 'Changes and contact'],
-        ]}
-      />
-
-      <div className="mt-10 space-y-10">
+      <DocLayout
+        title="Terms of Service"
+        effective={EFFECTIVE}
+        intro={
+          <p>
+            These terms apply when you use Backlot, including the demo, the web app and the installed app. By signing in, you agree to them.
+            The <A href="/privacy">Privacy Policy</A> explains how your data is handled.
+          </p>
+        }
+      >
         <Section id="account" title="Your account">
           {/* LEGAL REVIEW: minimum age and the operating entity's name. */}
           <p>
-            You sign in with a Google account. You’re responsible for activity on your Backlot account and for keeping your Google account
-            secure. You must be old enough to use a Google account where you live and to agree to these terms.
+            {/* OWNER REVIEW: was Google-only, with the age test tied to Google accounts. Email and password sign-in is also
+                supported now; the minimum age is still a LEGAL REVIEW item. */}
+            You sign in with a Google account or with an email address and password. You’re responsible for activity on your Backlot
+            account and for keeping your password and Google account secure. You must be old enough to agree to these
+            terms where you live.
           </p>
         </Section>
 
@@ -59,7 +52,7 @@ export default function TermsPage() {
           <p>
             You keep ownership of everything you add to Backlot: posts, captions, notes, ideas, files and Slate conversations. You give
             Backlot permission to store, process and display that content only to provide the service to you, including sending it to the AI
-            providers described in the <A href="/privacy#slate">Privacy Policy</A> when you use Slate. Backlot doesn’t sell your content or use
+            providers described in the Privacy Policy when you use Slate. Backlot doesn’t sell your content or use
             it for advertising.
           </p>
           <p>
@@ -72,7 +65,7 @@ export default function TermsPage() {
           <p>
             Slate generates suggestions with AI. They can be inaccurate, incomplete or similar to content created for others. Review anything
             before you rely on or publish it; you’re responsible for what you publish. Slate never changes your workspace without your
-            approval. See <A href="/slate">how Slate works</A>.
+            approval.
           </p>
         </Section>
 
@@ -98,7 +91,7 @@ export default function TermsPage() {
 
         <Section id="ending" title="Ending your use">
           <p>
-            You can stop using Backlot and delete your account at any time from Settings; the <A href="/privacy#deletion">Privacy Policy</A>{' '}
+            You can stop using Backlot and delete your account at any time from Settings; the Privacy Policy{' '}
             describes what’s deleted and when. Backlot may suspend or close an account that seriously or repeatedly breaks these terms, or
             where required by law, and will tell you when it reasonably can.
           </p>
@@ -120,7 +113,7 @@ export default function TermsPage() {
             {/* LEGAL REVIEW: whether and how users are notified of material changes in advance. */} Questions about these terms: <ContactLink />.
           </p>
         </Section>
-      </div>
+      </DocLayout>
     </PublicPage>
   );
 }

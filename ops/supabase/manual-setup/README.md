@@ -24,6 +24,8 @@ Open the project's SQL Editor (Dashboard → SQL Editor → New query). Paste ea
 | 09 | `09_roles.sql` | Yes | Two rows: `backlot_app` (login, no inherit) and `backlot_backup` (login), every other column `false` |
 | 10 | Role passwords: generated on your machine (below), not a file | Yes | `ALTER ROLE` twice |
 | 11 | `11_verify_readonly.sql` | No | Every row `ok`. Share the whole result |
+| 12 | `12_migration_2026-11-24_channel_platform.sql` (added after the first setup: adds `channels.platform`) | Yes | The migration history now lists 9 files |
+| 13 | `13_migration_2026-11-25_idea_images.sql` (adds `ideas.images`) | Yes | The migration history now lists 10 files |
 
 If the editor warns that a query "contains destructive operations" (it flags `REVOKE`/`DROP` words), check that it's the step you meant to run, then confirm.
 

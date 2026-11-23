@@ -12,13 +12,16 @@ import {
   Layers,
   Lightbulb,
   Plus,
+  Search,
   Smartphone,
   Tv,
 } from 'lucide-react';
 import { SlateAvatar } from '../SlateAvatar';
 import { cx } from '../ui';
+import { AuthButton, AuthDialogProvider } from '../auth/AuthDialog';
 import { HeroShowcase } from './Showcase';
 import { SiteFooter, SiteHeader } from './SiteChrome';
+import { SlateConversation } from './SlateDemo';
 
 const MARQUEE = [
   'YouTube Long',
@@ -49,36 +52,36 @@ const FEATURES: Array<{
     key: 'library',
     icon: Layers,
     eyebrow: 'Library',
-    title: 'A library that looks like your feed.',
-    body: 'Every post on one card: cover, video, carousel slides, caption, tags and live link. Filter by platform, channel or stage in a tap.',
-    points: ['YouTube, Shorts, Reels, TikTok and Instagram posts', 'Filter by stage: in progress, ready or posted', 'Channels for every account you run'],
+    title: 'Every post, with everything it needs.',
+    body: 'Each video’s files, caption, hashtags and stage live together. Filter by channel or stage to find anything fast.',
+    points: ['YouTube, Shorts, Reels, TikTok and Instagram posts', 'Planned, Made and Posted', 'A channel for every account you run'],
     accent: 'electric',
   },
   {
     key: 'ideas',
     icon: Lightbulb,
     eyebrow: 'Ideas',
-    title: 'An inbox for everything that inspires you.',
-    body: 'Paste a link, drop a screenshot or jot a thought the second it hits. When you’re ready, turn any idea into a post with one tap.',
-    points: ['Save YouTube and Instagram links', 'Attach screenshots and notes', '“Make it a post” carries everything over'],
+    title: 'Catch ideas before they slip away.',
+    body: 'Save a link, a screenshot or a quick note the moment inspiration hits. When an idea is ready, turn it into a post and everything comes with it.',
+    points: ['Save YouTube and Instagram links', 'Attach screenshots and notes', 'Turning it into a post carries everything over'],
     accent: 'electric',
   },
   {
     key: 'detail',
     icon: Copy,
     eyebrow: 'Post details',
-    title: 'Copy the caption, grab the files, post.',
-    body: 'Open any post to copy the title, caption or hashtags in one tap, download the cover and video, and keep notes and references together.',
-    points: ['One-tap copy for caption + tags', 'Download single files or everything as .zip', 'Ask Slate about any post'],
+    title: 'Everything you need at posting time.',
+    body: 'Open a post to copy its caption or hashtags, download the cover and video, and check its notes, references and target date.',
+    points: ['One-tap copy for caption and tags', 'Download one file or everything as a .zip', 'Add the live link once it’s posted'],
     accent: 'cantaloupe',
   },
   {
     key: 'calendar',
     icon: CalendarDays,
     eyebrow: 'Calendar',
-    title: 'See your whole month at a glance.',
-    body: 'Every post lands on its target or posted date, so gaps and pile-ups are obvious before they happen.',
-    points: ['Month view on phone and desktop', 'Filter by channel', 'Open any post straight from its day'],
+    title: 'See what’s planned and what’s posted.',
+    body: 'Posts land on their target or posted date, so gaps and pile-ups are obvious before they happen.',
+    points: ['Month view on phone and desktop', 'Filter by channel', 'Open any post from its day'],
     accent: 'cantaloupe',
   },
 ];
@@ -92,15 +95,15 @@ const STEPS = [
   },
   {
     n: '02',
-    title: 'Create',
-    body: 'Turn the idea into a post. Attach the cover, video and slides, write the caption, and move it from Scripting to Editing to Ready.',
+    title: 'Organize & prepare',
+    body: 'Turn the idea into a post. Attach the cover, video and slides, write the caption, and move it through its stages until it’s ready.',
     icon: Clapperboard,
   },
   {
     n: '03',
-    title: 'Post & reuse',
-    body: 'Copy the caption and tags in one tap, mark it Posted with the live link, and find it again in seconds months later.',
-    icon: Copy,
+    title: 'Track & reuse',
+    body: 'Post it on the platform as usual, then mark it Posted with the live link. Months later, find it and reuse what worked.',
+    icon: Search,
   },
 ];
 
@@ -116,7 +119,7 @@ const PERSONAS = [
     icon: Smartphone,
     title: 'Shorts, Reels & TikTok',
     blurb: 'High volume, vertical, fast. You post often and can’t lose a hook.',
-    uses: ['Batch ideas from saved reels and links', 'Reuse captions that worked', 'See what’s still in editing at a glance'],
+    uses: ['Batch ideas from saved reels and links', 'Reuse captions that worked', 'See what’s still planned at a glance'],
     accent: 'cantaloupe',
   },
   {
@@ -130,35 +133,56 @@ const PERSONAS = [
     icon: Layers,
     title: 'Multi-channel creators',
     blurb: 'A main channel, a clips channel, a side project. One backlot for all of it.',
-    uses: ['Filter by channel and platform', 'One library across every account', 'Ask Slate to plan the week'],
+    uses: ['Filter by channel', 'One library across every account', 'Ask Slate to plan the week'],
     accent: 'cantaloupe',
   },
 ];
 
-const FAQ = [
-  {
-    q: 'Can I try it without signing up?',
-    a: 'Yes. Choose “Try the live demo” to explore a full sample workspace with example posts and ideas. It runs in your browser and saves nothing. Sign in with Google when you want to build your own.',
-  },
-  {
-    q: 'Which platforms does it support?',
-    a: 'YouTube videos, YouTube Shorts, Instagram Reels, TikTok and Instagram posts, plus an “Other” type for anything else you make.',
-  },
-  {
-    q: 'Does it work on my phone?',
-    a: 'It’s built mobile-first. Install it to your home screen on iPhone or Android and it opens like a native app. Its app files are cached, so it can open without a connection; saving and uploading need one.',
-  },
-  {
-    q: 'Who is Slate?',
-    a: 'Slate is the AI creative partner built into Backlot. It reads the posts and ideas in your backlot and helps with hooks, captions, hashtags and planning. It only sees your own content.',
-  },
-  {
-    q: 'Who can see my content?',
-    a: 'Only you. Your workspace is private to your Google account, and uploaded files are served only to the account that uploaded them.',
-  },
-];
+export interface LandingLimits {
+  /** e.g. "30 MB" */
+  image: string;
+  video: string;
+  storage: string;
+}
 
-export function Landing() {
+function faq(limits: LandingLimits) {
+  return [
+    {
+      q: 'What is Backlot?',
+      a: 'A private workspace for creators. You keep each post’s files, caption, hashtags, notes and stage in one place, save ideas as they come, and track what’s planned and what’s posted.',
+    },
+    {
+      q: 'Does Backlot post to my social accounts?',
+      a: 'No. Backlot is where you prepare, organize and track your content. It doesn’t connect to YouTube, Instagram or TikTok and never publishes for you. When you’ve posted, mark the post Posted and add its live link.',
+    },
+    {
+      q: 'Which platforms’ content can I organize?',
+      a: 'YouTube videos, YouTube Shorts, Instagram Reels, TikTok and Instagram posts, plus an “Other” type for anything else you make.',
+    },
+    {
+      q: 'What files can I upload?',
+      a: `Images (JPEG, PNG, WebP, GIF, AVIF and HEIC) up to ${limits.image} each, and videos (MP4, MOV, WebM, M4V and MKV) up to ${limits.video} each. Each account currently has ${limits.storage} of storage.`,
+    },
+    {
+      q: 'Who can see my content?',
+      a: 'Only you. Your workspace is private to your account, and uploaded files are served only to the account that uploaded them.',
+    },
+    {
+      q: 'How does Slate work, and what can it access?',
+      a: 'Slate is the AI creative partner built into Backlot. It works from your own posts, ideas, channels and saved preferences, and only yours. It sees an image only when you pick one, and never your videos. It suggests changes; nothing happens until you apply them.',
+    },
+    {
+      q: 'Can I try it without signing up?',
+      a: 'Yes. Choose “Try the live demo”. It runs in your browser and saves nothing. Create an account with Google or an email and password when you want to keep your own.',
+    },
+    {
+      q: 'Does it work on my phone?',
+      a: 'Yes. It’s built mobile-first, and you can add it to your home screen on iPhone or Android so it opens like an app. Saving, uploading and Slate need an internet connection.',
+    },
+  ];
+}
+
+export function Landing({ limits }: { limits: LandingLimits }) {
   // Scroll-reveal for every [data-reveal] element on the page.
   useEffect(() => {
     const els = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
@@ -182,6 +206,7 @@ export function Landing() {
   }, []);
 
   return (
+    <AuthDialogProvider>
     <div className="relative min-h-dvh overflow-x-clip">
       <SiteHeader />
 
@@ -198,7 +223,7 @@ export function Landing() {
               <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
             </a>
 
-            <h1 className="mx-auto mt-7 max-w-4xl animate-rise text-[44px] font-extrabold leading-[0.98] tracking-[-0.04em] text-balance [animation-delay:80ms] sm:text-7xl lg:text-[80px]">
+            <h1 className="font-display mx-auto mt-7 max-w-4xl animate-rise text-[44px] font-extrabold leading-[0.98] tracking-[-0.04em] text-balance [animation-delay:80ms] sm:text-7xl lg:text-[80px]">
               Every video, reel & caption.{' '}
               <span className="relative inline-block whitespace-nowrap text-electric-600 dark:text-electric-400">
                 One backlot.
@@ -223,8 +248,8 @@ export function Landing() {
             </h1>
 
             <p className="mx-auto mt-7 max-w-xl animate-rise text-base leading-relaxed text-zinc-600 [animation-delay:160ms] sm:text-lg dark:text-zinc-400">
-              Backlot is the private workspace for creators. Keep covers, cuts, slides, captions and ideas together, and move every
-              post from idea to posted.
+              Backlot is the private workspace for creators. Keep covers, cuts, slides, captions and ideas together, and track every
+              post from first idea to posted.
             </p>
 
             <div className="mt-9 flex animate-rise flex-col items-center justify-center gap-3 [animation-delay:240ms] sm:flex-row">
@@ -235,21 +260,13 @@ export function Landing() {
                 Try the live demo
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
               </a>
-              <a
-                href="/app"
+              <AuthButton
+                mode="signup"
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-6 text-[15px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-zinc-400 sm:w-auto dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:border-zinc-500"
               >
-                Sign in with Google
-              </a>
+                Get started
+              </AuthButton>
             </div>
-            <p className="mt-4 flex animate-rise flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-zinc-500 [animation-delay:300ms]">
-              {['No setup for the demo', 'Works offline', 'Install on any device'].map((t) => (
-                <span key={t} className="flex items-center gap-1">
-                  <Check className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
-                  {t}
-                </span>
-              ))}
-            </p>
 
             <div className="mt-12 animate-rise [animation-delay:380ms] sm:mt-14">
               <HeroShowcase />
@@ -281,7 +298,7 @@ export function Landing() {
             <SectionHeading
               eyebrow="Features"
               title="Built for the way creators actually work."
-              body="No spreadsheets, no notes app archaeology. One place for the files, the words and the status of every post."
+              body="No spreadsheets, no digging through your notes app. One place for the files, the words and the status of every post."
             />
 
             <div className="mt-14 grid gap-4 sm:mt-20 sm:gap-5 md:grid-cols-2">
@@ -303,13 +320,20 @@ export function Landing() {
                   <SlateAvatar size={72} className="animate-float" />
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cantaloupe-600 dark:text-cantaloupe-400">Meet Slate</p>
                 </div>
-                <h2 className="mt-4 text-4xl font-bold leading-[1.02] sm:text-5xl">Your AI creative partner, who knows your whole backlot.</h2>
+                <h2 className="font-display mt-4 text-4xl font-bold leading-[1.02] sm:text-5xl">Your AI creative partner, who knows your whole backlot.</h2>
                 <p className="mt-5 max-w-md text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  Ask for hooks, rewrite a caption in your voice, find tags that fit, or plan next week’s posts. Slate answers using the
-                  posts and ideas you’ve already saved.
+                  Slate works from the posts, ideas and preferences you’ve already saved, so you never paste context into a chat. When it
+                  suggests a change, nothing happens until you approve it.
                 </p>
                 <ul className="mt-7 grid gap-2.5 text-sm text-zinc-700 sm:grid-cols-2 dark:text-zinc-300">
-                  {['Hooks for any post', 'Caption rewrites', 'Hashtag sets', 'Weekly posting plan'].map((t) => (
+                  {[
+                    'Knows your own workspace',
+                    'Writes and improves captions',
+                    'Finds old posts and ideas',
+                    'Suggests new ideas',
+                    'Helps plan your week',
+                    'Proposes changes you approve',
+                  ].map((t) => (
                     <li key={t} className="flex items-center gap-2">
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cantaloupe-100 dark:bg-white/10">
                         <Check className="h-3 w-3 text-cantaloupe-600 dark:text-cantaloupe-400" aria-hidden="true" />
@@ -327,23 +351,8 @@ export function Landing() {
                 </a>
               </div>
 
-              <div data-reveal style={{ '--reveal-delay': '120ms' } as React.CSSProperties} className="space-y-3">
-                <Bubble me>Give me 3 hooks for the desk setup video.</Bubble>
-                <Bubble>
-                  <span className="font-semibold text-zinc-950 dark:text-white">Here are three, based on your caption:</span>
-                  <br />
-                  1. “I rebuilt my desk for one reason.”
-                  <br />
-                  2. “This $40 light changed every shot.”
-                  <br />
-                  3. “Stop filming at eye level.”
-                </Bubble>
-                <Bubble me>Turn #2 into a Reels caption with tags.</Bubble>
-                <div className="flex items-center gap-1.5 pl-11">
-                  {[0, 1, 2].map((i) => (
-                    <span key={i} className="h-2 w-2 animate-pulse rounded-full bg-zinc-400 dark:bg-zinc-500" style={{ animationDelay: `${i * 160}ms` }} />
-                  ))}
-                </div>
+              <div data-reveal style={{ '--reveal-delay': '120ms' } as React.CSSProperties}>
+                <SlateConversation />
               </div>
             </div>
           </div>
@@ -352,7 +361,11 @@ export function Landing() {
         {/* ---------------- How it works ---------------- */}
         <section id="how" className="scroll-mt-20 py-24 sm:py-32">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <SectionHeading eyebrow="How it works" title="From shower thought to published post." />
+            <SectionHeading
+              eyebrow="How it works"
+              title="From first idea to posted, in one place."
+              body="Backlot is where you prepare, organize and track your content. You still publish on each platform yourself; Backlot never posts for you."
+            />
             <ol className="relative mt-16 grid gap-10 sm:grid-cols-3 sm:gap-6">
               <div
                 aria-hidden="true"
@@ -430,9 +443,9 @@ export function Landing() {
           <div className="mx-auto grid max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-[1fr_1.4fr]">
             <SectionHeading eyebrow="FAQ" title="Questions, answered." align="left" />
             <div className="divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-              {FAQ.map((f) => (
+              {faq(limits).map((f) => (
                 <details key={f.q} className="group py-5 [&_summary::-webkit-details-marker]:hidden">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display text-lg font-semibold tracking-tight">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-lg font-display text-lg font-semibold tracking-tight">
                     {f.q}
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 transition-all duration-300 group-open:rotate-45 group-open:border-electric-500 group-open:bg-electric-500 group-open:text-white dark:border-zinc-800">
                       <Plus className="h-4 w-4" aria-hidden="true" />
@@ -454,11 +467,11 @@ export function Landing() {
             <div aria-hidden="true" className="absolute -bottom-24 left-1/2 h-64 w-[640px] -translate-x-1/2 rounded-full bg-electric-300/40 blur-3xl" />
             <div className="relative">
               <CalendarClock className="mx-auto h-10 w-10 text-cantaloupe-200" aria-hidden="true" />
-              <h2 className="mx-auto mt-5 max-w-2xl text-4xl font-extrabold leading-[1.02] text-balance sm:text-6xl">
+              <h2 className="font-display mx-auto mt-5 max-w-2xl text-4xl font-extrabold leading-[1.02] text-balance sm:text-6xl">
                 Stop losing captions in your notes app.
               </h2>
               <p className="mx-auto mt-5 max-w-md text-[15px] text-electric-100">
-                Open the demo, it’s already full of sample posts. Sign in when you’re ready to keep your own.
+                It’s already full of sample posts. Create your account when you’re ready to keep your own.
               </p>
               <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <a
@@ -468,12 +481,12 @@ export function Landing() {
                   Try the live demo
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                 </a>
-                <a
-                  href="/app"
+                <AuthButton
+                  mode="signup"
                   className="flex h-12 w-full items-center justify-center rounded-full border border-white/40 px-6 text-[15px] font-semibold text-white transition-colors hover:bg-white/10 sm:w-auto"
                 >
-                  Sign in with Google
-                </a>
+                  Create your account
+                </AuthButton>
               </div>
             </div>
           </div>
@@ -482,6 +495,7 @@ export function Landing() {
 
       <SiteFooter />
     </div>
+    </AuthDialogProvider>
   );
 }
 
@@ -499,7 +513,7 @@ function SectionHeading({
   return (
     <div data-reveal className={cx('max-w-2xl', align === 'center' && 'mx-auto text-center')}>
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-electric-600 dark:text-electric-400">{eyebrow}</p>
-      <h2 className="mt-3 text-4xl font-bold leading-[1.04] text-balance sm:text-5xl">{title}</h2>
+      <h2 className="font-display mt-3 text-4xl font-bold leading-[1.04] text-balance sm:text-5xl">{title}</h2>
       {body ? <p className="mt-4 text-base leading-relaxed text-zinc-600 sm:text-lg dark:text-zinc-400">{body}</p> : null}
     </div>
   );
@@ -553,24 +567,6 @@ function FeatureCard({ feature: f, delay }: { feature: (typeof FEATURES)[number]
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function Bubble({ me = false, children }: { me?: boolean; children: React.ReactNode }) {
-  return (
-    <div className={cx('flex items-end gap-3', me && 'justify-end')}>
-      {!me ? (
-        <SlateAvatar size={34} />
-      ) : null}
-      <p
-        className={cx(
-          'max-w-[85%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed',
-          me ? 'rounded-br-md bg-electric-600 text-white' : 'rounded-bl-md bg-white text-zinc-700 shadow-sm ring-1 ring-zinc-200 dark:bg-white/[0.07] dark:text-zinc-300 dark:shadow-none dark:ring-white/10'
-        )}
-      >
-        {children}
-      </p>
     </div>
   );
 }

@@ -98,7 +98,7 @@ test('M3-5. batches: at most 5 posts, each once; missing posts are skipped; draf
   const r = await run('propose_batch_updates', {
     updates: [
       { post_id: 10, target_date: '2026-11-25' },
-      { post_id: 11, stage: 'scripting', target_date: '2026-11-28' },
+      { post_id: 11, stage: 'ready', target_date: '2026-11-28' },
       { post_id: 50, target_date: '2026-11-30' },
       { post_id: 12, stage: 'ready' },
     ],

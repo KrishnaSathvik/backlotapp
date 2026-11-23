@@ -231,7 +231,7 @@ export async function POST(request: NextRequest) {
               chars: r.chars,
               input_tokens: r.usage?.inputTokens ?? null,
               output_tokens: r.usage?.outputTokens ?? null,
-              // An estimate from list prices in providers.ts, not a billed amount (see docs/OPERATIONS.md).
+              // An estimate from list prices in providers.ts, not a billed amount.
               est_cost_usd: cost === null ? null : Number(cost.toFixed(5)),
               finish: r.finishReason ?? null,
             },

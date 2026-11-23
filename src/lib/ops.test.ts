@@ -48,6 +48,10 @@ test('OPS1. each job has its own credentials; neither secret opens the other job
   // The legacy CLEANUP_SECRET only ever opens maintenance.
   assert.equal(await authorizeInternal(req(`Bearer ${S2}`), 'maintenance', { env: { CLEANUP_SECRET: S2 } }), null);
   assert.equal((await authorizeInternal(req(`Bearer ${S2}`), 'deletions', { env: { CLEANUP_SECRET: S2 } }))?.status, 404);
+  // Vercel Cron sends Authorization: Bearer $CRON_SECRET: it opens the deletions job only.
+  assert.equal(await authorizeInternal(req(`Bearer ${S1}`), 'deletions', { env: { CRON_SECRET: S1 } }), null);
+  assert.equal((await authorizeInternal(req(`Bearer ${S1}`), 'maintenance', { env: { CRON_SECRET: S1 } }))?.status, 404);
+  assert.equal((await quiet(() => authorizeInternal(req(`Bearer ${S2}`), 'deletions', { env: { CRON_SECRET: S1 } })))?.status, 401);
 });
 
 test('OPS2. OIDC: only a verified token from the configured invoker, for the configured audience', async () => {
@@ -100,11 +104,15 @@ test('OPS3. structured log fields drop secrets, URLs, emails and content, and ke
 
 test('OPS4. production config check names every missing setting, without values', () => {
   const missing = checkProductionConfig({ NODE_ENV: 'production' });
-  for (const k of ['DATABASE_URL', 'STORAGE_BACKEND=r2', 'OPENAI_API_KEY', 'deletions job', 'maintenance job', 'PRIVACY_CONTACT_EMAIL']) {
+  for (const k of ['DATABASE_URL', 'STORAGE_BACKEND=r2', 'OPENAI_API_KEY', 'CRON_SECRET']) {
     assert.ok(missing.errors.some((e) => e.includes(k)), `reports ${k}`);
   }
-  // Vercel + Supabase + R2 + Firebase Admin credential.
-  const sa = JSON.stringify({ project_id: 'gen-lang-client-0425820524', client_email: 'auth-admin@x.iam.gserviceaccount.com', private_key: 'pk-value-456' });
+  // Vercel + Supabase (database and Auth) + R2.
+  const auth = {
+    NEXT_PUBLIC_SUPABASE_URL: 'https://pdhymiqjlzaanarleucv.supabase.co',
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    SUPABASE_SECRET_KEY: 'sb_secret_pk-value-456',
+  };
   const good = {
     NODE_ENV: 'production',
     VERCEL: '1',
@@ -115,28 +123,34 @@ test('OPS4. production config check names every missing setting, without values'
     R2_BUCKET: 'backlot-media',
     R2_ACCESS_KEY_ID: 'ak',
     R2_SECRET_ACCESS_KEY: 'r2-secret-789',
-    FIREBASE_SERVICE_ACCOUNT_JSON: sa,
+    ...auth,
     OPENAI_API_KEY: 'sk-test-value',
     DELETION_WORKER_SECRET: S1,
     MAINTENANCE_SECRET: S2,
     PRIVACY_CONTACT_EMAIL: 'privacy@example.com',
   };
   assert.deepEqual(checkProductionConfig(good).errors, []);
+  // Vercel Cron's CRON_SECRET is enough for the deletions job; maintenance has no schedule.
+  const { DELETION_WORKER_SECRET: _d, MAINTENANCE_SECRET: _m, ...noJobs } = good;
+  assert.deepEqual(checkProductionConfig({ ...noJobs, CRON_SECRET: S1 }).errors, []);
+  assert.ok(checkProductionConfig({ ...noJobs, CRON_SECRET: 'short' }).errors.some((e) => e.includes('at least 32')));
   const report = JSON.stringify(checkProductionConfig({ ...good, MAINTENANCE_SECRET: S1 }));
   assert.ok(report.includes('must not share a secret'));
-  for (const v of [S1, 'pw-value-123', 'sk-test-value', 'r2-secret-789', 'pk-value-456']) assert.ok(!report.includes(v), 'no values in the report');
-  // Vercel needs the Firebase Admin credential (account deletion), Supabase needs its CA, and the ledger must not sit inside the media prefix.
-  const { FIREBASE_SERVICE_ACCOUNT_JSON: _sa, ...noCred } = good;
-  assert.ok(checkProductionConfig(noCred).errors.some((e) => e.includes('FIREBASE_SERVICE_ACCOUNT_JSON')));
+  for (const v of [S1, 'pw-value-123', 'sk-test-value', 'r2-secret-789', 'pk-value-456', 'sb_publishable_test']) assert.ok(!report.includes(v), 'no values in the report');
+  // Account deletion needs the Supabase secret key, Supabase needs its CA, and the ledger must not sit inside the media prefix.
+  const { SUPABASE_SECRET_KEY: _secret, ...noSecret } = good;
+  assert.ok(checkProductionConfig(noSecret).errors.some((e) => e.includes('SUPABASE_SECRET_KEY')));
   assert.ok(checkProductionConfig({ ...good, DATABASE_CA_CERT: '' }).errors.some((e) => e.includes('DATABASE_CA_CERT')));
   assert.ok(checkProductionConfig({ ...good, R2_LEDGER_PREFIX: 'uploads/ledger/' }).errors.some((e) => e.includes('R2_LEDGER_PREFIX')));
-  assert.ok(checkProductionConfig({ ...good, FIREBASE_SERVICE_ACCOUNT_JSON: sa.replace('gen-lang-client-0425820524', 'other') }).errors.some((e) => e.includes('different project')));
-  // A separate (e.g. staging) Firebase project via NEXT_PUBLIC_FIREBASE_CONFIG: the service account must follow it.
-  const staging = JSON.stringify({ apiKey: 'k', authDomain: 'backlot-staging.firebaseapp.com', projectId: 'backlot-staging', appId: '1:2:web:3' });
-  assert.ok(checkProductionConfig({ ...good, NEXT_PUBLIC_FIREBASE_CONFIG: staging }).errors.some((e) => e.includes('different project')));
-  assert.deepEqual(checkProductionConfig({ ...good, NEXT_PUBLIC_FIREBASE_CONFIG: staging, FIREBASE_SERVICE_ACCOUNT_JSON: sa.replace('gen-lang-client-0425820524', 'backlot-staging') }).errors, []);
-  assert.ok(checkProductionConfig({ ...good, NEXT_PUBLIC_FIREBASE_CONFIG: '{"projectId":"x"}' }).errors.some((e) => e.includes('NEXT_PUBLIC_FIREBASE_CONFIG lacks')));
-  assert.ok(checkProductionConfig({ ...good, FIREBASE_PROJECT_ID: 'other' }).errors.some((e) => e.includes('FIREBASE_PROJECT_ID differs')));
+  // Sign-in needs the project URL and publishable key; secrets never go in public variables.
+  const { NEXT_PUBLIC_SUPABASE_URL: _url, ...noUrl } = good;
+  assert.ok(checkProductionConfig(noUrl).errors.some((e) => e.includes('NEXT_PUBLIC_SUPABASE_URL')));
+  assert.ok(checkProductionConfig({ ...good, NEXT_PUBLIC_SUPABASE_URL: 'https://evil.example' }).errors.some((e) => e.includes('NEXT_PUBLIC_SUPABASE_URL must be')));
+  assert.ok(checkProductionConfig({ ...good, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_x' }).errors.some((e) => e.includes('holds a secret key')));
+  const serviceRoleJwt = `h.${Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url')}.s`;
+  assert.ok(checkProductionConfig({ ...good, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: serviceRoleJwt }).errors.some((e) => e.includes('holds a secret key')));
+  assert.ok(checkProductionConfig({ ...good, SUPABASE_SECRET_KEY: 'sb_publishable_x' }).errors.some((e) => e.includes('is a publishable key')));
+  assert.ok(checkProductionConfig({ ...good, NEXT_PUBLIC_SUPABASE_SECRET_KEY: 'x' }).errors.some((e) => e.includes('NEXT_PUBLIC_ prefix')));
   // The legacy Cloud Run configuration (SQL_* + GCS with ADC) still validates, with a warning.
   const legacy = {
     NODE_ENV: 'production',
@@ -144,6 +158,7 @@ test('OPS4. production config check names every missing setting, without values'
     SQL_USER: 'app',
     SQL_PASSWORD: 'pw-value-123',
     SQL_DB_NAME: 'backlot',
+    ...auth,
     STORAGE_BACKEND: 'gcs',
     GCS_BUCKET: 'backlot-media',
     UPLOAD_SESSION_KEY: Buffer.alloc(32, 7).toString('base64'),

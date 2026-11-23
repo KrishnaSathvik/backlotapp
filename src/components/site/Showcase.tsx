@@ -9,6 +9,7 @@ export type ScreenName = 'library' | 'ideas' | 'calendar' | 'chat' | 'detail';
 
 const SIZE = {
   desktop: { w: 2880, h: 1800 },
+  tablet: { w: 2000, h: 1600 },
   mobile: { w: 780, h: 1328 },
 } as const;
 
@@ -25,7 +26,7 @@ export function Shot({
   className,
 }: {
   name: ScreenName;
-  kind: 'desktop' | 'mobile';
+  kind: 'desktop' | 'tablet' | 'mobile';
   alt: string;
   priority?: boolean;
   sizes: string;
@@ -35,7 +36,7 @@ export function Shot({
   return (
     <>
       <Image
-        src={`/screens/${kind}-${name}-light.jpg`}
+        src={`/screens/${kind}-${name}-light.jpg?v=4`}
         alt={alt}
         width={w}
         height={h}
@@ -44,7 +45,7 @@ export function Shot({
         className={cx('block h-auto w-full dark:hidden', className)}
       />
       <Image
-        src={`/screens/${kind}-${name}-dark.jpg`}
+        src={`/screens/${kind}-${name}-dark.jpg?v=4`}
         alt={alt}
         width={w}
         height={h}
@@ -183,8 +184,25 @@ export function HeroShowcase() {
           className="absolute -inset-x-6 -bottom-10 top-10 -z-10 animate-glow rounded-[48px] bg-[radial-gradient(55%_60%_at_25%_40%,color-mix(in_oklab,var(--color-electric-500)_30%,transparent),transparent_70%),radial-gradient(45%_55%_at_85%_70%,color-mix(in_oklab,var(--color-cantaloupe-400)_28%,transparent),transparent_70%)] blur-2xl"
         />
 
-        {/* Desktop frame (tablet and up) */}
-        <BrowserFrame className="hidden sm:block">
+        {/* Tablet: the icon rail, with the profile at the bottom. */}
+        <BrowserFrame className="hidden sm:block lg:hidden">
+          {TABS.map((t, i) => (
+            <div
+              key={t.key}
+              className={cx(
+                'transition-opacity duration-700',
+                i === 0 ? 'relative' : 'absolute inset-0',
+                i === active ? 'opacity-100' : 'opacity-0'
+              )}
+              aria-hidden={i !== active}
+            >
+              <Shot name={t.key} kind="tablet" alt={t.alt} priority={i === 0} sizes="92vw" />
+            </div>
+          ))}
+        </BrowserFrame>
+
+        {/* Desktop: the full sidebar, with the profile at the bottom. */}
+        <BrowserFrame className="hidden lg:block">
           {TABS.map((t, i) => (
             <div
               key={t.key}

@@ -64,6 +64,8 @@ export function platform(value: unknown): PlatformKey {
 export function status(value: unknown): StatusKey {
   if (value === undefined) return 'idea';
   if (typeof value === 'string' && STATUSES.includes(value as StatusKey)) {
+    // Scripting and editing are stored as Planned from here on.
+    if (value === 'scripting' || value === 'editing') return 'idea';
     return value as StatusKey;
   }
   throw new BadRequest('Unknown stage.');
@@ -156,6 +158,16 @@ export function keysIn(value: unknown): string[] {
     if (key) keys.add(key);
   }
   return [...keys];
+}
+
+/** An idea's reference images: uploaded file URLs only, de-duplicated, at most 6. */
+export function ideaImagesInput(value: unknown): string[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new BadRequest('Images must be a list.');
+  const urls = [...new Set(value.map((v) => str(v, 2048, 'Image').trim()).filter(Boolean))];
+  if (urls.length > 6) throw new BadRequest('An idea can have up to 6 images.');
+  if (urls.some((u) => !u.startsWith('/api/files/'))) throw new BadRequest('Images must be uploaded images.');
+  return urls;
 }
 
 /** Rejects references to uploaded files the user does not own. */

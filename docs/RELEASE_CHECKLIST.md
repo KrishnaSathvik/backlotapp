@@ -21,20 +21,25 @@ Ground rules:
 | S-INF2 | Edit a comment in an applied migration locally, dry run, then revert | `Refusing to migrate. Changed since applied: [...]`; nothing changes |
 | S-INF3 | `db:migrate` with a port-6543 URL | Refused with the "needs a session connection" message |
 | S-INF4 **P** | Deploy, open `/api/health?ready=1` | 200; logs show `config.ok`, no `config.error` |
-| S-INF5 | Deploy once without `FIREBASE_SERVICE_ACCOUNT_JSON` (then restore it) | `config.error` naming it, plus `config.refusing_to_start` |
-| S-INF6 **P** | `vercel inspect <url>`, plus the project's Functions settings | Region `iad1`; Fluid compute on; chat 300 s, deletion worker 120 s, maintenance 180 s accepted by the plan |
-| S-INF7 **P** | Plan eligibility | Vercel Hobby only while the beta is personal and noncommercial; recorded |
+| S-INF5 | Deploy once without `SUPABASE_SECRET_KEY` (then restore it) | `config.error` naming it, plus `config.refusing_to_start` |
+| S-INF6 **P** | `vercel inspect <url>`, plus the project's Functions settings | Region `iad1`; Fluid compute on; chat 300 s, deletion request 300 s, deletion recovery 120 s, maintenance 180 s accepted by the plan |
+| S-INF7 **P** | Plan | Vercel Pro; Spend Management configured |
 
-## Authentication (Firebase)
+## Authentication (Supabase Auth, Google)
 
 | ID | Check | Expected |
 | --- | --- | --- |
-| S-AU1 | Sign in with Google as A on the staging URL | Library loads; a `users` row exists for A's uid. The consent screen says "Backlot", not a project id |
-| S-AU2 | Staging isolation | Staging's uid for A exists only in the `backlot-staging` Firebase project; the production project has no user for A |
-| S-AU3 | Sign out and reload | Signed out; API calls return 401 |
+| S-AU1 | Sign in with Google as A on the staging URL | Back on the same page via `/auth/callback`; library loads; a `users` row exists for A's uid (a UUID equal to Supabase's `auth.users.id`). The consent screen says "Backlot" |
+| S-AU2 | Staging isolation | A's Supabase Auth user exists only in the staging project; `backlot` has no user for A |
+| S-AU3 | Reload while signed in; then sign out and reload | Still signed in after the reload (session cookies); after sign-out: signed out, `sb-…` cookies gone, API calls return 401 |
 | S-AU4 | As B, request A's `/api/items/<id>`, `/api/files/<key>`, `/api/slate/conversations/<id>` | 404 each, never A's data |
-| S-AU5 | Unauthorized domain | Sign-in from a domain not in Authorized domains fails |
-| S-AU6 | Admin credential (exercised by S-DEL) | No `account_deletion.revoke_deferred` in logs |
+| S-AU5 | Unlisted redirect | Sign-in started from an origin not in Supabase's Redirect URLs never returns to that origin (it lands on the Site URL) |
+| S-AU6 | Expired session: leave the app idle past the access-token lifetime (1 h), then use it | Works without signing in again (refreshed by the client or `middleware.ts`) |
+| S-AU9 | Email sign-up as D (email + password), sign out, sign in again; wrong password; existing email | Signed in at once with a `users` row; "Email or password is incorrect."; neutral "couldn’t create an account" message. No email is sent |
+| S-AU11 | Same email via Google and via link | One Supabase user (identities linked), one Backlot account |
+| S-AU12 | Delete account, email-only user | Confirmation link sent to their address; after opening it, Delete account reopens; typing DELETE again starts deletion |
+| S-AU7 | Forged identity: call an API with a token from another Supabase project, the publishable key as a Bearer token, or a hand-edited `sb-…` cookie | 401 each |
+| S-AU8 | Supabase Auth admin key (exercised by S-DEL) | No `account_deletion.revoke_deferred` in logs |
 
 ## Content
 
@@ -102,16 +107,16 @@ Ground rules:
 | S-DB6 **P** | Runtime role | Logs/`pg_stat_activity` show the app connected as `backlot_app`, never `postgres` |
 | S-DB7 | Verified TLS: correct CA, then a wrong CA (staging) | Readiness 200; then 503 `database` |
 | S-DB8 | Pause staging, use the app, resume | 503 "database unavailable", never wrong data; recovers without a redeploy |
-| S-DB9 | Database size after the cycle | Recorded in COSTS.md |
+| S-DB9 | Database size after the cycle | Recorded |
 
 ## Scheduling
 
 | ID | Check | Expected |
 | --- | --- | --- |
-| S-SC1 **P** | Worker deployed | Both Cron Triggers listed; Free plan |
-| S-SC2 **P** | Wait 10 minutes | Two or more deletion calls answered 200 (staging: through the protection bypass) |
+| S-SC1 **P** | Vercel → Settings → Cron Jobs | `/api/internal/account-deletions`, hourly |
+| S-SC2 **P** | Wait for the next hour | The cron run answered 200 |
 | S-SC3 **P** | Trigger maintenance manually | `maintenance.run` with no failed parts, finished within 180 s |
-| S-SC4 | No secret, the other job's secret, a short secret | 401 `internal_auth.denied`; 404 for a job without a credential |
+| S-SC4 | No secret, the maintenance secret, a wrong `CRON_SECRET` | 401 `internal_auth.denied`; 404 for a job without a credential |
 | S-SC5 | Orphan sweep: an object with no row (min age lowered for the test); then a preview pointed at an empty database | Deleted; then `storage.orphan_sweep_refused` and nothing deleted |
 | S-SC6 | Abandoned multipart upload past the abandoned age (shortened for the test) | Aborted by maintenance |
 
@@ -122,23 +127,23 @@ Ground rules:
 | S-DEL1 | Request deletion more than 10 minutes after sign-in | `reauth_required`; proceeds after re-auth |
 | S-DEL2 | Confirm "DELETE" | 202 with a status link; status "scheduled" (accepted and locked); every other call from A gets 403 `account_deleting` |
 | S-DEL3 | Ledger | `ledger/account-deletions/<uid>.json` (uid, jobId, requestedAt; no email) |
-| S-DEL4 | Worker | `account_deletion.step` for each step in order, then `account_deletion.completed` |
-| S-DEL5 | Data gone | No rows for A in the 13 guarded tables; A's R2 objects gone; multipart uploads aborted; Firebase user gone |
+| S-DEL4 | Prompt start | About 3 minutes after the request: `account_deletion.step` for each step in order, then `account_deletion.completed` and `account_deletion.prompt_start` |
+| S-DEL5 | Data gone | No rows for A in the 13 guarded tables; A's R2 objects gone; multipart uploads aborted; Supabase Auth user gone |
 | S-DEL6 | Status page signed out | "Completed"; `storagePurgeBy` null; a wrong token gets 404 |
 | S-DEL7 | **Database paused before a request:** pause staging, request deletion as C | Refused: "Nothing was deleted"; no lock, no partial work. Resume, then request again: accepted |
 | S-DEL8 | **Database paused after acceptance:** request as C, pause staging before the worker runs, wait, resume | While paused: status page says progress can't be checked, the account stays locked, deletion continues automatically; no "completed". After resuming: completes within one or two scheduler runs |
 | S-DEL9 | R2 credentials broken for the worker during a deletion (staging), then restored | `account_deletion.retry` with backoff, then completion; "delayed" shown after repeated attempts; never completed early |
 | S-DEL10 | B after A's deletion | B's content and files intact |
 
-## Backups and restore
+## Backups and restore (skip: no backups configured, owner decision)
 
 | ID | Check | Expected |
 | --- | --- | --- |
 | S-BK1 **P** | Manual `db-backup` run | `db/backlot-<stamp>.dump.age` and `db/latest.json`; log shows only names and sizes |
 | S-BK2 **P** | Download, check the SHA-256, `age -d`, `pg_restore` into an empty project (INFRA_SETUP.md §5 project limit), `db:migrate` dry run | Row counts match; `Nothing to apply`; 13 triggers |
-| S-BK3 | Back up; delete account C fully; restore that backup; `restore:reapply-deletions` dry run, then `--apply`; point staging at it | C listed as "would lock"; then locked and re-deleted by the worker. A Firebase-only miss is never acted on |
+| S-BK3 | Back up; delete account C fully; restore that backup; `restore:reapply-deletions` dry run, then `--apply`; point staging at it | C listed as "would lock"; then locked and re-deleted by the worker. A Supabase-Auth-only miss is never acted on |
 | S-BK4 **P** | Backups bucket lifecycle | Deletes after 30 days |
-| S-BK5 | Break `BACKUP_DATABASE_URL` and run on schedule | The run fails and the owner (last cron editor) gets the email |
+| S-BK5 | Workflow triggers | `db-backup.yml` has only `workflow_dispatch`; no scheduled runs in the Actions tab |
 | S-BK6 | Key rotation drill (BACKUPS.md) | A backup made with the new recipient decrypts with the new key; an old backup still decrypts with the old key |
 | S-BK7 **P** | Key custody | Two copies of the private key exist and open; nothing in GitHub, Vercel, Supabase or Cloudflare holds it |
 
@@ -155,7 +160,7 @@ Ground rules:
 
 | ID | Check | Expected |
 | --- | --- | --- |
-| S-PR1 **P** | `/privacy` | Names Vercel, Supabase, Cloudflare (R2 and the scheduler), Firebase/Google, OpenAI, Anthropic and GitHub (backups); explains no R2 recovery copy, ledger and backup retention, and that deletion is usually within 15 minutes but can be delayed; `PRIVACY_CONTACT_EMAIL` shown |
+| S-PR1 **P** | `/privacy` | Names Vercel, Supabase (Auth: Google and email/password; database), Cloudflare (R2), OpenAI and Anthropic; explains no R2 recovery copy, ledger retention, no Backlot-run backups, and deletion in the background with no time promise; `support@getbacklot.app` (or `PRIVACY_CONTACT_EMAIL`) shown |
 | S-PR2 | Backups wording | The privacy page mentions encrypted backups only once S-BK1 and S-BK2 have passed |
 | S-PR3 **P** | Professional legal review of `/privacy` and `/terms` (items in the header comment of `app/privacy/page.tsx`) | Done before any public launch (owner decision, 2026-11-18) |
 

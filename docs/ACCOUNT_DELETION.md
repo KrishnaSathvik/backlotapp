@@ -2,30 +2,32 @@
 
 Creators delete their own account from **Settings → Delete account**. The request-based option (email, see `/privacy#deletion`) still works for anyone who can't sign in. An operator handles those requests with the same job (see "Operator actions").
 
+> **Processing:** the job starts right after the request (after the 3-minute grace period) and an hourly Vercel Cron run resumes anything unfinished (docs/WORKERS.md).
+
 ## Flow
 
 | Stage | What happens | Code |
 | --- | --- | --- |
-| Confirm | The creator types `DELETE`. The server also requires a sign-in from the last 10 minutes, so the app asks for Google sign-in again first (`reauthenticateWithPopup`). | `AccountSettingsSheet.tsx`, `POST /api/account/deletion` |
-| Lock | One `account_deletions` row is inserted (idempotent: a repeat returns the same job). From then on: (1) `requireUser` refuses the account on **every** route with `403 account_deleting`, checked on every request and before the profile upsert, so a token that's still valid can't start anything new; (2) the database **write guard** refuses any INSERT or UPDATE of the account's rows in all 13 tables, from any code path (see below). Firebase refresh tokens are revoked, so no new ID tokens are issued. The browser forgets the account's local Slate keys, keeps only the status token, signs out and opens the status page. | `auth-server.ts`, `account-guard.ts`, `deletion.ts: requestAccountDeletion` |
+| Confirm | The creator types `DELETE`. The server also requires a sign-in from the last 10 minutes, so the app asks the creator to confirm first: Google accounts with Google, email accounts by re-entering their password (verified by Supabase, which issues a fresh session). | `AccountSettingsSheet.tsx`, `POST /api/account/deletion` |
+| Lock | One `account_deletions` row is inserted (idempotent: a repeat returns the same job). From then on: (1) `requireUser` refuses the account on **every** route with `403 account_deleting`, checked on every request and before the profile upsert, so a token that's still valid can't start anything new; (2) the database **write guard** refuses any INSERT or UPDATE of the account's rows in all 13 tables, from any code path (see below). the Supabase Auth user is banned, so no session can be refreshed or started. The browser forgets the account's local Slate keys, keeps only the status token, signs out and opens the status page. | `auth-server.ts`, `account-guard.ts`, `deletion.ts: requestAccountDeletion` |
 | Grace period | 3 minutes before the job starts. It's a drain window, not permission: no new request gets past the gate, and work already running can't write either (the guard refuses it). Requests already in flight just finish or fail. The final check is a third line of defence. | `DEFAULT_GRACE_MS` |
-| Job | A worker claims the job with a 10-minute lease (`FOR UPDATE SKIP LOCKED`, so only one worker runs it) and runs the steps below in order. Each step is idempotent, and its completion time is saved as soon as it finishes, so a crash resumes at the step that didn't finish. | `deletion.ts: processDueDeletions` |
+| Job | Started right after the request (`startDeletionSoon` via `after()`), resumed hourly by Vercel Cron. A run claims the job with a 10-minute lease (`FOR UPDATE SKIP LOCKED`, so only one worker runs it) and runs the steps below in order. Each step is idempotent, and its completion time is saved as soon as it finishes, so a crash resumes at the step that didn't finish. | `deletion.ts: processDueDeletions` |
 | Retry | A failed step saves a short error code (never content or tokens) and retries after 1, 5, 15, 30 and 60 minutes, then every 6 hours, **indefinitely**. After 4 attempts the status page says it's taking longer, and each retry logs `account deletion retry … needs_attention`. | `backoffMs` |
-| Complete | Only after `verify` finds no rows for the uid in any table and no Firebase user. | `verify` step |
-| Record | The completed row (uid, public id, step times; no email, no content) stays `ACCOUNT_DELETION_RECORD_DAYS` (30) days for the status page, then the daily cleanup removes it. | `purgeDeletionRecords` |
+| Complete | Only after `verify` finds no rows for the uid in any table and no Supabase Auth user. | `verify` step |
+| Record | The completed row (uid, public id, step times; no email, no content) stays `ACCOUNT_DELETION_RECORD_DAYS` (30) days for the status page, then the hourly run removes it. | `purgeDeletionRecords` |
 
 ### Steps
 
 | # | Step | Removes | Notes |
 | --- | --- | --- | --- |
-| 1 | `revoke_sessions` | Firebase refresh tokens | Also done when the request is made. |
+| 1 | `revoke_sessions` | Supabase Auth sessions (the user is banned, so no session can be refreshed or started) | Also done when the request is made. |
 | 2 | `cancel_uploads` | `upload_sessions` rows, partial objects | Cancels each active resumable session (so its URI stops working), then deletes any object it produced. |
 | 3 | `delete_workspace` | `content_items` (captions, tags, notes, references), `ideas` (links, source relationships), `channels` | One transaction. |
 | 4 | `delete_slate` | `slate_conversations` (incl. condensed notes in `summary`), `slate_messages`, `slate_embeddings`, `slate_preferences`, `slate_actions`, `slate_action_events`, `slate_usage_leases` | One transaction. Audit events hold no content but are tied to the account, so they go too. `slate_breaker_state` is global (per provider), not user data. |
 | 5 | `delete_files` | R2 objects, then `uploaded_files` rows | Batches of 200, 8 deletes at a time. Object first, then row, so a partial failure leaves rows pointing at what's still there. |
-| 6 | `delete_sign_in` | Firebase Authentication user | After everything the sign-in could reach is gone. The job doesn't need it (it runs server-side by uid). Doesn't touch the person's Google account. |
+| 6 | `delete_sign_in` | Supabase Auth user (hard delete, with its Google identity link) | After everything the sign-in could reach is gone. The job doesn't need it (it runs server-side by uid). Doesn't touch the person's Google account. |
 | 7 | `delete_profile` | `users` row | |
-| 8 | `verify` | — | Counts rows for the uid in all 13 user tables and checks Firebase. If something is there (a late write), the job is sent back to the step that clears that table and retried in a minute. |
+| 8 | `verify` | — | Counts rows for the uid in all 13 user tables and checks Supabase Auth. If something is there (a late write), the job is sent back to the step that clears that table and retried in a minute. |
 
 ### Write guard (no writes after deletion starts)
 
@@ -63,7 +65,7 @@ Migrations that add columns with constant defaults, or create tables and indexes
 | **Actual** (rows and objects) | Steps 2–7. Database rows are gone. Cloud Storage objects are deleted (live versions removed). | "Workspace and Slate data deleted", "Uploaded files deleted" |
 | **Provider recovery** | None on R2 (no soft delete, no versioning): objects are erased when deleted. The legacy Cloud Storage bucket kept them 7 days. | Nothing extra shown (`STORAGE_SOFT_DELETE_DAYS` unset = 0) |
 
-Database backups (encrypted nightly dumps, docs/BACKUPS.md) can hold deleted rows until they expire (30 days by design). The deletion ledger (R2, `ledger/account-deletions/`, 90 days) records each request outside the database, written when the creator asks and again by the job's first step (`record_ledger`), so a restore can re-apply it.
+Backlot runs no database backups (owner decision, docs/BACKUPS.md); if they're ever enabled, they can hold deleted rows until they expire. The deletion ledger (R2, `ledger/account-deletions/`, 90 days) records each request outside the database, written when the creator asks and again by the job's first step (`record_ledger`), so a restore can re-apply it.
 
 ## API
 
@@ -72,8 +74,8 @@ Database backups (encrypted nightly dumps, docs/BACKUPS.md) can hold deleted row
 | `POST /api/account/deletion` `{ "confirm": "DELETE" }` | Signed in, sign-in < 10 min old (else `401 reauth_required`), also on a repeat request | Start. `202` new, `200` already started. Returns `{ deletion: { statusToken, …progress } }`. A repeat issues a new token and retires the old one. |
 | `GET /api/account/deletion` | Signed in (allowed while locked) | This account's progress, or `null`. Never returns a token. |
 | `POST /api/account/deletion/status` `{ "token": "…" }` | Status token | Progress for the status page. See "Status link" below. |
-| `POST /api/internal/account-deletions` | Job `deletions`: OIDC from `DELETION_WORKER_INVOKER`, or `Bearer DELETION_WORKER_SECRET` | Worker. Runs due jobs for up to 90 s (route limit 120 s); the rest continues on the next call. |
-| `POST /api/internal/cleanup` (daily) | Job `maintenance`: OIDC from `MAINTENANCE_INVOKER`, or `Bearer MAINTENANCE_SECRET` | Purges completed deletion records after the record period (plus Slate and upload housekeeping). It doesn't run deletion jobs. |
+| `GET`/`POST /api/internal/account-deletions` | Job `deletions`: `Bearer CRON_SECRET` (Vercel Cron, hourly) | Recovery run. Runs due jobs for up to 90 s (route limit 120 s); the rest continues on the next call. |
+| `POST /api/internal/cleanup` (not scheduled) | Job `maintenance`: OIDC from `MAINTENANCE_INVOKER`, or `Bearer MAINTENANCE_SECRET` | Purges completed deletion records after the record period (plus Slate and upload housekeeping). It doesn't run deletion jobs. |
 
 ### Status link
 
@@ -83,14 +85,14 @@ Database backups (encrypted nightly dumps, docs/BACKUPS.md) can hold deleted row
 - **Expiry:** malformed, unknown and expired tokens all get the same 404. A token stops working once the completed record is older than `ACCOUNT_DELETION_RECORD_DAYS`, even before the daily purge runs.
 - **Enumeration:** guessing is infeasible (256 bits), and a valid token only shows that one deletion's progress.
 
-## Operational setup (not done; needs approval)
+## Operational setup
 
 1. Apply all migrations with `npm run db:migrate -- --apply` **before** deploying the code (docs/DEPLOYMENT.md). `requireUser` queries `account_deletions` on every request. `db:push` alone isn't enough: it doesn't create the write guard.
-2. Scheduler: the Cloudflare Worker in `ops/scheduler` calls `POST https://<host>/api/internal/account-deletions` every 5 minutes with `DELETION_WORKER_SECRET` (docs/WORKERS.md). **Deletion isn't operational until it runs.**
-3. Firebase Admin credential on Vercel: `FIREBASE_SERVICE_ACCOUNT_JSON`, a service account with only Firebase Authentication Admin in the Firebase project. The R2 token covers file deletion and the ledger.
-4. The worker route has `maxDuration = 300`; the worker stops taking jobs after 240 s.
+2. Set `CRON_SECRET` in Vercel (Production). The hourly cron comes from `vercel.json` (docs/WORKERS.md).
+3. Supabase Auth admin credential on Vercel: `SUPABASE_SECRET_KEY` (server only, never `NEXT_PUBLIC_`). The R2 token covers file deletion and the ledger.
+4. Time limits: the request route has 300 s (grace period + one bounded run), the recovery route 120 s (stops taking jobs after 90 s).
 5. Optional: `ACCOUNT_DELETION_RECORD_DAYS` (default 30), `LEDGER_RETENTION_DAYS` (default 90). Leave `STORAGE_SOFT_DELETE_DAYS` unset on R2.
-6. Alerting: `account_deletion.retry` with `needs_attention=true`, and a "no successful worker run" alert (docs/OPERATIONS.md, "Alerts").
+6. Alerting: `account_deletion.retry` with `needs_attention=true`, and failed runs under Vercel → Cron Jobs (docs/WORKERS.md, "Monitoring").
 
 ## Operator actions
 
@@ -110,7 +112,7 @@ Database backups (encrypted nightly dumps, docs/BACKUPS.md) can hold deleted row
 
 ## Final-verification scenarios (for the test cycle)
 
-1. Delete an account that has every kind of data (channels, posts with cover/video/slides, ideas with screenshots, a repurposed post, Slate chats long enough to have notes, preferences, pending and applied suggestions, an unfinished upload). Afterwards: zero rows for the uid in all 13 tables, zero objects for its keys in the R2 bucket, a ledger entry under `ledger/account-deletions/`, no Firebase user, status page "deleted".
+1. Delete an account that has every kind of data (channels, posts with cover/video/slides, ideas with screenshots, a repurposed post, Slate chats long enough to have notes, preferences, pending and applied suggestions, an unfinished upload). Afterwards: zero rows for the uid in all 13 tables, zero objects for its keys in the R2 bucket, a ledger entry under `ledger/account-deletions/`, no Supabase Auth user, status page "deleted".
 2. A second account's data, files and sign-in are untouched.
 3. Old sign-in: the app asks for Google sign-in again before deleting. Cancel the popup: nothing is deleted. Sign in with a different Google account: refused.
 4. Typo in the confirmation: the button stays disabled; the API returns 400 without `"DELETE"`.
@@ -118,10 +120,10 @@ Database backups (encrypted nightly dumps, docs/BACKUPS.md) can hold deleted row
 6. After requesting, every API route returns 403 for that account (try `/api/workspace`, `/api/files/<key>` in another tab, an upload chunk, a Slate message). Reloading the app goes to the status page.
 7. Start a Slate reply or a large upload, then delete the account in another tab. The reply isn't saved (`slate.reply_not_saved`, NOTICE), and the next chunk gets 403. Afterwards, zero rows and zero objects remain.
 7a. In psql, try `update content_items set title = 'x' where user_uid = '<locked uid>'`: it fails with `BKDEL`. The same update for another account works.
-8. Make storage or Firebase fail (e.g. remove the IAM binding temporarily in a test project): the status stays "in progress", shows "taking longer" after 4 attempts, logs `needs_attention`, and finishes once access is restored. It's never shown as complete early.
+8. Make storage or Supabase Auth fail (e.g. an invalid `SUPABASE_SECRET_KEY` temporarily, in a test project): the status stays "in progress", shows "taking longer" after 4 attempts, logs `needs_attention`, and finishes once access is restored. It's never shown as complete early.
 9. Kill the worker mid-job (deploy during a run): the next run after the lease (10 min) continues from the unfinished step.
-10. The status page works signed out, from another browser (with the link), and after the Firebase user is deleted. An altered or unknown token shows "not valid". Vercel request logs for `/account/deleted` and `/api/account/deletion/status` contain no token.
-11. After 30 days (or with `ACCOUNT_DELETION_RECORD_DAYS=1`), the daily cleanup removes the completed record.
+10. The status page works signed out, from another browser (with the link), and after the Supabase Auth user is deleted. An altered or unknown token shows "not valid". Vercel request logs for `/account/deleted` and `/api/account/deletion/status` contain no token.
+11. After 30 days (or with `ACCOUNT_DELETION_RECORD_DAYS=1`), the hourly run removes the completed record.
 12. In R2, a deleted object is gone at once (no soft delete); the status page shows no recovery date.
 13. Email path: operator inserts a job for a uid and the same flow completes.
 14. The worker with the wrong credentials: a maintenance secret or the maintenance scheduler's OIDC token gets 401 from the deletion worker, and the other way round.

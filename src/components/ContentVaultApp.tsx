@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { onIdTokenChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import Link from 'next/link';
+import type { Session } from '@supabase/supabase-js';
 import {
   convertIdeaToPostDraft,
-  channelPlatform,
+  extractDomainAndTitle,
   filterContentItems,
+  platformOfChannel,
   type ChannelItem,
   type ContentItem,
   type IdeaItem,
@@ -14,24 +16,29 @@ import {
   type PlatformKey,
   type StatusKey,
 } from '@/src/lib/content-logic';
-import { auth, googleAuthProvider } from '@/src/lib/firebase';
+import { supabaseBrowser, takeReauthIntent, type AuthUser } from '@/src/lib/supabase/browser';
+import { hasLinkPreview } from '@/src/lib/link-preview';
+import { fetchLinkPreview } from '@/src/lib/link-preview-client';
+import { Pencil, Trash2 } from 'lucide-react';
 import { AccountSettingsSheet } from './AccountSettingsSheet';
 import { DEMO_CHANNELS, DEMO_IDEAS, DEMO_ITEMS } from '@/src/lib/demo-data';
 import { useTheme } from '@/src/hooks/useTheme';
-import { MobileTabBar, MobileTopBar, Sidebar, StatsStrip, type ActiveTab } from './AppShell';
+import { useVisualViewportVars } from '@/src/hooks/useVisualViewport';
+import { MobileTopBar, PhoneTabBar, Sidebar, TabletRail, useAppBreakpoint, type ActiveTab, type SidebarProps } from './AppShell';
 import { PlatformIcon } from './PlatformIcon';
 import { AuthGate } from './AuthGate';
 import { IdeasView } from './IdeasView';
 import { AddChannelDialog } from './AddChannelDialog';
 import { ItemDetailModal, type ItemFieldsPatch } from './ItemDetailModal';
 import { ItemEditorModal } from './ItemEditorModal';
+import { NewPostDialog } from './NewPostDialog';
 import { LibraryView } from './LibraryView';
 import { OfflineIndicator } from './PWAControls';
 import { StudioChatPanel, type ChatFocus } from './StudioChatPanel';
 import { CalendarView } from './CalendarView';
 import { DELETION_STATUS_KEY } from './DeletionStatus';
 import type { IdeaFieldsPatch } from './IdeaDetailSheet';
-import { buttonStyles, cx, FeedbackProvider, sizes, useFeedback } from './ui';
+import { ActionMenu, buttonStyles, cx, FeedbackProvider, sizes, useFeedback } from './ui';
 
 
 const PAGE_COPY: Record<ActiveTab, { title: string; subtitle?: string }> = {
@@ -41,18 +48,25 @@ const PAGE_COPY: Record<ActiveTab, { title: string; subtitle?: string }> = {
   chat: { title: 'Slate', subtitle: 'Your AI creative partner: hooks, captions, tags and plans.' },
 };
 
-const SESSION_COOKIE = 'cv_session';
+const toAuthUser = (session: Session | null): AuthUser | null => {
+  if (!session?.user) return null;
+  const providers = (session.user.identities ?? []).map((i) => i.provider);
+  return { uid: session.user.id, email: session.user.email ?? '', hasGoogle: providers.includes('google') };
+};
 
-function setSessionCookie(token: string | null) {
-  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = token
-    ? `${SESSION_COOKIE}=${token}; Path=/api/files; Max-Age=3600; SameSite=Strict${secure}`
-    : `${SESSION_COOKIE}=; Path=/api/files; Max-Age=0; SameSite=Strict${secure}`;
-}
+const AUTH_ERRORS: Record<string, string> = {
+  cancelled: 'Google sign-in was cancelled.',
+  failed: 'Sign-in didn’t complete. Try again.',
+};
 
 function readTabFromUrl(): ActiveTab {
   const t = new URLSearchParams(window.location.search).get('tab');
   return t === 'ideas' || t === 'calendar' || t === 'chat' ? t : 'library';
+}
+
+/** The live demo link. A signed-in browser still gets the sample workspace, not the account. */
+function demoAutostart(): boolean {
+  return new URLSearchParams(window.location.search).get('autostart') === '1';
 }
 
 async function readError(res: Response, fallback: string) {
@@ -83,13 +97,16 @@ const VaultShell: React.FC = () => {
   const { toast, confirm } = useFeedback();
 
   const [authReady, setAuthReady] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  /** Settings opened straight at Delete account after re-signing in (null: closed normally). */
+  const [settingsIntent, setSettingsIntent] = useState<'reauthed' | 'reauth_mismatch' | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
-  const [isSigningIn, setIsSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTabState] = useState<ActiveTab>('library');
+  // Read the tab straight from the URL so a refresh on ?tab=chat never shows Library first. The
+  // first render is the loading screen on server and client alike, so this can't mismatch.
+  const [activeTab, setActiveTabState] = useState<ActiveTab>(() => (typeof window === 'undefined' ? 'library' : readTabFromUrl()));
   const { theme: themePref, setTheme: setThemePref } = useTheme();
 
   const [channels, setChannels] = useState<ChannelItem[]>([]);
@@ -107,9 +124,17 @@ const VaultShell: React.FC = () => {
 
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [newPostOpen, setNewPostOpen] = useState(false);
+  const [newIdeaOpen, setNewIdeaOpen] = useState(false);
+  const pendingDate = useRef('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  useVisualViewportVars();
+  // Only the shell for this width stays mounted. A hidden copy of the same avatar
+  // shares gradient ids and the visible one paints blank.
+  const appBreakpoint = useAppBreakpoint();
   const [editingItem, setEditingItem] = useState<ContentItem | null>(null);
   const [channelDialogOpen, setChannelDialogOpen] = useState(false);
+  const [editingChannel, setEditingChannel] = useState<ChannelItem | null>(null);
   const [chatFocus, setChatFocus] = useState<ChatFocus | null>(null);
   /** An idea to open when the Ideas tab mounts (from a Slate reference chip). */
   const [ideaToOpen, setIdeaToOpen] = useState<number | null>(null);
@@ -151,7 +176,14 @@ const VaultShell: React.FC = () => {
   useEffect(() => {
     Promise.resolve().then(() => {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('autostart') === '1' && !auth.currentUser) enterPreview();
+      if (params.get('autostart') === '1') enterPreview();
+      const authErr = params.get('auth_error');
+      if (authErr) {
+        setAuthError(AUTH_ERRORS[authErr] ?? AUTH_ERRORS.failed);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('auth_error');
+        window.history.replaceState(null, '', url);
+      }
       const shareUrl = params.get('share_url') || '';
       const shareTitle = params.get('share_title') || '';
       const shareText = params.get('share_text') || '';
@@ -179,16 +211,17 @@ const VaultShell: React.FC = () => {
     } catch {
       // Storage unavailable
     }
-    setSessionCookie(null);
-    await signOut(auth).catch(() => undefined);
+    await supabaseBrowser().auth.signOut({ scope: 'local' }).catch(() => undefined);
     window.location.replace(token ? `/account/deleted#${token}` : '/account/deleted');
   }, []);
 
-  const loadAuthenticatedWorkspace = useCallback(async (user: User) => {
+  const loadAuthenticatedWorkspace = useCallback(async (user: AuthUser) => {
     setLoadingWorkspace(true);
     setWorkspaceError(null);
     try {
-      const token = await user.getIdToken();
+      const { data: { session } } = await supabaseBrowser().auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Your session ended. Sign in again.');
       const res = await fetch('/api/workspace', { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 403) {
         // This account is being deleted: show its progress instead of the app.
@@ -219,51 +252,105 @@ const VaultShell: React.FC = () => {
 
   const loadedUid = useRef<string | null>(null);
   useEffect(() => {
-    // Fires on sign-in, sign-out, and every hourly token refresh.
-    const unsub = onIdTokenChanged(auth, async (user) => {
-      setFirebaseUser(user);
-      if (user) {
-        const token = await user.getIdToken();
-        setAuthToken(token);
-        setSessionCookie(token);
-        setPreviewMode(false);
-        if (loadedUid.current !== user.uid) {
-          loadedUid.current = user.uid;
-          await loadAuthenticatedWorkspace(user);
+    let supabase: ReturnType<typeof supabaseBrowser>;
+    try {
+      supabase = supabaseBrowser();
+    } catch (err) {
+      Promise.resolve().then(() => {
+        setAuthError(err instanceof Error ? err.message : 'Sign-in is not configured.');
+        setAuthReady(true);
+      });
+      return;
+    }
+    // Fires once with the stored session (INITIAL_SESSION), then on sign-in, sign-out and each
+    // automatic token refresh. The session lives in cookies, so it survives a page refresh.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = toAuthUser(session);
+      // Don't await other Supabase calls inside this callback (it holds the auth lock): defer.
+      setTimeout(() => {
+        // /app?autostart=1 is the sample workspace, even on a browser that is already signed in.
+        // Applying the session here would replace the demo with the real account.
+        if (demoAutostart()) {
+          setAuthReady(true);
+          return;
         }
-      } else {
-        loadedUid.current = null;
-        setAuthToken(null);
-        setSessionCookie(null);
-      }
-      setAuthReady(true);
+        setAuthUser(user);
+        setAuthToken(session?.access_token ?? null);
+        if (user) {
+          setPreviewMode(false);
+          if (loadedUid.current !== user.uid) {
+            loadedUid.current = user.uid;
+            void loadAuthenticatedWorkspace(user);
+          }
+          // Back from "sign in again to delete": reopen Delete account, but only for the same account.
+          const expected = takeReauthIntent();
+          if (expected) {
+            setSettingsIntent(expected === user.uid ? 'reauthed' : 'reauth_mismatch');
+            setSettingsOpen(true);
+          }
+        } else {
+          loadedUid.current = null;
+        }
+        setAuthReady(true);
+      }, 0);
     });
-    return () => unsub();
+    return () => subscription.unsubscribe();
   }, [loadAuthenticatedWorkspace]);
 
 
-  const handleGoogleSignIn = async () => {
-    setAuthError(null);
-    setIsSigningIn(true);
-    try {
-      await signInWithPopup(auth, googleAuthProvider);
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Google sign-in popup was closed or blocked.');
-    } finally {
-      setIsSigningIn(false);
-    }
+  /** "Sign in" from the demo: leave the sample workspace. An existing session opens that account. */
+  const goToSignIn = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('autostart');
+    window.history.replaceState(null, '', url);
+    void (async () => {
+      let session: Session | null = null;
+      try {
+        const result = await supabaseBrowser().auth.getSession();
+        session = result.data.session;
+      } catch {
+        session = null;
+      }
+      const next = toAuthUser(session);
+      setChannels([]);
+      setItems([]);
+      setIdeas([]);
+      setPreviewMode(false);
+      if (!next) return;
+      setLoadingWorkspace(true);
+      setAuthUser(next);
+      setAuthToken(session?.access_token ?? null);
+      loadedUid.current = next.uid;
+      void loadAuthenticatedWorkspace(next);
+    })();
   };
 
   const handleSignOut = async () => {
-    if (firebaseUser) {
+    let uid = authUser?.uid ?? null;
+    if (!uid) {
       try {
-        window.localStorage.removeItem(`cv_chat_${firebaseUser.uid}`);
-        window.localStorage.removeItem(`cv_slate_open_${firebaseUser.uid}`);
+        const { data: { session } } = await supabaseBrowser().auth.getSession();
+        uid = session?.user?.id ?? null;
+      } catch {
+        uid = null;
+      }
+    }
+    if (uid) {
+      try {
+        window.localStorage.removeItem(`cv_chat_${uid}`);
+        window.localStorage.removeItem(`cv_slate_open_${uid}`);
       } catch {
         // Storage unavailable
       }
-      await signOut(auth);
     }
+    try {
+      await supabaseBrowser().auth.signOut({ scope: 'local' });
+    } catch {
+      // Sign-in isn't configured, or the session is already gone.
+    }
+    loadedUid.current = null;
+    setAuthUser(null);
+    setAuthToken(null);
     setPreviewMode(false);
     setChannels([]);
     setItems([]);
@@ -273,9 +360,11 @@ const VaultShell: React.FC = () => {
     window.history.replaceState(null, '', url);
   };
 
+  /** The current access token; Supabase refreshes it first if it's about to expire. */
   const getFreshToken = async (): Promise<string | null> => {
-    if (!firebaseUser) return null;
-    const token = await firebaseUser.getIdToken();
+    if (!authUser) return null;
+    const { data: { session } } = await supabaseBrowser().auth.getSession();
+    const token = session?.access_token ?? null;
     setAuthToken(token);
     return token;
   };
@@ -333,14 +422,14 @@ const VaultShell: React.FC = () => {
 
   /* ---------------- Mutations ---------------- */
 
-  const handleAddChannel = async (name: string, handle: string): Promise<boolean> => {
+  const handleAddChannel = async (name: string, handle: string, platform: PlatformKey): Promise<boolean> => {
     try {
       const token = await getFreshToken();
       if (token) {
-        const data = await api(token, '/api/channels', 'POST', { name, handle });
+        const data = await api(token, '/api/channels', 'POST', { name, handle, platform });
         setChannels((prev) => [...prev, data.channel]);
       } else {
-        const nextChannels = [...channels, { id: Date.now(), name, handle }];
+        const nextChannels = [...channels, { id: Date.now(), name, handle, platform }];
         setChannels(nextChannels);
       }
       toast(`Channel “${name}” added`);
@@ -348,6 +437,64 @@ const VaultShell: React.FC = () => {
     } catch (err) {
       fail(err, 'Could not add channel.');
       return false;
+    }
+  };
+
+  /** Puts server copies of posts and ideas a channel change touched into the workspace. */
+  const mergeChanged = (changedItems: ContentItem[] = [], changedIdeas: IdeaItem[] = []) => {
+    changedItems.forEach(rememberPost);
+    changedIdeas.forEach(rememberIdea);
+    if (changedItems.length) setItems((prev) => prev.map((i) => changedItems.find((c) => c.id === i.id) ?? i));
+    if (changedIdeas.length) setIdeas((prev) => prev.map((i) => changedIdeas.find((c) => c.id === i.id) ?? i));
+  };
+
+  /** Edit a channel. Renaming moves its posts and ideas along with it. */
+  const handleEditChannel = async (channel: ChannelItem, name: string, handle: string, platform: PlatformKey): Promise<boolean> => {
+    try {
+      const token = await getFreshToken();
+      if (token) {
+        const data = await api(token, `/api/channels/${channel.id}`, 'PATCH', { name, handle, platform });
+        setChannels((prev) => prev.map((c) => (c.id === channel.id ? data.channel : c)));
+        mergeChanged(data.items, data.ideas);
+      } else {
+        setChannels((prev) => prev.map((c) => (c.id === channel.id ? { ...c, name, handle, platform } : c)));
+        if (name !== channel.name) {
+          setItems((prev) => prev.map((i) => (i.channelName === channel.name ? { ...i, channelName: name, channelId: channel.id } : i)));
+          setIdeas((prev) => prev.map((i) => (i.channelName === channel.name ? { ...i, channelName: name } : i)));
+        }
+      }
+      if (filters.channel === channel.name && name !== channel.name) setFilters((f) => ({ ...f, channel: name }));
+      toast('Channel updated');
+      return true;
+    } catch (err) {
+      fail(err, 'Could not update the channel.');
+      return false;
+    }
+  };
+
+  /** Delete a channel. Its posts and ideas stay, without a channel. */
+  const handleDeleteChannel = async (channel: ChannelItem) => {
+    const ok = await confirm({
+      title: `Delete “${channel.name}”?`,
+      body: 'Its posts and ideas stay in your library, without a channel.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      const token = await getFreshToken();
+      if (token) {
+        const data = await api(token, `/api/channels/${channel.id}`, 'DELETE');
+        mergeChanged(data.items, data.ideas);
+      } else {
+        setItems((prev) => prev.map((i) => (i.channelName === channel.name || i.channelId === channel.id ? { ...i, channelName: '', channelId: null } : i)));
+        setIdeas((prev) => prev.map((i) => (i.channelName === channel.name ? { ...i, channelName: '' } : i)));
+      }
+      setChannels((prev) => prev.filter((c) => c.id !== channel.id));
+      if (filters.channel === channel.name) setFilters((f) => ({ ...f, channel: 'all' }));
+      toast(`Channel “${channel.name}” deleted`);
+    } catch (err) {
+      fail(err, 'Could not delete the channel.');
     }
   };
 
@@ -366,8 +513,9 @@ const VaultShell: React.FC = () => {
     coverAsset: MediaAsset | null;
     videoAsset: MediaAsset | null;
     slides: MediaAsset[];
-  }) => {
+  }): Promise<ContentItem | null> => {
     // Errors propagate to the editor, which shows them inline.
+    let created: ContentItem | null = null;
     const token = await getFreshToken();
     const channelId = channels.find((c) => c.name === payload.channelName)?.id ?? null;
 
@@ -389,6 +537,7 @@ const VaultShell: React.FC = () => {
         const data = await api(token, '/api/items', 'POST', { ...payload, channelId });
         rememberPost(data.item);
         setItems((prev) => [data.item, ...prev]);
+        created = data.item;
       }
     } else {
       const now = new Date().toISOString();
@@ -401,7 +550,7 @@ const VaultShell: React.FC = () => {
           setSelectedItem(nextItems.find((i) => i.id === payload.id) ?? null);
         }
       } else {
-        const created: ContentItem = {
+        const local: ContentItem = {
           ...payload,
           id: Date.now(),
           channelId,
@@ -410,12 +559,38 @@ const VaultShell: React.FC = () => {
           createdAt: now,
           updatedAt: now,
         };
-        nextItems = [created, ...items];
+        created = local;
+        nextItems = [local, ...items];
       }
       setItems(nextItems);
     }
     toast(payload.id ? 'Post updated' : 'Post created');
+    return created;
   };
+
+  /** Title and platform, then open the new post with the drop zone ready. */
+  const handleQuickCreatePost = async (title: string, platform: PlatformKey, channelName: string) => {
+    const date = pendingDate.current;
+    pendingDate.current = '';
+    const created = await handleSaveItem({
+      title,
+      platform,
+      channelName,
+      status: 'idea',
+      caption: '',
+      tags: [],
+      notes: '',
+      liveLink: '',
+      postDate: '',
+      targetDate: date,
+      coverAsset: null,
+      videoAsset: null,
+      slides: [],
+    });
+    setNewPostOpen(false);
+    if (created) setSelectedItem(created);
+  };
+
 
   const handleUpdateItemFields = async (itemId: number, fields: ItemFieldsPatch): Promise<boolean> => {
     const patch: ItemFieldsPatch & { channelId?: number | null } = { ...fields };
@@ -510,6 +685,14 @@ const VaultShell: React.FC = () => {
     }
   };
 
+  /** Titles Backlot made up for a link idea (from the URL text), which a real title can replace. */
+  const isAutoIdeaTitle = (title: string, link: string) =>
+    title === extractDomainAndTitle(link).suggestedTitle ||
+    title === 'Saved idea' ||
+    title === 'Captured idea' ||
+    // Older made-up titles, e.g. "YouTube Reference: watch".
+    /^(YouTube( Short)? Reference|Instagram (Reel|Post) Reference)(: \S+)?$/.test(title);
+
   const handleCaptureIdea = async (payload: {
     title: string;
     linkUrl: string;
@@ -525,6 +708,13 @@ const VaultShell: React.FC = () => {
     try {
       const token = await getFreshToken();
       if (token) {
+        // YouTube/TikTok link: use the video's real title (looked up once; saving never waits more than ~4 s).
+        if (payload.linkUrl && hasLinkPreview(payload.linkUrl)) {
+          const preview = await fetchLinkPreview(payload.linkUrl, token);
+          if (preview.title) {
+            payload = { ...payload, linkTitle: preview.title, title: isAutoIdeaTitle(payload.title, payload.linkUrl) ? preview.title : payload.title };
+          }
+        }
         const data = await api(token, '/api/ideas', 'POST', payload);
         rememberIdea(data.idea);
         setIdeas((prev) => [data.idea, ...prev]);
@@ -546,12 +736,12 @@ const VaultShell: React.FC = () => {
     }
   };
 
-  const handleMakePost = async (idea: IdeaItem) => {
+  const handleMakePost = async (idea: IdeaItem, platform?: PlatformKey) => {
     try {
       const token = await getFreshToken();
       let newItem: ContentItem;
       if (token) {
-        const data = await api(token, `/api/ideas/${idea.id}`, 'POST', { expectedVersion: ideaVersion(idea.id) });
+        const data = await api(token, `/api/ideas/${idea.id}`, 'POST', { expectedVersion: ideaVersion(idea.id), ...(platform ? { platform } : {}) });
         newItem = data.item;
         rememberPost(newItem);
         rememberIdea(data.idea);
@@ -563,7 +753,7 @@ const VaultShell: React.FC = () => {
           newItem = existing;
         } else {
           const now = new Date().toISOString();
-          newItem = { ...convertIdeaToPostDraft(idea), id: Date.now(), createdAt: now, updatedAt: now };
+          newItem = { ...convertIdeaToPostDraft({ ...idea, platform: platform ?? idea.platform }), id: Date.now(), createdAt: now, updatedAt: now };
           const nextItems = [newItem, ...items];
           const nextIdeas = ideas.map((i) => (i.id === idea.id ? { ...i, convertedItemId: newItem.id } : i));
           setItems(nextItems);
@@ -578,6 +768,30 @@ const VaultShell: React.FC = () => {
       fail(err, 'Could not create post.');
     }
   };
+
+  // Existing YouTube/TikTok link ideas that still have a made-up title ("YouTube Reference: watch")
+  // get the video's real title, once per idea per session, quietly (no toast).
+  const titledIdeas = useRef(new Set<number>());
+  useEffect(() => {
+    if (!authToken || loadingWorkspace) return;
+    const todo = ideas.filter((i) => i.linkUrl && !titledIdeas.current.has(i.id) && hasLinkPreview(i.linkUrl) && isAutoIdeaTitle(i.title, i.linkUrl));
+    if (!todo.length) return;
+    todo.forEach((i) => titledIdeas.current.add(i.id));
+    void (async () => {
+      for (const idea of todo.slice(0, 20)) {
+        const preview = await fetchLinkPreview(idea.linkUrl, authToken);
+        if (!preview.title) continue;
+        try {
+          const data = await api(authToken, `/api/ideas/${idea.id}`, 'PATCH', { title: preview.title, linkTitle: preview.title, expectedVersion: ideaVersion(idea.id) });
+          rememberIdea(data.idea);
+          setIdeas((prev) => prev.map((i) => (i.id === idea.id ? data.idea : i)));
+        } catch {
+          // A conflict or error: leave the title as it is.
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authToken, loadingWorkspace, ideas]);
 
   const handleUpdateIdea = async (ideaId: number, patch: IdeaFieldsPatch): Promise<boolean> => {
     try {
@@ -632,12 +846,7 @@ const VaultShell: React.FC = () => {
   const filteredItems = useMemo(() => filterContentItems(items, filters), [items, filters]);
 
   // The demo uses the same screens and handlers; without a token every change stays in memory.
-  const isDemo = !firebaseUser;
-
-  const openEditor = (item: ContentItem | null = null) => {
-    setEditingItem(item);
-    setEditorOpen(true);
-  };
+  const isDemo = !authUser;
 
   /* ---------------- Render ---------------- */
 
@@ -652,18 +861,16 @@ const VaultShell: React.FC = () => {
     );
   }
 
-  if (!firebaseUser && !previewMode) {
+  if (!authUser && !previewMode) {
     return (
       <>
         <AuthGate
-          onGoogleSignIn={handleGoogleSignIn}
           onPreview={() => {
             enterPreview();
             const url = new URL(window.location.href);
             url.searchParams.set('autostart', '1');
             window.history.replaceState(null, '', url);
           }}
-          isSigningIn={isSigningIn}
           errorMessage={authError}
         />
         <OfflineIndicator />
@@ -684,7 +891,7 @@ const VaultShell: React.FC = () => {
       : null;
   const scopedItems = activeChannel ? items.filter((i) => i.channelName === activeChannel.name) : items;
   const channelIdeas = activeChannel ? ideas.filter((i) => i.channelName === activeChannel.name).length : 0;
-  const channelLogo = activeChannel ? channelPlatform(items, activeChannel.name) : null;
+  const channelLogo = activeChannel ? platformOfChannel(channels, items, activeChannel.name) : null;
   const goTab = (tab: ActiveTab) => {
     // "Library" always means everything; leaving a channel clears its filter.
     if (tab === 'library') setFilters((f) => ({ ...f, channel: 'all' }));
@@ -692,60 +899,90 @@ const VaultShell: React.FC = () => {
   };
 
   const account = {
-    uid: firebaseUser?.uid ?? null,
-    isPreview: !firebaseUser,
+    uid: authUser?.uid ?? null,
+    isPreview: !authUser,
   };
   const shellProps = {
     activeTab,
     onTab: goTab,
-    onNewPost: () => openEditor(),
+    onNewPost: () => setNewPostOpen(true),
     account,
     theme: themePref,
     onThemeChange: setThemePref,
     onSignOut: handleSignOut,
-    onSignIn: firebaseUser ? undefined : handleGoogleSignIn,
-    onOpenSettings: firebaseUser ? () => setSettingsOpen(true) : undefined,
+    onSignIn: authUser ? undefined : goToSignIn,
+    onOpenSettings: authUser ? () => setSettingsOpen(true) : undefined,
+  };
+
+  const sidebarProps: SidebarProps = {
+    ...shellProps,
+    counts: { library: items.length, ideas: ideas.filter((i) => !i.convertedItemId).length, calendar: null, chat: null },
+    channels,
+    items,
+    activeChannel: activeChannel?.name ?? 'all',
+    onAddChannel: () => setChannelDialogOpen(true),
+    onEditChannel: setEditingChannel,
+    onDeleteChannel: handleDeleteChannel,
+    onChannel: (name) => {
+      setFilters((f) => ({ ...f, channel: name, status: 'all', platform: 'all' }));
+      setActiveTab('library');
+    },
   };
 
   return (
     <div
       className={cx(
-        'relative isolate lg:pl-[256px]',
-        isChat ? 'flex h-dvh flex-col overflow-hidden' : 'min-h-dvh pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-16'
+        'relative isolate md:pl-16 lg:pl-[256px]',
+        // Below lg the chat follows the visual viewport so the composer stays above the keyboard.
+        isChat
+          ? 'flex h-dvh flex-col overflow-hidden max-lg:h-[var(--vv-height,100dvh)] max-md:pb-[calc(45px+env(safe-area-inset-bottom))]'
+          : 'min-h-dvh pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-[calc(2.5rem+env(safe-area-inset-bottom))] lg:pb-16'
       )}
     >
-      <Sidebar
-        {...shellProps}
-        counts={{ library: items.length, ideas: ideas.filter((i) => !i.convertedItemId).length, calendar: null, chat: null }}
+      {appBreakpoint === null || appBreakpoint === 'desktop' ? <Sidebar {...sidebarProps} /> : null}
+      {appBreakpoint === null || appBreakpoint === 'tablet' ? (
+      <TabletRail
+        activeTab={activeTab}
+        onTab={goTab}
+        activeChannel={sidebarProps.activeChannel}
         channels={channels}
         items={items}
-        activeChannel={activeChannel?.name ?? 'all'}
-        onAddChannel={() => setChannelDialogOpen(true)}
-        onChannel={(name) => {
-          setFilters((f) => ({ ...f, channel: name, status: 'all', platform: 'all' }));
-          setActiveTab('library');
+        onChannel={sidebarProps.onChannel}
+        onAddChannel={sidebarProps.onAddChannel}
+        account={account}
+        onSignOut={handleSignOut}
+        onOpenSettings={shellProps.onOpenSettings}
+      />
+      ) : null}
+      {appBreakpoint === null || appBreakpoint === 'phone' ? <MobileTopBar {...shellProps} /> : null}
+      <PhoneTabBar
+        activeTab={activeTab}
+        onTab={goTab}
+        onNew={() => {
+          if (activeTab === 'ideas') {
+            setNewIdeaOpen(true);
+            return;
+          }
+          setNewPostOpen(true);
         }}
       />
-      <MobileTopBar {...shellProps} />
-
-      <div aria-hidden="true" className={cx('pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px] overflow-hidden lg:left-[256px]', isChat && 'hidden')}>
-        <div className="absolute -left-24 -top-40 h-80 w-[520px] rounded-full bg-electric-400/15 blur-3xl dark:bg-electric-600/15" />
-        <div className="absolute -top-48 right-0 h-72 w-96 rounded-full bg-cantaloupe-300/15 blur-3xl dark:bg-cantaloupe-500/10" />
-      </div>
-
-      {isChat && !loadingWorkspace ? (
-        <main className="flex min-h-0 w-full flex-1 flex-col">
+      {/* Slate is always mounted (hidden on other tabs): opening it is instant, a refresh on the
+          Slate tab shows the chat straight away (posts and ideas fill in as the workspace loads),
+          and switching tabs doesn't reload the conversation. */}
+        <main className={cx('min-h-0 w-full flex-1 flex-col', isChat ? 'flex' : 'hidden')} aria-hidden={!isChat || undefined}>
           <StudioChatPanel
+            active={isChat}
             items={items}
             ideas={ideas}
             channels={channels}
-            historyKey={firebaseUser ? `cv_chat_${firebaseUser.uid}` : null}
+            historyKey={authUser ? `cv_chat_${authUser.uid}` : null}
             authToken={authToken}
+            sample={!authUser}
             focus={chatFocus}
             onFocusChange={setChatFocus}
             onApplyCaption={(itemId, caption) => handleUpdateItemFields(itemId, { caption })}
             onActionApplied={handleSlateApplied}
-            onSignIn={firebaseUser ? undefined : handleGoogleSignIn}
+            onSignIn={authUser ? undefined : goToSignIn}
             onOpenRef={(ref) => {
               if (ref.type === 'post') {
                 const item = items.find((i) => i.id === ref.id);
@@ -760,32 +997,35 @@ const VaultShell: React.FC = () => {
             }}
           />
         </main>
-      ) : (
-      <main className="mx-auto w-full max-w-[1400px] px-4 pt-6 sm:px-6 sm:pt-8 lg:px-10 lg:pt-10">
+      {isChat ? null : (
+      <main className="@container mx-auto w-full max-w-[1400px] px-4 pt-6 sm:px-6 sm:pt-8 lg:px-10 lg:pt-10">
         {isDemo ? (
           // Desktop shows the same note in the sidebar card.
           <div
             data-preview-badge
-            className="mb-5 flex items-center gap-3 rounded-2xl border border-cantaloupe-200/80 bg-cantaloupe-50/70 px-3.5 py-2.5 text-[13px] text-cantaloupe-800 lg:hidden dark:border-cantaloupe-900/50 dark:bg-cantaloupe-950/30 dark:text-cantaloupe-200"
+            className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-border bg-surface-2 px-3.5 py-2.5 text-[13px] text-text lg:hidden"
           >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-cantaloupe-500" aria-hidden="true" />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-faint" aria-hidden="true" />
             <span className="min-w-0 flex-1">
               <span className="font-semibold">Demo workspace</span> · Changes reset when you refresh.
             </span>
+            <Link href="/" className="shrink-0 text-[13px] font-semibold text-link underline-offset-2 hover:underline">
+              Back to home
+            </Link>
             <button
               type="button"
-              onClick={handleGoogleSignIn}
-              disabled={isSigningIn}
-              className="shrink-0 text-[13px] font-semibold text-cantaloupe-900 underline-offset-2 hover:underline dark:text-cantaloupe-100"
+              onClick={goToSignIn}
+              className="shrink-0 text-[13px] font-semibold text-link underline-offset-2 hover:underline"
             >
               Sign in
             </button>
           </div>
         ) : null}
-        <div className="mb-5 sm:mb-7">
+        {(activeTab === 'library' || activeTab === 'ideas') && !activeChannel ? null : (
+        <div className="mb-5 flex items-start justify-between gap-3 sm:mb-7">
           {activeChannel ? (
-            <div key={`ch-${activeChannel.id}`} className="flex animate-rise items-center gap-3">
-              {channelLogo ? <PlatformIcon platform={channelLogo} size={36} className="rounded-xl" /> : null}
+            <div key={`ch-${activeChannel.id}`} className="flex min-w-0 flex-1 animate-rise items-center gap-3">
+              {channelLogo ? <PlatformIcon platform={channelLogo} size={36} colored className="rounded-xl" /> : null}
               <div className="min-w-0 flex-1">
                 <h1 className="truncate text-2xl font-extrabold sm:text-[30px] sm:leading-[1.1]">{activeChannel.name}</h1>
                 <p className="mt-0.5 text-sm text-zinc-500 tabular-nums dark:text-zinc-400">
@@ -798,20 +1038,30 @@ const VaultShell: React.FC = () => {
                     .join(' · ')}
                 </p>
               </div>
+              <ActionMenu
+                label={`More for ${activeChannel.name}`}
+                items={[
+                  { label: 'Edit channel', icon: Pencil, onSelect: () => setEditingChannel(activeChannel) },
+                  { label: 'Delete channel', icon: Trash2, onSelect: () => handleDeleteChannel(activeChannel), tone: 'danger' },
+                ]}
+              />
             </div>
           ) : (
-            <>
+            <div className="min-w-0 flex-1">
               <h1 key={activeTab} className="animate-rise text-3xl font-extrabold sm:text-[40px] sm:leading-[1.05]">{page.title}</h1>
               <p className="mt-1 text-sm text-zinc-500 tabular-nums dark:text-zinc-400">
-                {activeTab === 'library'
+                {loadingWorkspace && activeTab !== 'calendar' ? (
+                  <span className="inline-block h-3.5 w-44 animate-pulse rounded bg-surface-2 align-middle" aria-label="Loading" />
+                ) : activeTab === 'library'
                   ? librarySubtitle
                   : activeTab === 'ideas'
                   ? `Your creative inbox · ${ideas.length} saved ${ideas.length === 1 ? 'idea' : 'ideas'}`
                   : page.subtitle}
               </p>
-            </>
+            </div>
           )}
         </div>
+        )}
 
         {workspaceError ? (
           <div
@@ -819,10 +1069,10 @@ const VaultShell: React.FC = () => {
             className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
           >
             <span>{workspaceError}</span>
-            {firebaseUser ? (
+            {authUser ? (
               <button
                 type="button"
-                onClick={() => loadAuthenticatedWorkspace(firebaseUser)}
+                onClick={() => loadAuthenticatedWorkspace(authUser)}
                 className={cx(buttonStyles.secondary, sizes.sm)}
               >
                 Try again
@@ -832,42 +1082,30 @@ const VaultShell: React.FC = () => {
         ) : null}
 
         {loadingWorkspace ? (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[1, 2, 3, 4].map((n) => (
-              <div key={n} className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900/60">
-                <div className="aspect-[4/3] animate-pulse bg-zinc-100 dark:bg-zinc-800/60" />
-                <div className="space-y-2.5 p-4">
-                  <div className="h-3 w-1/3 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-                  <div className="h-4 w-4/5 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-                  <div className="h-3 w-full animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <PageSkeleton tab={activeTab} />
         ) : activeTab === 'library' ? (
-          <>
-          {items.length ? (
-            <StatsStrip
-              items={scopedItems}
-              active={filters.status}
-              onSelect={(status) => setFilters((f) => ({ ...f, status }))}
-            />
-          ) : null}
           <LibraryView
             items={filteredItems}
             totalItemsCount={items.length}
             allItems={items}
-            channels={channels}
+            authToken={authToken}
             filters={filters}
+            heading={activeChannel ? null : 'Library'}
             onFiltersChange={setFilters}
             onSelectItem={setSelectedItem}
-            onCreateNew={() => openEditor()}
-            onOpenIdeas={() => setActiveTab('ideas')}
-            onAddChannel={() => setChannelDialogOpen(true)}
+            onCreateNew={() => setNewPostOpen(true)}
           />
-          </>
         ) : activeTab === 'calendar' ? (
-          <CalendarView items={items} channels={channels} onSelectItem={setSelectedItem} />
+          <CalendarView
+            items={items}
+            channels={channels}
+            onSelectItem={setSelectedItem}
+            onReschedule={(item, targetDate) => handleUpdateItemFields(item.id, { targetDate })}
+            onCreateOnDay={(date) => {
+              pendingDate.current = date;
+              setNewPostOpen(true);
+            }}
+          />
         ) : activeTab === 'ideas' ? (
           <IdeasView
             key={sharedDraft ? 'shared-idea' : 'default-ideas'}
@@ -885,22 +1123,26 @@ const VaultShell: React.FC = () => {
               setChatFocus({ kind: 'idea', id: idea.id });
               setActiveTab('chat');
             }}
+            heading={activeChannel ? null : 'Ideas'}
+            createOpen={newIdeaOpen}
+            onCreateClose={() => setNewIdeaOpen(false)}
           />
         ) : null}
       </main>
       )}
-
-      <MobileTabBar activeTab={activeTab} onTab={setActiveTab} onNewPost={() => openEditor()} />
 
       {selectedItem ? (
         <ItemDetailModal
           key={`detail-${selectedItem.id}`}
           item={selectedItem}
           channels={channels}
+          authToken={authToken}
           onClose={() => setSelectedItem(null)}
-          onEditFiles={(item) => {
+          sourceIdea={ideas.find((i) => i.id === selectedItem.sourceIdeaId) ?? null}
+          onOpenIdea={(id) => {
             setSelectedItem(null);
-            openEditor(item);
+            setIdeaToOpen(id);
+            setActiveTab('ideas');
           }}
           onDelete={async (item) => {
             if (await handleDeleteItem(item)) setSelectedItem(null);
@@ -915,6 +1157,16 @@ const VaultShell: React.FC = () => {
         />
       ) : null}
 
+
+      {newPostOpen ? (
+        <NewPostDialog
+          channels={channels}
+          initialChannel={activeChannel?.name ?? ''}
+          onCreate={handleQuickCreatePost}
+          onClose={() => setNewPostOpen(false)}
+        />
+      ) : null}
+
       {editorOpen ? (
         <ItemEditorModal
           key={`editor-${editingItem?.id ?? 'new'}`}
@@ -926,22 +1178,112 @@ const VaultShell: React.FC = () => {
             setEditorOpen(false);
             setEditingItem(null);
           }}
-          onSave={handleSaveItem}
+          onSave={async (payload) => {
+            await handleSaveItem(payload);
+          }}
         />
       ) : null}
 
-      {settingsOpen && firebaseUser ? (
+      {settingsOpen && authUser ? (
         <AccountSettingsSheet
-          user={firebaseUser}
-          onClose={() => setSettingsOpen(false)}
-          onDeletionStarted={(id) => leaveForDeletionStatus(firebaseUser.uid, id)}
+          user={authUser}
+          getToken={getFreshToken}
+          intent={settingsIntent}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsIntent(null);
+          }}
+          onDeletionStarted={(id) => leaveForDeletionStatus(authUser.uid, id)}
         />
       ) : null}
       {channelDialogOpen ? (
         <AddChannelDialog onClose={() => setChannelDialogOpen(false)} onAdd={handleAddChannel} />
+      ) : null}
+      {editingChannel ? (
+        <AddChannelDialog
+          channel={editingChannel}
+          onClose={() => setEditingChannel(null)}
+          onAdd={(name, handle, platform) => handleEditChannel(editingChannel, name, handle, platform)}
+        />
       ) : null}
 
       <OfflineIndicator />
     </div>
   );
 };
+
+/* ---------------- Loading placeholders, one per page ---------------- */
+
+const shimmer = 'animate-pulse rounded bg-surface-2';
+
+/** Shown while the workspace loads after a refresh: the same shape as the page that's coming. */
+function PageSkeleton({ tab }: { tab: ActiveTab }) {
+  if (tab === 'calendar') {
+    return (
+      <div aria-busy="true" aria-label="Loading calendar" className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className={cx(shimmer, 'h-6 w-40')} />
+          <div className={cx(shimmer, 'h-10 w-48 rounded-full')} />
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+          <div className="grid grid-cols-7 border-b border-zinc-100 py-2.5 dark:border-zinc-800">
+            {Array.from({ length: 7 }, (_, i) => (
+              <div key={i} className={cx(shimmer, 'mx-auto h-2.5 w-8')} />
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {Array.from({ length: 35 }, (_, i) => (
+              <div key={i} className="h-20 border-b border-r border-zinc-100 p-2 sm:h-24 dark:border-zinc-800">
+                <div className={cx(shimmer, 'h-2.5 w-4')} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (tab === 'ideas') {
+    return (
+      <div aria-busy="true" aria-label="Loading ideas" className="space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className={cx(shimmer, 'h-10 flex-1 rounded-xl lg:max-w-md')} />
+          <div className={cx(shimmer, 'h-10 w-32 rounded-xl')} />
+        </div>
+        <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className="overflow-hidden rounded-2xl border border-border bg-surface">
+              <div className={cx(shimmer, 'aspect-[16/10] rounded-none')} />
+              <div className="space-y-2.5 p-4">
+                <div className={cx(shimmer, 'h-4 w-3/4')} />
+                <div className={cx(shimmer, 'h-3 w-full')} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  // Library
+  return (
+    <div aria-busy="true" aria-label="Loading library" className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[1, 2, 3, 4].map((n) => (
+          <div key={n} className={cx(shimmer, 'h-[72px] rounded-2xl')} />
+        ))}
+      </div>
+      <div className={cx(shimmer, 'h-10 w-full rounded-xl lg:max-w-xl')} />
+      <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3, 4].map((n) => (
+          <div key={n} className="overflow-hidden rounded-2xl border border-border bg-surface">
+            <div className={cx(shimmer, 'aspect-[4/3] rounded-none')} />
+            <div className="space-y-2.5 p-4">
+              <div className={cx(shimmer, 'h-3 w-1/3')} />
+              <div className={cx(shimmer, 'h-4 w-4/5')} />
+              <div className={cx(shimmer, 'h-3 w-full')} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

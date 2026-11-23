@@ -1,29 +1,53 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import React from 'react';
+import { MenuSelect, type MenuOption } from './MenuSelect';
 
-interface FormSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+/** Reads <option value>label</option> children (also inside fragments and arrays). */
+function optionsFrom(children: React.ReactNode): MenuOption[] {
+  const out: MenuOption[] = [];
+  const text = (node: React.ReactNode): string =>
+    React.Children.toArray(node)
+      .map((c) => (typeof c === 'string' || typeof c === 'number' ? String(c) : React.isValidElement(c) ? text((c.props as { children?: React.ReactNode }).children) : ''))
+      .join('');
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return;
+    const props = child.props as { value?: string | number; children?: React.ReactNode; disabled?: boolean };
+    if (child.type === 'option') {
+      if (props.disabled) return;
+      const label = text(props.children);
+      out.push({ value: String(props.value ?? label), label });
+    } else if (props.children) {
+      out.push(...optionsFrom(props.children));
+    }
+  });
+  return out;
+}
+
+interface FormSelectProps {
+  id?: string;
+  value: string | number;
+  /** Called like a native select's onChange: only `e.target.value` is set. */
+  onChange?: (e: { target: { value: string } }) => void;
+  disabled?: boolean;
+  className?: string;
+  'aria-label'?: string;
   children: React.ReactNode;
 }
 
-export const FormSelect: React.FC<FormSelectProps> = ({
-  children,
-  className = '',
-  ...props
-}) => {
-  return (
-    <div className="relative">
-      <select
-        {...props}
-        className={`h-11 w-full appearance-none rounded-xl border border-zinc-200 bg-white pl-3.5 pr-10 text-sm text-zinc-900 shadow-xs transition-colors hover:border-zinc-300 focus:border-electric-500 focus:outline-none focus:ring-4 focus:ring-electric-500/15 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-700 ${className}`}
-      >
-        {children}
-      </select>
-      <ChevronDown
-        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
-        aria-hidden="true"
-      />
-    </div>
-  );
-};
+/**
+ * Backlot's form dropdown. Same API as a native <select> with <option> children, rendered as the
+ * styled MenuSelect (not the browser's built-in list).
+ */
+export const FormSelect: React.FC<FormSelectProps> = ({ id, value, onChange, disabled, className = '', children, 'aria-label': ariaLabel }) => (
+  <MenuSelect
+    id={id}
+    value={String(value ?? '')}
+    onChange={(v) => onChange?.({ target: { value: v } })}
+    options={optionsFrom(children)}
+    ariaLabel={ariaLabel}
+    disabled={disabled}
+    className={className}
+    sizeClass={/(^|\s)h-/.test(className) ? '' : 'h-11'}
+  />
+);

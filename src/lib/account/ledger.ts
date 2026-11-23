@@ -10,7 +10,7 @@ import { readStorageConfig, UPLOAD_ROOT } from '../storage/index.ts';
  * Why: restoring an older database snapshot brings back the rows of accounts deleted after
  * that snapshot, and the restored account_deletions table doesn't know about them. The ledger
  * survives the restore, so the restore procedure can lock and re-delete every account Backlot
- * was asked to delete (scripts/reapply-deletions-after-restore.ts). A missing Firebase user is
+ * was asked to delete (scripts/reapply-deletions-after-restore.ts). A missing Supabase Auth user is
  * never treated as proof on its own.
  *
  * - Where: the private R2 bucket, under its own prefix (default `ledger/account-deletions/`),

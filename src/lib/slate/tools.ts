@@ -1,4 +1,4 @@
-import { getPlatformLabel, PLATFORM_OPTIONS, type PlatformKey } from '../content-logic.ts';
+import { getPlatformLabel, normalizeStatus, PLATFORM_OPTIONS, type PlatformKey } from '../content-logic.ts';
 import { sanitize } from './context.ts';
 import { describePreference, effectivePreferences, PREFERENCE_KEYS, PREFERENCE_SPECS, validatePreference, type PreferenceKey } from './preferences.ts';
 import type { ChannelRecord, IdeaRecord, PostRecord, SlateStore } from './types.ts';
@@ -36,8 +36,9 @@ import {
  * - Tool execution has no write access to posts, ideas or preferences.
  */
 
-export const STAGES = ['idea', 'scripting', 'editing', 'ready', 'posted'] as const;
-const STAGE_LABELS: Record<string, string> = { idea: 'Planned', scripting: 'Scripting', editing: 'Editing', ready: 'Ready', posted: 'Posted' };
+export const STAGES = ['idea', 'ready', 'posted'] as const;
+const STAGE_LABELS: Record<string, string> = { idea: 'Planned', ready: 'Made', posted: 'Posted' };
+const stageLabel = (status: string) => STAGE_LABELS[normalizeStatus(status)] ?? status;
 const PLATFORMS = PLATFORM_OPTIONS.map((p) => p.key);
 
 /** Caps shared by one request. */
@@ -150,7 +151,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'get_upcoming_content',
-    description: 'Unposted work (Planned, Scripting, Editing, Ready), soonest target date first, with real stored dates. Undated items come last.',
+    description: 'Unposted work (Planned and Made), soonest target date first, with real stored dates. Undated items come last.',
     parameters: {
       type: 'object',
       properties: {
@@ -447,7 +448,7 @@ function postSummary(p: PostRecord, terms: string[] = []) {
     title: clip(p.title, 160),
     platform: platformLabel(p.platform),
     channel: p.channelName || null,
-    stage: STAGE_LABELS[p.status] ?? p.status,
+    stage: stageLabel(p.status),
     ...dateOf(p),
     excerpt: excerpt(text, terms),
   };
@@ -550,7 +551,7 @@ const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 /** Pure: turns stored posts into the planning view the model sees. */
 export function buildCalendar(posts: PostRecord[], opts: { start: string; days: number; today: string }) {
   const end = shiftDate(opts.start, opts.days - 1);
-  const brief = (p: PostRecord) => ({ ref: `post:${p.id}`, title: clip(p.title, 100), stage: STAGE_LABELS[p.status] ?? p.status, channel: p.channelName || null, platform: platformLabel(p.platform) });
+  const brief = (p: PostRecord) => ({ ref: `post:${p.id}`, title: clip(p.title, 100), stage: stageLabel(p.status), channel: p.channelName || null, platform: platformLabel(p.platform) });
   const unposted = posts.filter((p) => p.status !== 'posted');
   const scheduled = unposted.filter((p) => isDate(p.targetDate) && p.targetDate >= opts.start && p.targetDate <= end);
   const byDay = new Map<string, PostRecord[]>();
@@ -602,7 +603,7 @@ function readPostChanges(a: Record<string, unknown>): PostChanges {
   return out as PostChanges;
 }
 
-const currentOf = (p: PostRecord): PostChanges => ({ title: p.title, caption: p.caption, tags: p.tags, notes: p.notes, status: p.status, targetDate: p.targetDate });
+const currentOf = (p: PostRecord): PostChanges => ({ title: p.title, caption: p.caption, tags: p.tags, notes: p.notes, status: normalizeStatus(p.status), targetDate: p.targetDate });
 
 /** A draft for one post, or a reason it can't be proposed. */
 async function postChangeDraft(ctx: ToolContext, postId: number, proposed: PostChanges, reason: string, batchKey?: string): Promise<ActionDraft | 'not_found' | 'no_change'> {
@@ -757,7 +758,7 @@ export async function executeTool(name: string, rawArgs: unknown, ctx: ToolConte
             title: clip(p.title, 300),
             platform: platformLabel(p.platform),
             channel: p.channelName || null,
-            stage: STAGE_LABELS[p.status] ?? p.status,
+            stage: stageLabel(p.status),
             ...dateOf(p),
             caption: clip(p.caption, 2000),
             tags: p.tags.slice(0, 30).map((t) => clip(t, 40)),

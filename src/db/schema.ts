@@ -30,6 +30,8 @@ export const channels = pgTable('channels', {
   userUid: text('user_uid').notNull(),
   name: text('name').notNull(),
   handle: text('handle').default('').notNull(),
+  /** youtube_long | youtube_short | instagram_reel | tiktok | instagram_post | other (2026-11-24 migration). */
+  platform: text('platform').default('other').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => [index('channels_user_idx').on(t.userUid)]);
 
@@ -72,6 +74,8 @@ export const ideas = pgTable('ideas', {
   linkTitle: text('link_title').default('').notNull(),
   linkDomain: text('link_domain').default('').notNull(),
   screenshotUrl: text('screenshot_url').default('').notNull(),
+  /** Reference images (uploaded file URLs, max 6); screenshotUrl mirrors the first (2026-11-25 migration). */
+  images: jsonb('images').$type<string[]>().default([]).notNull(),
   notes: text('notes').default('').notNull(),
   platform: text('platform').notNull().default('youtube_long'),
   channelName: text('channel_name').default('').notNull(),

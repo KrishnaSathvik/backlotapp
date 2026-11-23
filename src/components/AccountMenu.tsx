@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import BoringAvatar from 'boring-avatars';
-import { Check, Download, LogOut, Settings, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Check, Download, LogOut, Trash2 } from 'lucide-react';
 import { creatorIdentity } from '@/src/lib/identity';
 import { usePWAInstall } from '@/src/hooks/usePWAInstall';
 import { ThemeToggle } from './ThemeToggle';
 import { buttonStyles, cx, Sheet, SheetCloseButton, sizes } from './ui';
 
 export interface AccountInfo {
-  /** Firebase uid; null in the demo. */
+  /** Supabase Auth user id; null in the demo. */
   uid: string | null;
   isPreview: boolean;
 }
@@ -113,13 +114,13 @@ export function SidebarAccount({ account, onSignOut, onOpenSettings }: { account
           <button
             type="button"
             onClick={onOpenSettings}
-            aria-label="Settings"
-            title="Settings"
-            className="self-center rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            aria-label="Delete account"
+            title="Delete account"
+            className="self-center rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-zinc-500 dark:hover:bg-red-950/40 dark:hover:text-red-400"
           >
-            <Settings className="h-4 w-4" aria-hidden="true" />
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
           </button>
-        ) : (
+        ) : account.isPreview ? null : (
           <a
             href="/privacy"
             className="self-end rounded-md px-1 py-0.5 text-[11.5px] font-medium text-zinc-400 transition-colors hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
@@ -133,7 +134,22 @@ export function SidebarAccount({ account, onSignOut, onOpenSettings }: { account
 }
 
 /** Mobile top bar: the avatar opens a small card with the name and Log out. */
-export function AccountMenu({ account, onSignOut, onOpenSettings }: { account: AccountInfo; onSignOut: () => void; onOpenSettings?: () => void }) {
+export function AccountMenu({
+  account,
+  onSignOut,
+  onOpenSettings,
+  menuClassName,
+  avatarSize = 34,
+  buttonClassName,
+}: {
+  account: AccountInfo;
+  onSignOut: () => void;
+  onOpenSettings?: () => void;
+  /** Position the card. Defaults to dropping down from the right edge. */
+  menuClassName?: string;
+  avatarSize?: number;
+  buttonClassName?: string;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const id = useIdentity(account);
@@ -162,14 +178,17 @@ export function AccountMenu({ account, onSignOut, onOpenSettings }: { account: A
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Account: ${id.name}`}
-        className={cx('rounded-full transition-transform active:scale-95', open && 'ring-4 ring-electric-500/20')}
+        className={cx('rounded-full transition-transform active:scale-95', buttonClassName, open && 'ring-4 ring-electric-500/20')}
       >
-        <Avatar account={account} size={34} />
+        <Avatar account={account} size={avatarSize} />
       </button>
       {open ? (
         <div
           role="menu"
-          className="animate-pop-in absolute right-0 top-12 z-50 w-60 origin-top-right rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-2xl shadow-zinc-950/15 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/95 dark:shadow-black/50"
+          className={cx(
+            'animate-pop-in absolute z-50 w-60 rounded-2xl border border-border bg-surface p-1.5 shadow-2xl shadow-zinc-950/15',
+            menuClassName ?? 'right-0 top-12 origin-top-right'
+          )}
         >
           <div className="flex items-center gap-3 px-2.5 pb-2.5 pt-2">
             <Avatar account={account} size={36} />
@@ -179,6 +198,17 @@ export function AccountMenu({ account, onSignOut, onOpenSettings }: { account: A
             <ThemeToggle className="w-fit" />
           </div>
           <div className="mb-1 h-px bg-zinc-100 dark:bg-zinc-800" />
+          {account.isPreview ? (
+            <Link
+              href="/"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-[13.5px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to site
+            </Link>
+          ) : null}
           <InstallAppButton
             onDone={() => setOpen(false)}
             className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-[13.5px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -193,18 +223,10 @@ export function AccountMenu({ account, onSignOut, onOpenSettings }: { account: A
               }}
               className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-[13.5px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
-              <Settings className="h-4 w-4" aria-hidden="true" />
-              Settings
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              Delete account
             </button>
           ) : null}
-          <a
-            href="/privacy"
-            role="menuitem"
-            className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-[13.5px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-            Privacy
-          </a>
           <button
             type="button"
             role="menuitem"

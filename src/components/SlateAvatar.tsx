@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import React from 'react';
-import { cx } from './ui';
+import { cx } from '@/src/lib/cx';
 
 /**
  * Slate, the Backlot AI mascot (public/brand/slate-*.png).

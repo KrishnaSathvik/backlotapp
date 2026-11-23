@@ -8,11 +8,11 @@ import { opsEvent } from './ops-log.ts';
  *
  * | Job          | Route                                | OIDC invoker env          | Bearer secret env (fallback)          |
  * | ------------ | ------------------------------------ | ------------------------- | ------------------------------------- |
- * | `deletions`  | POST /api/internal/account-deletions | DELETION_WORKER_INVOKER   | DELETION_WORKER_SECRET                |
+ * | `deletions`  | GET/POST /api/internal/account-deletions | DELETION_WORKER_INVOKER | CRON_SECRET (or DELETION_WORKER_SECRET) |
  * | `maintenance`| POST /api/internal/cleanup           | MAINTENANCE_INVOKER       | MAINTENANCE_SECRET (or CLEANUP_SECRET)|
  *
- * Production on Vercel: the bearer secrets below, sent by the Cloudflare Worker scheduler
- * (ops/scheduler, docs/WORKERS.md).
+ * Production on Vercel: the deletions job is called hourly by Vercel Cron, which sends
+ * `Authorization: Bearer $CRON_SECRET`. The maintenance job has no schedule (docs/WORKERS.md).
  *
  * Optional (legacy Google Cloud): Cloud Scheduler OIDC. Set INTERNAL_OIDC_AUDIENCE (the service URL the scheduler
  * job targets, e.g. https://backlot-xyz.a.run.app) and the invoker service-account email per
@@ -27,7 +27,7 @@ import { opsEvent } from './ops-log.ts';
 export type InternalJob = 'deletions' | 'maintenance';
 
 const CONFIG: Record<InternalJob, { invokerEnv: string; secretEnvs: string[] }> = {
-  deletions: { invokerEnv: 'DELETION_WORKER_INVOKER', secretEnvs: ['DELETION_WORKER_SECRET'] },
+  deletions: { invokerEnv: 'DELETION_WORKER_INVOKER', secretEnvs: ['CRON_SECRET', 'DELETION_WORKER_SECRET'] },
   maintenance: { invokerEnv: 'MAINTENANCE_INVOKER', secretEnvs: ['MAINTENANCE_SECRET', 'CLEANUP_SECRET'] },
 };
 

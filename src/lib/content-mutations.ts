@@ -90,7 +90,7 @@ export type ConvertResult =
  * version. Otherwise the idea must still be at `expectedVersion` (null skips the check;
  * only used by the transitional unversioned path).
  */
-export async function convertIdeaVersioned(db: Db, uid: string, ideaId: number, expectedVersion: number | null): Promise<ConvertResult> {
+export async function convertIdeaVersioned(db: Db, uid: string, ideaId: number, expectedVersion: number | null, platformOverride?: string | null): Promise<ConvertResult> {
   return db.transaction(async (tx) => {
     // Lock the idea row so concurrent clicks cannot both convert it.
     const [idea] = await tx
@@ -111,7 +111,7 @@ export async function convertIdeaVersioned(db: Db, uid: string, ideaId: number, 
 
     const draft = convertIdeaToPostDraft({
       ...idea,
-      platform: idea.platform as PlatformKey,
+      platform: (platformOverride || idea.platform) as PlatformKey,
       createdAt: idea.createdAt.toISOString(),
     });
     const [item] = await tx

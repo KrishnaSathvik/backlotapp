@@ -25,3 +25,15 @@ test('creatorIdentity mixes avatar styles across accounts', () => {
   const variants = new Set(Array.from({ length: 50 }, (_, i) => creatorIdentity(`uid-${i}`).variant));
   assert.equal(variants.size, AVATAR_VARIANTS.length);
 });
+
+test('avatar palettes have no near-black colors (avatars stay visible on the dark theme)', () => {
+  const luminance = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  for (const palette of AVATAR_PALETTES) for (const color of palette) assert.ok(luminance(color) >= 0.08, `${color} is too dark`);
+});

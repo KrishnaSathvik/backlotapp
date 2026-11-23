@@ -4,27 +4,32 @@ This is the exact procedure for the owner to follow, or to authorize step by ste
 
 ## Status (2026-11-20)
 
-**Done:**
-- **Production database.** The Supabase project formerly named `content-vault` was renamed **`backlot`** (`pdhymiqjlzaanarleucv`, `us-east-2`). The owner set it up in the SQL Editor on 2026-11-20: legacy tables moved into `legacy_init` (§3.1a), all 8 migrations applied with exact checksums, roles `backlot_app` and `backlot_backup` created with passwords, and `ops/supabase/manual-setup/11_verify_readonly.sql` passed all 33 checks.
-- **Staging database deleted.** `backlot-staging` (`rzgfyzsjbfvdallduxio`) only ever held the legacy-table rehearsal. The owner deleted it on 2026-11-20. No staging Firebase, Vercel, R2 or Worker resources were ever created.
+**Done (all local; nothing committed, pushed or deployed):**
+- **Production database.** The Supabase project formerly named `content-vault` was renamed **`backlot`** (`pdhymiqjlzaanarleucv`, `us-east-2`). Set up in the SQL Editor on 2026-11-20: legacy tables moved into `legacy_init` (§3.1a), all 8 migrations with exact checksums, roles `backlot_app` and `backlot_backup` with passwords, `11_verify_readonly.sql` 33/33 `ok`. Data API off, SSL enforced. The app connects as `backlot_app` with the Supabase CA verified.
+- **Sign-in: Supabase Auth** (Firebase removed): Google's own button (`signInWithIdToken`, Google shows "continue to Backlot") with a redirect fallback, and email + password (§2). Google OAuth client `843813897401-…` with `http://localhost:3000` and `http://localhost` as JavaScript origins.
+- **Cloudflare R2:** bucket `backlot-media`, a bucket-scoped object token, CORS for `http://localhost:3000` (GET, HEAD, PUT). The owner ran the first real upload, preview, download and deletion through the local app.
+- **Staging database deleted.** `backlot-staging` (`rzgfyzsjbfvdallduxio`) only ever held the legacy-table rehearsal. The owner deleted it on 2026-11-20. No staging resources exist anywhere.
+
+**Owner decisions, 2026-11-20:** Vercel **Pro**, region `iad1` kept. No staging. Account deletion: prompt start + hourly Vercel Cron recovery (no Cloudflare Worker, no maintenance schedule). No backups. Custom SMTP deferred. GCS and other legacy code left in place.
 
 **Left:**
-1. `backlot` dashboard: Data API off (§3.1 step 3); SSL enforcement on and CA certificate saved (§3.1 step 2); security advisor clean (§3.1 step 8).
-2. **Owner decision: a staging environment or not.** The release checklist's failure tests (pausing the database, a wrong CA, broken R2 credentials) must not run against production. Keeping staging means creating a new free Supabase staging project (§3.1, then manual-setup 00–11 without the legacy transition) plus the rest of §5. Without staging, those tests are skipped or need a recorded decision.
-3. Firebase production project (§2), R2 (§3.2), Worker scheduler (§3.3), Vercel (§3.4), backups (§3.5), Slate provider keys (§3.6), domain (§3.7).
-4. RELEASE_CHECKLIST.md, then the owner's explicit release approval.
+1. **Set `CRON_SECRET` in Vercel** so the hourly deletion recovery run is accepted (WORKERS.md).
+2. **Vercel Pro project and variables** (DEPLOYMENT.md "Vercel Pro environment checklist"), then the production domain in Supabase URL Configuration, the Google OAuth origins and the R2 CORS policy.
+3. **No staging:** the release checklist's failure tests (pausing the database, a wrong CA, broken R2 credentials) must not run against production, so they're skipped or need a recorded decision.
+4. Deferred: custom SMTP for sign-in emails (Supabase's built-in sender is rate-limited), the R2 lifecycle rule (abort incomplete multipart uploads after 7 days), Supabase security advisor check.
+5. RELEASE_CHECKLIST.md, legal review, then the owner's explicit release approval.
 
-Related: [DEPLOYMENT.md](DEPLOYMENT.md) (env inventory, migrations, rollback), [STORAGE.md](STORAGE.md) (R2 CORS JSON), [WORKERS.md](WORKERS.md) (scheduler), [BACKUPS.md](BACKUPS.md) (backups, key custody, restore), [COSTS.md](COSTS.md) (allowances), [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) (final verification).
+Related: [DEPLOYMENT.md](DEPLOYMENT.md) (env inventory, migrations, rollback), [STORAGE.md](STORAGE.md) (R2 CORS JSON), [WORKERS.md](WORKERS.md) (scheduler), [BACKUPS.md](BACKUPS.md) (backups, key custody, restore), [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) (final verification).
 
 ## Owner decisions this guide follows (2026-11-18)
 
 | Decision | Value |
 | --- | --- |
-| Use | Personal, noncommercial, limited-access private beta. A commercial launch means moving off Vercel Hobby first. |
-| Hosting | Vercel Hobby, region `iad1` (Washington, D.C.) |
+| Use | Limited-access private beta. |
+| Hosting | **Vercel Pro** (owner confirmed 2026-11-20), region `iad1` (Washington, D.C.). Keep `iad1`; don't change the region based on estimated latency. |
 | Database | Supabase Free. **Production reuses the existing project formerly named `content-vault`, renamed `backlot` on 2026-11-20** (`pdhymiqjlzaanarleucv`, East US, Ohio, `us-east-2`; decision 2026-11-19). Staging, if used, is a separate, disposable project in the same region (the first one was deleted on 2026-11-20). Vercel stays `iad1` until staging measures the latency. |
 | Media | Private Cloudflare R2 bucket |
-| Authentication | Firebase Authentication with Google sign-in, in a **dedicated Backlot Firebase project** (if the check in §2 finds no real users in the old project) |
+| Authentication | **Supabase Authentication with Google sign-in**, in the same `backlot` project (decision 2026-11-20; replaces the earlier Firebase plan). Identity only: data still goes through Drizzle and `backlot_app`, and the Data API stays off. |
 | Slate | OpenAI GPT-6.1 Sol primary, Claude Opus 5.5 fallback. No other providers. |
 | Supabase pausing | Accepted during the private beta (see the note in §4) |
 | Backup decryption key | Held by the owner only |
@@ -36,50 +41,50 @@ Free allowances are **not** spending caps. "Can charge" means usage beyond an al
 
 | Service | Needs billing details? | Can it charge? | What stops or limits a bill |
 | --- | --- | --- | --- |
-| Vercel Hobby | No | No overage billing on Hobby; over-limit usage is paused instead (verify the current Hobby terms) | Plan limits. **Hobby is personal, non-commercial use only.** |
+| Vercel Pro | Yes (subscription) | **Yes**: the monthly fee, plus usage beyond Pro's included amounts | **Spend Management** (Settings → Billing): set an amount and whether to pause projects when it's reached |
 | Supabase Free | No | No | Free-plan limits (500 MB database, 2 active projects per organization); the project pauses after low activity |
 | Cloudflare R2 | **Yes.** Enabling R2 goes through a checkout that adds a payment method, even to use only the free allowance | **Yes**, beyond 10 GB-month storage and the Class A/B operation allowances (egress is free) | No hard cap. Backlot's own limits (1 GB per creator, 9.5 GB app ceiling) plus Cloudflare billing notifications |
-| Cloudflare Workers (scheduler) | No, on the Free plan | No, on the Free plan. Don't upgrade to Workers Paid; ~290 calls a day is far within Free | Free plan request limits |
-| Firebase Authentication (Spark plan) | No | No for Google sign-in on Spark. Upgrading to Blaze or to Identity Platform adds usage billing; neither is needed | Stay on Spark; decline upgrade prompts |
-| Google Cloud (service-account key for Firebase Admin) | No | No | Creating a service account and key doesn't need billing |
-| GitHub Actions (backups) | No for a private repository within the free minutes | Only if the account's Actions spending limit is above $0 | The nightly job uses about 2–3 minutes a day. Keep the spending limit at $0 |
+| Supabase Auth | No | No on Free (50,000 monthly active users included) | Free-plan limits |
+| Google Cloud (OAuth client for Google sign-in) | No | No | Creating an OAuth client doesn't need billing |
+| GitHub Actions (backups) | No for a private repository within the free minutes | Only if the account's Actions spending limit is above $0 | Manual-only; nothing runs unless started. Keep the spending limit at $0 |
 | OpenAI API | **Yes** (prepaid credits or billing) | **Yes**, per token | Project budget and usage limits in the OpenAI dashboard, plus Backlot's per-creator Slate limits |
 | Anthropic API | **Yes** | **Yes**, per token (only on fallback) | Workspace spend limit in the Anthropic Console |
 | Domain name | **Yes** (registrar) | Yearly renewal | Registrar auto-renew settings |
 
-## 2. Firebase: identity decision
+## 2. Sign-in: Supabase Auth (Google, and email + password)
 
-**What was checked.** Nothing in this repository records a production Firebase user. The repository has no export of user records, and no code or script reads the old AI Studio database. As instructed, that database was not accessed. The Firebase project in `firebase-applet-config.json` (`gen-lang-client-0425820524`) was created by AI Studio, and this machine's `gcloud` account can't read it (docs/OPERATIONS.md, discovery).
+Decision 2026-11-20: Supabase Authentication replaces Firebase Authentication. Backlot has no users yet, so no accounts migrate. The old Firebase project (`gen-lang-client-0425820524`) and the AI Studio app are left untouched and are no longer used.
 
-So whether real people already depend on it can't be determined from here. The owner checks two things, both read-only:
+**How it works in code:**
 
-1. **Firebase console** → project `gen-lang-client-0425820524` → **Authentication → Users**. Is there anyone other than the owner and test accounts?
-2. **Whether the old AI Studio app is in use by anyone.** Its data lives in its own database, which stays untouched.
+| Piece | File | What it does |
+| --- | --- | --- |
+| Google button | `src/lib/google-identity.ts`, `src/components/GoogleSignInButton.tsx` | Google's official button (Google Identity Services) on Backlot's own origin returns a Google ID token; `signInWithIdToken` (with a hashed nonce) turns it into a Supabase session. Google's screens name Backlot's site, not the Supabase domain. Falls back to the redirect flow if the script can't load. |
+| Email + password | `src/lib/supabase/browser.ts` (`signUpWithPassword`, `signInWithPassword`), `src/components/auth/AuthPanel.tsx` | `signUp` / `signInWithPassword`. Minimum 8 characters (checked in the browser; Supabase's own minimum still applies). "Confirm email" is **off** (owner decision), so sign-up signs the person in at once and no email is sent. No magic links and no password reset (owner decision). |
+| Browser session | `src/lib/supabase/browser.ts` | The session is kept in first-party `sb-…` cookies and refreshed automatically. Redirect fallback: `signInWithOAuth` (PKCE). |
+| Callback | `app/auth/callback/route.ts` | PKCE code exchange for the Google redirect fallback. Redirects only to a path on this site (`src/lib/supabase/redirect.ts`). |
+| Session refresh | `middleware.ts` | Refreshes an expired access token on each request that has a session cookie. It isn't access control. |
+| Server identity | `src/lib/supabase/server.ts`, `src/lib/auth-server.ts` | `requireUser` verifies the access token (Bearer header, else cookies) with `auth.getClaims()`. The uid is the token's `sub`, never anything the browser sends. Fails closed (401). |
+| Account deletion | `src/lib/account/supabase-identity.ts` | Admin API with `SUPABASE_SECRET_KEY`: ban (revokes refresh), hard delete, existence check. |
 
-**Decision rule:**
+Supabase user ids are UUIDs, stored in the existing text uid columns. No schema change.
 
-| Result | Action |
-| --- | --- |
-| **No real users** (expected) | Create a **dedicated Backlot Firebase project** (below). Nothing migrates. The old project and the AI Studio app are left as they are. |
-| **Real users exist** | Stop before changing projects. In a new Firebase project each person signing in gets a **new uid**, and Backlot keys all their data by uid, so their content would no longer be theirs. Keeping uids requires exporting users from the old project and importing them into the new one (`firebase auth:export` / `auth:import`). That's an identity migration needing its own approval, plus access to the old project, which this machine doesn't have. The alternative is to keep the old project once the owner has confirmed they own it. Don't create or delete any accounts until that's decided. |
+### Setup [confirm]
 
-### Dedicated Firebase projects [confirm]
+Done by the owner on 2026-11-20: the Google provider is enabled with the Google OAuth client id and secret. Google's authorized redirect URI is `https://pdhymiqjlzaanarleucv.supabase.co/auth/v1/callback`.
 
-Create **two** projects: `backlot` (production) and `backlot-staging` (disposable). Staging must have its own project, because deleting a staging account deletes its Firebase user. With a shared project, a staging test could delete a real person's production sign-in.
+Still to do:
 
-For each project:
+1. **Authentication → URL Configuration:**
+   - **Site URL:** `http://localhost:3000` for now (the production URL once Backlot is deployed).
+   - **Redirect URLs:** add `http://localhost:3000/**`. The callback is `/auth/callback?next=…`, and the wildcard covers the query string. Later, add `https://<production-domain>/**`. Supabase sends anything not listed to the Site URL instead.
+2. **Project Settings → API Keys:** copy the **publishable** key into `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (already in `.env.local`). Create or copy a **secret** key into `SUPABASE_SECRET_KEY`: `.env.local` for local account-deletion testing, Vercel (Sensitive) in production. Never use a `NEXT_PUBLIC_` name for the secret key. The config check refuses one.
+3. **Google Cloud → Credentials → the OAuth client (`843813897401-…`) → Authorized JavaScript origins:** add `http://localhost:3000` and `http://localhost` (later `https://<production-domain>`). Without it Google's button refuses to load ("The given origin is not allowed"). The client id goes in `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (public).
+4. **Email + password:** the Email provider is enabled and "Confirm email" is off (owner decision, 2026-11-20). No SMTP is configured, so Backlot sends no auth emails. Known limits: no self-service password reset, and email addresses aren't verified (see the security note below).
+5. **Google Cloud → OAuth consent screen (Branding):** app name "Backlot", support email, privacy and terms URLs, authorized domain. Otherwise Google's screen shows the Supabase domain.
+6. **Optional:** Authentication → Providers: keep only Google and Email enabled. Anonymous sign-ins stay off (the server rejects them anyway).
 
-1. [Firebase console](https://console.firebase.google.com) → **Add project**. Google Analytics: **off** (Backlot doesn't use it, and the privacy page doesn't cover it). Plan: **Spark**.
-2. **Authentication → Get started → Sign-in method → Google → Enable.** Set the public-facing name to "Backlot" and the support email to the owner's address.
-3. **Authentication → Settings → Authorized domains:** add the domains that will host sign-in (production: the custom domain and `<project>.vercel.app`; staging: the staging branch domain, §5). Remove anything else except `localhost`, which only the staging project keeps, for local development.
-4. **Google Cloud console** for the same project → **APIs & Services → OAuth consent screen (Google Auth Platform → Branding):** app name "Backlot", support email, privacy and terms URLs (`/privacy`, `/terms`), authorized domain. Without this, Google's sign-in screen shows the raw project id.
-5. **Project settings → General → Your apps → Add app → Web.** Copy the config (`apiKey`, `authDomain`, `projectId`, `appId`, `messagingSenderId`, `storageBucket`). These values are public by design.
-   - **Production:** replace the values in `firebase-applet-config.json` (a code change the owner commits). The default build then signs in to `backlot`.
-   - **Staging:** don't edit the file. Set the same JSON as one line in the Vercel variable `NEXT_PUBLIC_FIREBASE_CONFIG`, scoped to the staging branch (§3.4). It's a build-time value: redeploy after changing it.
-6. **Admin credential** (account deletion revokes sessions and deletes the sign-in): Google Cloud console → **IAM & Admin → Service accounts → Create** `backlot-auth-admin`, role **Firebase Authentication Admin** only → **Keys → Add key → JSON**. Put the JSON only into Vercel (`FIREBASE_SERVICE_ACCOUNT_JSON`, marked Sensitive) and the owner's password manager. Delete the downloaded file. If key creation is blocked by an organization policy, use an account outside that organization.
-7. Optional hardening: Google Cloud → **APIs & Services → Credentials** → the browser API key → restrict it to HTTP referrers for the app's domains, and to the Identity Toolkit and Token Service APIs.
-
-The startup config check refuses to run when the service account, `FIREBASE_PROJECT_ID` and the browser config point at different projects.
+**Security note (email confirmation off).** Nobody proves they own the address they sign up with. Supabase links a later Google sign-in to an existing user with the same email, and removes only *unconfirmed* identities when it does; with confirmation off, password sign-ups are auto-confirmed. So someone could register a victim's address with a password first, and when the victim later signs in with Google, both may reach the same account (pre-account takeover). Supabase's docs don't spell out this case; treat it as likely until tested. Turning "Confirm email" on (which needs custom SMTP) closes it. Also: there's no password reset, so a forgotten password means a lost account, and support can't safely reset one, because the registered address was never verified.
 
 ## 3. Setup steps by service
 
@@ -131,36 +136,30 @@ Procedure: rehearse each step on staging first, with the same legacy objects cre
    - `backlot-backups-rw`: **Object Read & Write**, the backups bucket only → GitHub secrets (§3.5).
 6. **Billing → Notifications:** set a usage/billing notification at a small amount (for example $1). It's an alert, not a cap.
 
-### 3.3 Cloudflare Worker scheduler [confirm]
+### 3.3 Deletion cron
 
-Account deletion and maintenance don't run until this is deployed (WORKERS.md).
-
-1. In `ops/scheduler/wrangler.toml`, set `BACKLOT_ORIGIN` (production) or `[env.staging.vars] BACKLOT_ORIGIN` (staging) to the exact https origin.
-2. From `ops/scheduler/`: `npx wrangler login`, then for production:
-   `npx wrangler secret put DELETION_WORKER_SECRET`, `npx wrangler secret put MAINTENANCE_SECRET`, `npx wrangler deploy`.
-   For staging, add `--env staging` to each command, plus `npx wrangler secret put VERCEL_PROTECTION_BYPASS --env staging` (§5).
-3. Use the same two secret values as that environment's Vercel variables. They must differ from each other and be 32+ characters (`openssl rand -base64 48`).
-4. Check that the Worker is on the **Free** plan and shows both Cron Triggers.
+Nothing to set up outside Vercel: `vercel.json` defines the hourly cron, and `CRON_SECRET` (Vercel, Production) authenticates it (WORKERS.md).
 
 ### 3.4 Vercel [confirm]
 
 Prerequisite: the code is committed and pushed to a GitHub repository (the owner's commit; the agent doesn't commit). A **private** repository is recommended (BACKUPS.md: workflow logs and the 60-day schedule rule).
 
-1. [vercel.com](https://vercel.com) → Hobby account → **Add New → Project** → import the repository. Framework: Next.js (detected); root: repository root; build command: default (`next build`).
+1. [vercel.com](https://vercel.com) → Pro team → **Add New → Project** → import the repository. Framework: Next.js (detected); root: repository root; build command: default (`next build`).
 2. **Settings → Functions:** confirm **Fluid compute** is on, the region is `iad1` (from `vercel.json`), and the maximum duration allows 300 s. `vercel.json` asks for chat 300 s, the deletion worker 120 s and maintenance 180 s. A rejected value fails the deployment, which is the signal to adjust.
 3. **Settings → General → Node.js version:** the newest LTS offered.
 4. **Settings → Environment Variables:** enter the variables from DEPLOYMENT.md "Environment variables", marking secrets **Sensitive**.
    - **Production** environment: production values only.
-   - **Preview** environment, **scoped to the branch `staging`**: the staging values, including `NEXT_PUBLIC_FIREBASE_CONFIG`. Don't define production secrets for "all Preview branches".
+   - **Preview** environment, **scoped to the branch `staging`**: the staging values (its own Supabase URL and keys). Don't define production secrets for "all Preview branches".
 5. **Settings → Deployment Protection:** keep **Vercel Authentication** on for Preview deployments. For staging scheduling, create a **Protection Bypass for Automation** secret and give it only to the staging Worker (`VERCEL_PROTECTION_BYPASS`).
 6. Deploy (staging: push the `staging` branch). Open `/api/health?ready=1`: expect 200 and `config.ok` in the logs.
 
-### 3.5 GitHub Actions backups [confirm]
+### 3.5 GitHub Actions backups (not configured: owner decision)
+
+The workflow is manual-only. Only if that decision changes:
 
 1. **Key pair** on the owner's machine (BACKUPS.md "Key custody"): `age-keygen -o backlot-backup.key`. Two copies of the private key: password manager plus an offline copy. The printed `age1…` public key is the only part GitHub gets.
 2. Repository → **Settings → Secrets and variables → Actions:** `BACKUP_DATABASE_URL` (the **session pooler** URL as `backlot_backup.<ref>`), `BACKUP_AGE_RECIPIENT`, `BACKUP_R2_ENDPOINT` (`https://<account-id>.r2.cloudflarestorage.com`), `BACKUP_R2_BUCKET`, `BACKUP_R2_ACCESS_KEY_ID`, `BACKUP_R2_SECRET_ACCESS_KEY`. For staging, point a manual run at the staging project, or use a fork's secrets, and keep the production secrets separate.
-3. The owner must be the person who commits `.github/workflows/db-backup.yml` (GitHub sends scheduled-run failures to whoever last changed its cron line) and must have **Settings → Notifications → Actions** email on.
-4. **Actions → db-backup → Run workflow** once. Then do the restore test (RELEASE_CHECKLIST S-BK2). Backups count as operational only after that restore passes.
+3. **Actions → db-backup → Run workflow**. Then do the restore test (RELEASE_CHECKLIST S-BK2). Backups count as operational only after that restore passes.
 
 ### 3.6 Slate providers [confirm: paid]
 
@@ -177,10 +176,9 @@ Prerequisite: the code is committed and pushed to a GitHub repository (the owner
    | Where | Value |
    | --- | --- |
    | Vercel `SITE_URL` (Production) | `https://<domain>` |
-   | Firebase `backlot` → Authorized domains | add `<domain>` |
+   | Supabase → Authentication → URL Configuration | Site URL `https://<domain>`; Redirect URLs add `https://<domain>/**` |
    | Google OAuth consent screen → Authorized domains | add `<domain>` |
    | R2 `backlot-media` CORS `AllowedOrigins` | add `https://<domain>` |
-   | Worker `BACKLOT_ORIGIN` | `https://<domain>`, then `npx wrangler deploy` |
 
    Redeploy production after changing `SITE_URL`.
 
@@ -188,11 +186,11 @@ Prerequisite: the code is committed and pushed to a GitHub repository (the owner
 
 Supabase pauses a Free project when **database activity** has been low for 7 days, and only the owner can resume it (dashboard → project → Resume). While it's paused, Backlot's API returns 503 everywhere. A deletion request can't be accepted: the creator sees "Couldn't start deleting your account. Nothing was deleted." A deletion that was already accepted stays locked and waiting, and the status page says progress can't be checked and that deletion continues automatically.
 
-The deletion scheduler queries the database every 5 minutes (about 2,000 small queries a week). Supabase says a few requests a day typically prevent pausing, so in practice **the scheduler will probably keep the project from pausing**. That traffic is the deletion job doing its real work, not traffic added to avoid pausing, and nothing more should be added for that purpose. Don't rely on it either way: Supabase doesn't guarantee it, and the owner's decision to accept pausing stands. If the project does pause, resume it from the dashboard; queued deletions then complete within one or two scheduler runs.
+The hourly deletion run queries the database (about 170 small queries a week). Supabase says a few requests a day typically prevent pausing, so it may keep the project awake, but don't rely on it: Supabase doesn't guarantee it, and the owner's decision to accept pausing stands. If the project does pause, resume it from the dashboard; queued deletions then complete on the next hourly run.
 
 ## 5. Disposable staging environment
 
-Purpose: run the full release checklist against **real** Vercel, Supabase, R2 and Firebase, with **synthetic** data only, then throw it away.
+Purpose: run the full release checklist against **real** Vercel, Supabase (database and Auth) and R2, with **synthetic** data only, then throw it away.
 
 | Piece | Staging | Production |
 | --- | --- | --- |
@@ -200,15 +198,14 @@ Purpose: run the full release checklist against **real** Vercel, Supabase, R2 an
 | Vercel variables | Preview, scoped to branch `staging` | Production |
 | Database | Supabase project `backlot-staging` (same region) | `backlot` |
 | Media and backups | `backlot-media-staging`, `backlot-db-backups-staging`, their own tokens | `backlot-media`, `backlot-db-backups` |
-| Identity | Firebase project `backlot-staging` (`NEXT_PUBLIC_FIREBASE_CONFIG`) and its own service account | Firebase project `backlot` (`firebase-applet-config.json`) |
-| Scheduler | `backlot-scheduler-staging` (`--env staging`), with `VERCEL_PROTECTION_BYPASS` | `backlot-scheduler` |
+| Identity | Supabase Auth of the staging project (its own URL and keys) | Supabase Auth of `backlot` |
 | Slate keys | Separate low-budget keys | Production keys |
 | Accounts | Dedicated test Google accounts (A, B, C), never anyone's real account | Real creators |
 | Data | Synthetic only: made-up posts and ideas, generated test images, a public-domain or self-made test video | Real |
 
 **Supabase project limit:** the Free plan allows **two active projects** per organization. Staging plus production uses both, so the restore drill (S-BK2) needs a third. Restore into the staging project after a `--clean` reset, or pause or delete staging first. Don't restore over production.
 
-**Teardown after sign-off:** `npx wrangler delete --env staging`; delete the staging Vercel variables and the `staging` branch deployments; delete the staging Supabase project; empty and delete both staging buckets and revoke their tokens; delete the staging Firebase service-account key (and the project, if no further testing is planned); revoke the staging Slate keys; delete the test Google accounts' Backlot data through the app's account deletion first.
+**Teardown after sign-off:** delete the staging Vercel variables and the `staging` branch deployments; delete the staging Supabase project; empty and delete both staging buckets and revoke their tokens; revoke the staging Slate keys; delete the test Google accounts' Backlot data through the app's account deletion first.
 
 ## 6. Secrets: where each one lives
 
@@ -216,13 +213,13 @@ Purpose: run the full release checklist against **real** Vercel, Supabase, R2 an
 | --- | --- | --- |
 | `DATABASE_URL` (as `backlot_app`) | Vercel (Sensitive) | Git, the browser |
 | `DATABASE_MIGRATION_URL` (postgres) | Owner's `.env.local`, password manager | Vercel, GitHub |
-| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (media) | Vercel | GitHub, Worker |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Vercel, password manager | Git, local disk after setup |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (media) | Vercel | GitHub |
+| `SUPABASE_SECRET_KEY` (Auth admin, account deletion) | Vercel (Sensitive), owner's `.env.local`, password manager | Git, the browser, any `NEXT_PUBLIC_` name |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Vercel | Git |
-| `DELETION_WORKER_SECRET`, `MAINTENANCE_SECRET` | Vercel and the Worker (same values, per environment) | Git |
-| `VERCEL_PROTECTION_BYPASS` | Staging Worker only | Production |
+| `CRON_SECRET` (deletion recovery run) | Vercel (Production) | Git, the browser |
+| `MAINTENANCE_SECRET` (optional, manual runs) | Vercel, password manager | Git, the browser |
 | `BACKUP_*` (backup role, R2 backups token, age **public** key) | GitHub Actions secrets | Vercel |
 | age **private** key | Owner's password manager plus one offline copy | GitHub, Vercel, Supabase, Cloudflare, the backups bucket |
 | Supabase `postgres` password | Password manager | Anywhere the app runs |
 
-Nothing secret uses a `NEXT_PUBLIC_` name. `NEXT_PUBLIC_FIREBASE_CONFIG` holds only the public web config.
+Nothing secret uses a `NEXT_PUBLIC_` name. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are public by design. The Google OAuth client secret lives only in Supabase's provider settings.

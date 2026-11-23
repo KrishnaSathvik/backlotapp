@@ -5,6 +5,7 @@ import { requireUser } from '@/src/lib/auth-server.ts';
 import {
   assertOwnsFiles,
   badRequest,
+  ideaImagesInput,
   errorResponse,
   platform,
   readJson,
@@ -22,7 +23,10 @@ export async function POST(request: NextRequest) {
     const linkUrl = str(body.linkUrl, 2048, 'Link').trim();
     const linkTitle = str(body.linkTitle, 300, 'Link title').trim();
     const notes = str(body.notes, 20000, 'Notes').trim();
-    const screenshotUrl = str(body.screenshotUrl, 2048, 'Screenshot').trim();
+    const screenshotInput = str(body.screenshotUrl, 2048, 'Screenshot').trim();
+    const images = ideaImagesInput(body.images);
+    if (!images.length && screenshotInput) images.push(screenshotInput);
+    const screenshotUrl = images[0] ?? '';
 
     if (!title && !linkUrl && !notes && !screenshotUrl) {
       return badRequest('Add a title, link, screenshot, or note to capture an idea.');
@@ -33,7 +37,7 @@ export async function POST(request: NextRequest) {
     if (screenshotUrl && !screenshotUrl.startsWith('/api/files/')) {
       return badRequest('Screenshot must be an uploaded image.');
     }
-    await assertOwnsFiles(user.uid, screenshotUrl);
+    await assertOwnsFiles(user.uid, images);
 
     const [created] = await db
       .insert(ideas)
@@ -44,6 +48,7 @@ export async function POST(request: NextRequest) {
         linkTitle,
         linkDomain: str(body.linkDomain, 300, 'Link domain'),
         screenshotUrl,
+        images,
         notes,
         platform: platform(body.platform),
         channelName: str(body.channelName, 200, 'Channel'),

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, ArrowRight, CalendarClock, Check, FilePlus2, Lightbulb, Pencil, RefreshCw, Wand2, X } from 'lucide-react';
 import type { ContentItem, IdeaItem } from '@/src/lib/content-logic';
 import { marksPosted, POSTED_NOTE, STAGE_KEYS, STAGE_LABEL, type ActionView, type ChangeField, type PostChanges } from '@/src/lib/slate/actions';
+import { MenuSelect } from './MenuSelect';
 import { cx, useFeedback } from './ui';
 
 /**
@@ -197,13 +198,7 @@ const ActionCard: React.FC<{
       );
     if (f === 'status')
       return (
-        <select value={String(v)} onChange={(e) => set(e.target.value)} aria-label="Stage" className={base}>
-          {STAGE_KEYS.map((s) => (
-            <option key={s} value={s}>
-              {STAGE_LABEL[s]}
-            </option>
-          ))}
-        </select>
+        <MenuSelect value={String(v)} onChange={set} ariaLabel="Stage" options={STAGE_KEYS.map((s) => ({ value: s, label: STAGE_LABEL[s] }))} />
       );
     if (f === 'targetDate') return <input type="date" value={String(v ?? '')} onChange={(e) => set(e.target.value)} aria-label="Target date" className={base} />;
     return <input value={String(v ?? '')} onChange={(e) => set(e.target.value)} maxLength={300} aria-label={FIELD_LABEL[f]} className={base} />;
@@ -309,7 +304,7 @@ const ActionCard: React.FC<{
           <button
             type="button"
             onClick={() => onOpenPost(a.resultPostId!)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-emerald-700 hover:bg-white dark:text-emerald-400 dark:hover:bg-zinc-800"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-link hover:bg-surface"
           >
             <Check className="h-3.5 w-3.5" aria-hidden="true" />
             Open post

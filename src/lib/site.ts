@@ -12,15 +12,15 @@ type Env = Record<string, string | undefined>;
 export const SITE_NAME = 'Backlot';
 export const SITE_TAGLINE = 'Every post, one backlot';
 export const SITE_DESCRIPTION =
-  'Backlot is a private workspace for creators to keep YouTube videos, Shorts, Reels, TikToks and Instagram posts together: covers, videos, slides, captions, hashtags and ideas, with Slate, an AI creative partner that answers from your own saved posts.';
+  'A private workspace for creators: keep every video, Reel, TikTok and post with its files, captions and ideas, plus Slate, an AI partner that knows your work.';
 
 /** Indexable public pages: path, title for breadcrumbs, and when their content last changed. */
 export const PUBLIC_PAGES = [
-  { path: '/', name: 'Home', updated: '2026-11-17' },
-  { path: '/slate', name: 'Slate', updated: '2026-11-17' },
-  { path: '/support', name: 'Help & support', updated: '2026-11-17' },
-  { path: '/privacy', name: 'Privacy Policy', updated: '2026-11-17' },
-  { path: '/terms', name: 'Terms of Service', updated: '2026-11-17' },
+  { path: '/', name: 'Home', updated: '2026-11-20' },
+  { path: '/slate', name: 'Slate', updated: '2026-11-20' },
+  { path: '/support', name: 'Help & support', updated: '2026-11-20' },
+  { path: '/privacy', name: 'Privacy Policy', updated: '2026-11-20' },
+  { path: '/terms', name: 'Terms of Service', updated: '2026-11-20' },
 ] as const;
 
 export type PublicPath = (typeof PUBLIC_PAGES)[number]['path'];
@@ -74,9 +74,12 @@ export function absoluteUrl(path: string, env: Env = process.env): string | null
   return base ? `${base}${path === '/' ? '/' : path}` : null;
 }
 
-/** The contact address shown on public pages (PRIVACY_CONTACT_EMAIL). Never invented. */
+/** Backlot's support and privacy address, chosen by the owner (2026-11-20). */
+export const SUPPORT_EMAIL = 'support@getbacklot.app';
+
+/** The contact address shown on public pages: PRIVACY_CONTACT_EMAIL if set, else SUPPORT_EMAIL. */
 export function contactEmail(env: Env = process.env): string | null {
-  return env.PRIVACY_CONTACT_EMAIL?.trim() || null;
+  return env.PRIVACY_CONTACT_EMAIL?.trim() || SUPPORT_EMAIL;
 }
 
 /** Serialize JSON-LD for a <script> tag without allowing it to close the tag. */

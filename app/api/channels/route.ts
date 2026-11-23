@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { channels } from '@/src/db/schema.ts';
 import { requireUser } from '@/src/lib/auth-server.ts';
-import { badRequest, errorResponse, readJson, str } from '@/src/lib/api-utils.ts';
+import { badRequest, errorResponse, platform, readJson, str } from '@/src/lib/api-utils.ts';
 
 export async function POST(request: NextRequest) {
   const { user, response } = await requireUser(request);
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     const [created] = await db
       .insert(channels)
-      .values({ userUid: user.uid, name, handle })
+      .values({ userUid: user.uid, name, handle, platform: body.platform === undefined ? 'other' : platform(body.platform) })
       .returning();
 
     return NextResponse.json({ channel: created }, { status: 201 });

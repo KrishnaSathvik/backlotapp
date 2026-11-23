@@ -1,4 +1,4 @@
-import { getPlatformLabel, type PlatformKey } from '../content-logic.ts';
+import { getPlatformLabel, normalizeStatus, type PlatformKey } from '../content-logic.ts';
 import { PREFERENCE_SPECS, type EffectivePreference } from './preferences.ts';
 import type { ChannelRecord, IdeaRecord, PostRecord } from './types.ts';
 
@@ -13,9 +13,7 @@ export const CONTEXT_CHAR_BUDGET = 12_000;
 
 const STATUS_LABELS: Record<string, string> = {
   idea: 'Planned',
-  scripting: 'Scripting',
-  editing: 'Editing',
-  ready: 'Ready',
+  ready: 'Made',
   posted: 'Posted',
 };
 
@@ -33,7 +31,7 @@ function clip(text: string, max: number): string {
 }
 
 const platform = (p: string) => getPlatformLabel(p as PlatformKey) || p;
-const stage = (s: string) => STATUS_LABELS[s] ?? s;
+const stage = (s: string) => STATUS_LABELS[normalizeStatus(s)] ?? s;
 const quote = (text: string, max: number) => `"${clip(text, max)}"`;
 
 function postDates(p: PostRecord): string {
@@ -106,9 +104,8 @@ export function buildContextBlock(parts: ContextParts, budget = CONTEXT_CHAR_BUD
   if (parts.scope) head.push(`Scope: only the channel ${quote(parts.scope.name, 60)}. Ignore other channels.`);
   if (parts.counts) {
     const total = Object.values(parts.counts).reduce((a, b) => a + b, 0);
-    const byStage = ['idea', 'scripting', 'editing', 'ready', 'posted']
-      .map((s) => `${stage(s)} ${parts.counts?.[s] ?? 0}`)
-      .join(' · ');
+    const planned = (parts.counts.idea ?? 0) + (parts.counts.scripting ?? 0) + (parts.counts.editing ?? 0);
+    const byStage = `Planned ${planned} · Made ${parts.counts.ready ?? 0} · Posted ${parts.counts.posted ?? 0}`;
     head.push(`Posts: ${total} total (${byStage})`);
   }
   if (parts.focusPost) head.push('', describeFocusPost(parts.focusPost));

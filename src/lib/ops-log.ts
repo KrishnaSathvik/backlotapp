@@ -8,7 +8,6 @@
  * Fields are limited to numbers, booleans, null and short strings, and keys that could carry
  * private data (tokens, keys, URLs, emails, content, prompts) are dropped, so a careless call
  * can't log a secret, a resumable upload URL or a creator's text. Pass ids and counts only.
- * docs/OPERATIONS.md lists the events.
  */
 
 export type Severity = 'DEBUG' | 'INFO' | 'NOTICE' | 'WARNING' | 'ERROR' | 'CRITICAL';

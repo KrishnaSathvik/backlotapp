@@ -1,12 +1,8 @@
 # Database backups, restore and the deletion ledger
 
-**Backups are NOT operational.** They start working only when all three of these are true:
+**No automated backups run.** The owner has chosen not to configure them. `.github/workflows/db-backup.yml` is manual-only (no schedule) and has no secrets, so Backlot has no backup it can restore from, and **data recovery is not guaranteed**. Don't describe backups as working on the privacy page or anywhere else. Whatever Supabase keeps on its own isn't an application backup unless it's confirmed for this project and plan.
 
-1. `.github/workflows/db-backup.yml` is pushed to the default branch;
-2. its secrets exist;
-3. one full restore test (below) has passed.
-
-Until then, Backlot has no backup it can restore from. Don't describe backups as working on the privacy page or anywhere else.
+The rest of this page is the design and procedure, kept for if that decision changes.
 
 ## Why this is needed
 
@@ -16,22 +12,20 @@ Supabase Free doesn't provide downloadable managed backups or point-in-time reco
 
 | Part | Choice |
 | --- | --- |
-| Schedule | GitHub Actions, nightly at 03:41 UTC, plus manual `workflow_dispatch` |
+| Trigger | GitHub Actions, manual `workflow_dispatch` only (no schedule) |
 | Dump | `pg_dump` 17, custom format (`pg_restore`-able), `public` schema only, `--no-owner --no-privileges` |
 | Encryption | Piped straight into `age`, encrypted to an **age public key**. The private key is kept **offline** by the owner; nothing in GitHub or Cloudflare can decrypt a backup. The plaintext dump never touches disk. |
 | Destination | A **separate private R2 bucket** for backups (not the media bucket), written with its **own token scoped to that bucket** |
 | Integrity | Size sanity check (> 1 KB), SHA-256 stored as object metadata, `db/latest.json` marker with time, size and hash |
 | Retention | R2 lifecycle rule on the backups bucket: delete objects after **30 days** |
-| Monitoring | GitHub notifies the user who **last changed the workflow's cron line** about scheduled-run failures, and only if that user has Actions email notifications on (GitHub → Settings → Notifications → Actions). The owner must be that user. Also check `db/latest.json` monthly. |
+| Monitoring | Check each manual run's result and `db/latest.json`. |
 | Database access | A read-only `backlot_backup` role over the **session pooler (port 5432)** |
 
 Cautions:
 
 - **Public repository:** workflow logs are public. The workflow prints only file names and sizes, never secrets or data, but keep the repository private if possible.
-- **Inactivity:** in a **public** repository GitHub disables scheduled workflows after 60 days without repository activity. Re-enable it from the Actions tab. The monthly check below catches that.
-- **Delays:** GitHub can delay or drop scheduled runs under load. The minute (`:41`) is offset from the hour to reduce this.
 
-## Setup (not done; needs approval)
+## Setup (not done; the owner has chosen not to)
 
 1. **Key pair**, on the owner's machine: `age-keygen -o backlot-backup.key`. Store the key file offline (password manager or hardware), with a second copy somewhere separate. The printed `age1…` public key becomes `BACKUP_AGE_RECIPIENT`.
 2. **Backups bucket** in R2 (for example `backlot-db-backups`): private, no public URL. Add the lifecycle rule "delete after 30 days". Create an API token with *Object Read & Write* on this bucket only.
@@ -64,11 +58,11 @@ Restoring an older snapshot brings back the rows of accounts deleted after it, a
 | When | Written when the creator asks (best effort), and again as the deletion job's first step (`record_ledger`), which retries until it succeeds. Every job that runs has an entry. |
 | How long | `LEDGER_RETENTION_DAYS`, default **90**. That must stay longer than backup retention (30) plus the time it takes to notice a problem and restore. Purged by the daily maintenance job. |
 
-**Evidence rules:** re-delete an account only when the **ledger** or the **old database's `account_deletions`** shows that Backlot was asked to delete it. A missing Firebase user is review-only (`scripts/find-deleted-accounts-after-restore.ts`), never proof on its own: it also happens after a project or tenant mismatch, a sign-in migration, or a console deletion.
+**Evidence rules:** re-delete an account only when the **ledger** or the **old database's `account_deletions`** shows that Backlot was asked to delete it. A missing Supabase Auth user is review-only (`scripts/find-deleted-accounts-after-restore.ts`), never proof on its own: it also happens after a project or tenant mismatch, a sign-in migration, or a console deletion.
 
 ## Restore procedure (into a NEW Supabase project; never over production)
 
-1. **Pause the maintenance job** (the orphan sweep) in the scheduler (docs/WORKERS.md). Against an older database, files uploaded after the snapshot would look orphaned. The sweep's safety stop is a backstop, not the plan.
+1. **Don't run the maintenance job** (the orphan sweep) and pause the deletion cron in Vercel (docs/WORKERS.md). Against an older database, files uploaded after the snapshot would look orphaned. The sweep's safety stop is a backstop, not the plan.
 2. Create a new Supabase project in the same region. Note its session-pooler URL and CA certificate.
 3. Download the backup (`aws s3 cp s3://<backups-bucket>/db/backlot-<stamp>.dump.age . --endpoint-url …`) and check its SHA-256 against the object metadata.
 4. Decrypt on the owner's machine: `age -d -i backlot-backup.key -o backlot.dump backlot-<stamp>.dump.age`.
@@ -80,7 +74,7 @@ Restoring an older snapshot brings back the rows of accounts deleted after it, a
    `DATABASE_MIGRATION_URL=$RESTORE_SESSION_URL npm run restore:reapply-deletions` (dry run), review the list, then the same command with `-- --apply`. Each listed account is locked at once (sign-in gate and write guard).
 8. Optionally run `scripts/find-deleted-accounts-after-restore.ts` against the restored database. Its output is a review list; act on an account only with ledger or old-database evidence.
 9. Check row counts and a few posts. Point Vercel's `DATABASE_URL` (transaction pooler of the new project) and `DATABASE_CA_CERT` at it, redeploy, and check `/api/health?ready=1`.
-10. Resume the scheduler. Confirm the re-applied deletions reach `completed`, then resume maintenance.
+10. Resume the deletion cron. Confirm the re-applied deletions reach `completed`, then resume maintenance.
 11. Keep the old project until you're satisfied. Delete the decrypted dump.
 
 Media isn't part of the database backup: R2 objects aren't restored or versioned (docs/STORAGE.md).

@@ -39,10 +39,10 @@ The production domain isn't recorded anywhere in this repository, so nothing gue
 | Vercel env `SITE_URL` | `https://<domain>` | Canonical URLs, `og:url`/`og:image`, sitemap, robots.txt `Sitemap:`, JSON-LD and `/llms.txt` links all follow automatically. No code change. |
 | `src/components/site/Showcase.tsx` (browser-frame label) | `<domain>` | The only hard-coded domain text. Code change and redeploy. |
 | Domain mapping or load balancer | Map the domain to the service. Redirect the other host (apex or `www`) and any `*.run.app` URL users might share to it with a 301. | One canonical host. The app doesn't redirect hosts itself. |
-| Firebase Authentication → Authorized domains (Firebase project) | Add `<domain>` | Google sign-in fails on the new domain without it. |
-| Google OAuth consent screen (Firebase project) | Add the domain, privacy URL `https://<domain>/privacy` and terms URL `https://<domain>/terms` | Shown on the Google sign-in consent screen. |
-| `INTERNAL_OIDC_AUDIENCE` and the Scheduler job URIs | Keep the `*.run.app` service URL unless the jobs are moved to the domain. They must match each other. | Job authentication (OPERATIONS.md). |
-| `PRIVACY_CONTACT_EMAIL` | An address that receives mail, ideally on the domain | Contact on `/privacy`, `/terms`, `/support` and in the Organization JSON-LD. |
+| Supabase → Authentication → URL Configuration (`backlot`) | Site URL `https://<domain>`; add `https://<domain>/**` to Redirect URLs | Google sign-in returns to the old Site URL without it. |
+| Google OAuth consent screen (the Google Cloud project of Backlot's OAuth client) | Add the domain, privacy URL `https://<domain>/privacy` and terms URL `https://<domain>/terms` | Shown on the Google sign-in consent screen. |
+| `INTERNAL_OIDC_AUDIENCE` and the Scheduler job URIs | Keep the `*.run.app` service URL unless the jobs are moved to the domain. They must match each other. | Job authentication (WORKERS.md). |
+| `PRIVACY_CONTACT_EMAIL` | Optional override of the default `support@getbacklot.app` | Contact on `/privacy`, `/terms`, `/support` and in the Organization JSON-LD. |
 | Google Search Console and Bing Webmaster Tools | Domain property, verified via DNS | See "Search setup". |
 
 Before launch, check with `curl https://<domain>/robots.txt`, `/sitemap.xml`, `/llms.txt` and the page source of `/` that every URL uses the domain and none uses `localhost` or `*.run.app`.
@@ -78,12 +78,12 @@ Only implemented features are described. There's deliberately no price or `offer
 Pages are written to match implemented behavior; they're not lawyer-reviewed. `LEGAL REVIEW` comments in the source mark the open points:
 
 - **Operating entity:** name and address for the Terms and Privacy Policy.
-- **Contact address:** `PRIVACY_CONTACT_EMAIL` must be set. Until then, pages show neutral wording instead of an address.
+- **Contact address:** `support@getbacklot.app` (`SUPPORT_EMAIL` in `src/lib/site.ts`); `PRIVACY_CONTACT_EMAIL` overrides it. Make sure that mailbox receives mail before launch.
 - **Minimum age** (Terms and Privacy).
 - **Governing law, venue, warranty disclaimer and liability cap** (Terms).
 - **Notice of material changes:** whether, and how, users are told in advance.
 - **Regional privacy rights and legal bases** (e.g. GDPR/UK GDPR, CCPA/CPRA), and international transfers to OpenAI and Anthropic.
-- **Backup, log and deletion-ledger retention periods:** add them once verified or decided in production (OPERATIONS.md). The ledger keeps account ids for its retention period (60 days suggested). The policy now says accounts deleted after a backup are locked and deleted again if it's restored, and that deletion logs record the account id. The procedure for both is in OPERATIONS.md ("Restore procedure").
+- **Backup, log and deletion-ledger retention periods:** add them once verified or decided in production. The ledger keeps account ids for its retention period (60 days suggested). The policy now says accounts deleted after a backup are locked and deleted again if it's restored, and that deletion logs record the account id. The procedure for both is in BACKUPS.md ("Restore procedure").
 - **AI-provider terms:** confirm OpenAI's and Anthropic's API data-retention and training terms for the account actually used, before citing any specifics. The policy currently says only that each handles data under its own terms (and that OpenAI requests use `store: false`).
 
 ## Accessibility changes (public pages)

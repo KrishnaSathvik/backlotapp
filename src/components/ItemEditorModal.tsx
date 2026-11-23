@@ -81,6 +81,9 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
   const [coverAsset, setCoverAsset] = useState<MediaAsset | null>(editingItem?.coverAsset ?? null);
   const [videoAsset, setVideoAsset] = useState<MediaAsset | null>(editingItem?.videoAsset ?? null);
   const [slides, setSlides] = useState<MediaAsset[]>(editingItem?.slides ?? []);
+  // An existing post opens here only from "Change files": every other field is edited in its
+  // details, so only the media is shown (the rest is saved back unchanged).
+  const filesOnly = !!editingItem;
 
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [uploadingLabel, setUploadingLabel] = useState('');
@@ -206,17 +209,19 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
   const fileButton = 'cursor-pointer';
 
   return (
-    <Sheet onClose={requestClose} label={editingItem ? `Edit ${editingItem.title}` : 'New post'} size="lg">
+    <Sheet onClose={requestClose} label={filesOnly ? `Files for ${editingItem!.title}` : 'New post'} size={filesOnly ? 'md' : 'lg'} fullscreenOnMobile>
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-5 py-3.5 sm:px-6 sm:py-4 dark:border-zinc-800">
           <div className="min-w-0">
-            <h2 className="text-lg font-bold tracking-tight">{editingItem ? 'Edit post' : 'New post'}</h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Only the title is required.</p>
+            <h2 className="text-lg font-bold tracking-tight">{filesOnly ? 'Files' : 'New post'}</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">{filesOnly ? 'Cover, video and slides for this post.' : 'Only the title is required.'}</p>
           </div>
           <SheetCloseButton onClick={requestClose} label="Close editor" />
         </div>
 
         <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+          {!filesOnly ? (
+          <>
           {/* Basics */}
           <div className="space-y-4">
             <div>
@@ -287,6 +292,9 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
             </div>
           </div>
 
+          </>
+          ) : null}
+
           {/* Media */}
           <fieldset
             onDragOver={(e) => {
@@ -298,13 +306,13 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
             className={cx(
               'rounded-2xl border-2 border-dashed p-3 transition-colors sm:p-4',
               isDragOver
-                ? 'border-electric-500 bg-electric-50/60 dark:bg-electric-950/30'
-                : 'border-zinc-200 dark:border-zinc-800'
+                ? 'border-accent bg-accent/10'
+                : 'border-border-strong'
             )}
           >
             <legend className="px-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300">Media</legend>
             <p className="mb-3 hidden items-center gap-2 text-xs text-zinc-500 sm:flex dark:text-zinc-400">
-              <UploadCloud className="h-4 w-4 text-electric-600 dark:text-electric-400" aria-hidden="true" />
+              <UploadCloud className="h-4 w-4 text-muted" aria-hidden="true" />
               Drop files here, or choose below. Images up to {formatLimit(MAX_IMAGE_BYTES)}, video up to {formatLimit(MAX_VIDEO_BYTES)}.
             </p>
 
@@ -449,6 +457,8 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
             ) : null}
           </fieldset>
 
+          {!filesOnly ? (
+          <>
           {/* Copy */}
           <div className="space-y-4">
             <div>
@@ -476,7 +486,7 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
                 placeholder="#filmmaking #desksetup #shorts"
                 autoCapitalize="none"
                 autoCorrect="off"
-                className={cx(inputStyles, 'h-11 font-mono text-[13px]')}
+                className={cx(inputStyles, 'h-11 font-mono lg:text-[13px]')}
               />
             </div>
           </div>
@@ -526,9 +536,11 @@ export const ItemEditorModal: React.FC<ItemEditorModalProps> = ({
               />
             </div>
           </div>
+          </>
+          ) : null}
         </div>
 
-        <div className="border-t border-zinc-100 bg-white/90 px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:px-6 sm:pb-3 dark:border-zinc-800 dark:bg-zinc-950/90">
+        <div className="border-t border-border bg-surface px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-3">
           {error ? (
             <p role="alert" className="mb-2.5 text-sm font-medium text-red-600 dark:text-red-400">
               {error}

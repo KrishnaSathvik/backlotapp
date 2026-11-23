@@ -23,12 +23,14 @@ const NOUNS = [
 export const AVATAR_VARIANTS = ['beam', 'marble', 'bauhaus', 'sunset'] as const;
 export type AvatarVariant = (typeof AVATAR_VARIANTS)[number];
 
+// Bright and mid tones only: no near-black colors, so an avatar is always visible on the dark
+// theme (an avatar can be drawn mostly in one palette color).
 export const AVATAR_PALETTES: string[][] = [
-  ['#2e66ff', '#ff9a5a', '#0b1020', '#ffd166', '#8fb3ff'], // Backlot
-  ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51'], // Desert
-  ['#0b3954', '#087e8b', '#bfd7ea', '#ff5a5f', '#c81d25'], // Harbor
-  ['#5f0f40', '#9a031e', '#fb8b24', '#e36414', '#0f4c5c'], // Ember
-  ['#3d348b', '#7678ed', '#f7b801', '#f18701', '#f35b04'], // Dusk
+  ['#2e66ff', '#ff9a5a', '#7c5cff', '#ffd166', '#8fb3ff'], // Backlot
+  ['#2a9d8f', '#3fb8af', '#e9c46a', '#f4a261', '#e76f51'], // Desert
+  ['#087e8b', '#3a86ff', '#bfd7ea', '#ff5a5f', '#f15bb5'], // Harbor
+  ['#ff006e', '#fb5607', '#fb8b24', '#ffbe0b', '#e36414'], // Ember
+  ['#7678ed', '#9b5de5', '#f7b801', '#f18701', '#f35b04'], // Dusk
 ];
 
 /** FNV-1a: a small, stable string hash. */

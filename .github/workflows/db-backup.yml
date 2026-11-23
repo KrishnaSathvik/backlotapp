@@ -1,6 +1,6 @@
-# Nightly encrypted logical backup of the Supabase database to a private R2 bucket.
-# docs/BACKUPS.md explains setup, retention, monitoring and restore. NOT ACTIVE until this file
-# is on the default branch and the secrets below exist.
+# Encrypted logical backup of the Supabase database to a private R2 bucket.
+# MANUAL ONLY: there is no schedule, and nothing runs automatically. The owner has chosen not to
+# configure automated backups (docs/BACKUPS.md). A manual run needs the secrets below.
 #
 # Secrets (repository → Settings → Secrets and variables → Actions):
 #   BACKUP_DATABASE_URL      session-pooler (5432) URL for the read-only `backlot_backup` role
@@ -10,14 +10,9 @@
 #   BACKUP_R2_BUCKET         dedicated backups bucket (not the media bucket)
 #   BACKUP_R2_ACCESS_KEY_ID / BACKUP_R2_SECRET_ACCESS_KEY
 #                            R2 token scoped to the backups bucket only
-# Retention: an R2 lifecycle rule on the backups bucket deletes objects after 30 days.
-# Failures: GitHub sends scheduled-run notifications to the user who last changed the cron line
-# below, and only if that user has Actions email notifications on. The owner should be that user.
 name: db-backup
 
 on:
-  schedule:
-    - cron: '41 3 * * *' # 03:41 UTC daily
   workflow_dispatch: {}
 
 permissions:

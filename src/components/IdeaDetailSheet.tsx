@@ -6,6 +6,7 @@ import {
   extractDomainAndTitle,
   formatTagsForCopy,
   getPlatformLabel,
+  ideaImages,
   parseTagsInput,
   PLATFORM_OPTIONS,
   type ChannelItem,
@@ -13,7 +14,8 @@ import {
   type PlatformKey,
 } from '@/src/lib/content-logic';
 import { FormSelect } from './CustomSelect';
-import { MediaImage } from './MediaImage';
+import { IdeaReferenceImages } from './IdeaReferenceImages';
+import { LinkThumbnail } from './LinkThumbnail';
 import { PlatformIcon } from './PlatformIcon';
 import {
   ActionMenu,
@@ -28,7 +30,7 @@ import {
 } from './ui';
 
 export type IdeaFieldsPatch = Partial<
-  Pick<IdeaItem, 'title' | 'linkUrl' | 'linkTitle' | 'linkDomain' | 'notes' | 'platform' | 'channelName' | 'tags' | 'targetDate'>
+  Pick<IdeaItem, 'title' | 'linkUrl' | 'linkTitle' | 'linkDomain' | 'notes' | 'platform' | 'channelName' | 'tags' | 'targetDate' | 'images'>
 >;
 
 const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
@@ -47,6 +49,7 @@ const draftFrom = (idea: IdeaItem) => ({
 export function IdeaDetailSheet({
   idea,
   channels,
+  authToken = null,
   onClose,
   onSave,
   onMakePost,
@@ -55,9 +58,11 @@ export function IdeaDetailSheet({
 }: {
   idea: IdeaItem;
   channels: ChannelItem[];
+  /** For TikTok thumbnails (looked up; YouTube's need nothing). */
+  authToken?: string | null;
   onClose: () => void;
   onSave: (ideaId: number, patch: IdeaFieldsPatch) => Promise<boolean>;
-  onMakePost: (idea: IdeaItem) => Promise<void>;
+  onMakePost: (idea: IdeaItem, platform?: PlatformKey) => Promise<void>;
   onAskSlate: (idea: IdeaItem) => void;
   onDelete: (idea: IdeaItem) => Promise<void>;
 }) {
@@ -65,6 +70,7 @@ export function IdeaDetailSheet({
   const [draft, setDraft] = useState(() => draftFrom(idea));
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
   const set = <K extends keyof typeof draft>(key: K) => (value: (typeof draft)[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
   const saved = draftFrom(idea);
@@ -117,12 +123,12 @@ export function IdeaDetailSheet({
       : [draft.channelName, ...channels.map((c) => c.name)];
 
   return (
-    <Sheet onClose={() => leave(onClose)} label={`Idea: ${idea.title}`} size="lg">
+    <Sheet onClose={() => leave(onClose)} label={`Idea: ${idea.title}`} size="lg" fullscreenOnMobile>
       <div className="border-b border-zinc-100 px-5 pb-4 pt-3 sm:px-6 sm:pt-5 dark:border-zinc-800">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <span className="rounded-full bg-cantaloupe-100 px-2 py-0.5 text-[11px] font-semibold text-cantaloupe-800 dark:bg-cantaloupe-950/60 dark:text-cantaloupe-300">
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted">
                 Idea
               </span>
               <span className="flex items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-200">
@@ -136,26 +142,41 @@ export function IdeaDetailSheet({
           <SheetCloseButton onClick={() => leave(onClose)} />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          {picking && !idea.convertedItemId ? (
+            PLATFORM_OPTIONS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  leave(async () => {
+                    setBusy(true);
+                    try {
+                      await onMakePost(idea, p.key);
+                    } finally {
+                      setBusy(false);
+                    }
+                  })
+                }
+                className={cx(buttonStyles.secondary, 'h-9 px-3 text-xs')}
+              >
+                <PlatformIcon platform={p.key} size={14} colored />
+                {p.shortLabel}
+              </button>
+            ))
+          ) : (
           <button
             type="button"
             disabled={busy}
-            onClick={() =>
-              leave(async () => {
-                setBusy(true);
-                try {
-                  await onMakePost(idea);
-                } finally {
-                  setBusy(false);
-                }
-              })
-            }
+            onClick={() => (idea.convertedItemId ? leave(() => onMakePost(idea)) : setPicking(true))}
             className={cx(idea.convertedItemId ? buttonStyles.secondary : buttonStyles.primary, sizes.sm, 'h-9')}
           >
-            {idea.convertedItemId ? 'Open linked post' : 'Make it a post'}
+            {idea.convertedItemId ? 'Open post' : 'Turn into post'}
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
+          )}
           <button type="button" onClick={() => leave(() => onAskSlate(idea))} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
-            <MessageSquare className="h-3.5 w-3.5 text-electric-600 dark:text-electric-400" aria-hidden="true" />
+            <MessageSquare className="h-3.5 w-3.5 text-cantaloupe-500" aria-hidden="true" />
             Ask Slate
           </button>
           <ActionMenu
@@ -165,26 +186,43 @@ export function IdeaDetailSheet({
         </div>
       </div>
 
-      <form id="idea-inline-form" onSubmit={handleSave} className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="grid gap-5 p-5 sm:p-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <div className="space-y-3">
-            <div className="aspect-[4/3] overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
-              <MediaImage src={idea.screenshotUrl || null} alt="" fallbackLabel={idea.linkDomain || 'No screenshot'} />
-            </div>
+      <form id="idea-inline-form" onSubmit={handleSave} className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div className="grid grid-cols-1 gap-5 p-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:p-6">
+          <div className="min-w-0 space-y-5">
             {isWebLink(idea.linkUrl) ? (
-              <a
-                href={idea.linkUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2.5 text-[13px] font-medium text-electric-700 hover:bg-electric-50/60 dark:border-zinc-800 dark:text-electric-300 dark:hover:bg-electric-950/30"
-              >
-                <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{idea.linkTitle || idea.linkDomain || idea.linkUrl}</span>
-              </a>
+              <section aria-label="Link">
+                <p className="mb-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">Link</p>
+                <a
+                  href={idea.linkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex min-w-0 items-center gap-3 rounded-xl border border-zinc-200 p-2 pr-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                >
+                  <span className="relative h-12 w-20 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                    <LinkThumbnail
+                      link={idea.linkUrl}
+                      authToken={authToken}
+                      className="h-full w-full object-cover"
+                      fallback={
+                        <span className="flex h-full w-full items-center justify-center text-electric-500">
+                          <Link2 className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                      }
+                    />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13.5px] font-medium text-zinc-900 dark:text-zinc-100">{idea.linkTitle || idea.linkUrl}</span>
+                    <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{idea.linkDomain}</span>
+                  </span>
+                  <ExternalLink className="h-4 w-4 shrink-0 text-zinc-400 group-hover:text-electric-600 dark:group-hover:text-electric-400" aria-hidden="true" />
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              </section>
             ) : null}
+            <IdeaReferenceImages images={ideaImages(idea)} authToken={authToken} onChange={(images) => onSave(idea.id, { images })} />
           </div>
 
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-3">
             <div>
               <label htmlFor="idea-edit-title" className={labelStyles}>Title</label>
               <input
@@ -246,7 +284,7 @@ export function IdeaDetailSheet({
                   onChange={(e) => set('tags')(e.target.value)}
                   placeholder="#hook #lighting"
                   autoCapitalize="none"
-                  className={cx(inputStyles, 'h-11 font-mono text-xs')}
+                  className={cx(inputStyles, 'h-11 font-mono lg:text-xs')}
                 />
               </div>
               <div>
@@ -266,8 +304,8 @@ export function IdeaDetailSheet({
 
       {dirty ? (
         <div className="animate-pop-in flex items-center justify-between gap-3 border-t border-zinc-100 bg-white px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6 dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400">Unsaved changes</p>
-          <div className="flex gap-2">
+          <p className="min-w-0 truncate text-[13px] font-medium text-zinc-500 max-[359px]:sr-only dark:text-zinc-400">Unsaved changes</p>
+          <div className="ml-auto flex shrink-0 gap-2">
             <button type="button" onClick={() => setDraft(draftFrom(idea))} disabled={saving} className={cx(buttonStyles.secondary, sizes.md)}>
               Discard
             </button>

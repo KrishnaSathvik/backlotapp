@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import { Bricolage_Grotesque, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
-import Script from 'next/script';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, siteUrl } from '@/src/lib/site';
 import './globals.css';
 
@@ -30,6 +29,8 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // Android Chrome: shrink the layout when the on-screen keyboard opens (iOS uses the visual viewport).
+  interactiveWidget: 'resizes-content',
 };
 
 // Metadata depends on SITE_URL and the privacy contact, which are set per deployment at runtime,
@@ -69,11 +70,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
       className={`${plusJakarta.variable} ${bricolage.variable} ${jetbrainsMono.variable}`}
     >
+      <head>
+        {/* Apply the saved theme before first paint (a plain inline script in <head> runs before the
+            page is drawn; next/script's beforeInteractive waits for Next's runtime, so it flashed white). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('slatevault_theme');var d=t==='dark'||((!t||t==='system')&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){}`,
+          }}
+        />
+      </head>
       <body suppressHydrationWarning>
-        {/* Apply the saved theme before first paint to avoid a light/dark flash. */}
-        <Script id="theme-init" strategy="beforeInteractive">
-          {`try{var t=localStorage.getItem('slatevault_theme');var d=t==='dark'||((!t||t==='system')&&matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark')}catch(e){}`}
-        </Script>
         {/* Without JavaScript, show scroll-reveal content instead of leaving it transparent. */}
         <noscript>
           <style>{'[data-reveal]{opacity:1!important;transform:none!important}'}</style>

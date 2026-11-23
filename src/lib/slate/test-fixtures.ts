@@ -146,7 +146,7 @@ export class MemoryStore implements SlateStore {
   async searchPosts(uid: string, q: PostSearch) {
     this.calls.push('searchPosts');
     return this.posts
-      .filter((p) => p.uid === uid && this.inChannel(p.row, q.channel) && (!q.status || p.row.status === q.status) && (!q.platform || p.row.platform === q.platform))
+      .filter((p) => p.uid === uid && this.inChannel(p.row, q.channel) && (!q.status || p.row.status === q.status || (q.status === 'idea' && (p.row.status === 'scripting' || p.row.status === 'editing'))) && (!q.platform || p.row.platform === q.platform))
       .map((p) => ({ row: p.row, s: this.score(q.terms, [[p.row.title, 3], [JSON.stringify(p.row.tags), 2], [p.row.caption, 1], [p.row.notes, 1], [p.row.channelName, 1]]) }))
       .filter((x) => x.s > 0)
       .sort((a, b) => b.s - a.s || b.row.updatedAt.localeCompare(a.row.updatedAt) || b.row.id - a.row.id)

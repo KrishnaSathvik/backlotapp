@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getPlatformShortLabel, type ChannelItem, type ContentItem } from '@/src/lib/content-logic';
+import { getPlatformShortLabel, normalizeStatus, type ChannelItem, type ContentItem } from '@/src/lib/content-logic';
 import { FormSelect } from './CustomSelect';
 import { MediaImage } from './MediaImage';
 import { PlatformIcon } from './PlatformIcon';
@@ -12,8 +12,8 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n: number) => String(n).padStart(2, '0');
 const keyOf = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
 
-/** The day a post belongs on: when it went live, otherwise when it's planned for. */
-const dayOf = (item: ContentItem) => item.postDate || item.targetDate || '';
+/** Posted posts sit on the day they went live. Planned and Made sit on the target day. */
+const dayOf = (item: ContentItem) => (normalizeStatus(item.status) === 'posted' ? item.postDate : item.targetDate) || '';
 
 function todayKey() {
   const t = new Date();
@@ -29,10 +29,14 @@ interface CalendarViewProps {
   items: ContentItem[];
   channels: ChannelItem[];
   onSelectItem: (item: ContentItem) => void;
+  /** Dragging a post onto a day sets its target date. */
+  onReschedule: (item: ContentItem, targetDate: string) => void;
+  /** An empty day starts a post planned for that date. */
+  onCreateOnDay: (date: string) => void;
 }
 
 /** Month view of posts by target or posted date. Read-only: opening a post edits it as usual. */
-export function CalendarView({ items, channels, onSelectItem }: CalendarViewProps) {
+export function CalendarView({ items, channels, onSelectItem, onReschedule, onCreateOnDay }: CalendarViewProps) {
   const today = todayKey();
   const [cursor, setCursor] = useState(() => {
     const t = new Date();
@@ -69,6 +73,13 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
   const undated = scoped.filter((i) => !dayOf(i)).length;
   const selectedItems = byDay.get(selected) ?? [];
   const monthLabel = new Date(y, m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const unscheduled = scoped.filter((i) => normalizeStatus(i.status) === 'ready' && !i.targetDate);
+  const dropOn = (date: string) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const id = Number(e.dataTransfer.getData('text/post-id'));
+    const item = items.find((i) => i.id === id);
+    if (item) onReschedule(item, date);
+  };
 
   const shift = (delta: number) => {
     setCursor(({ y, m }) => {
@@ -90,15 +101,19 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
       {/* Toolbar: month on the left; navigation and channel on the right */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
         <div className="mr-auto min-w-0">
-          <h2 className="font-display text-xl font-bold tracking-tight sm:text-2xl" aria-live="polite">
+          <h2 className="text-xl font-bold tracking-tight sm:text-2xl" aria-live="polite">
             {monthLabel}
           </h2>
           <p className="mt-0.5 text-[13px] text-zinc-500 tabular-nums dark:text-zinc-400">
-            {inMonth} {inMonth === 1 ? 'post' : 'posts'} this month
-            {undated ? ` · ${undated} without a date` : ''}
+            {scoped.every((i) => !dayOf(i))
+              ? 'Nothing planned yet. Posts with a target date will appear here.'
+              : inMonth
+                ? `${inMonth} ${inMonth === 1 ? 'post' : 'posts'} this month`
+                : 'Nothing planned for this month'}
+            {undated && scoped.some((i) => dayOf(i)) ? ` · ${undated} without a date` : ''}
           </p>
         </div>
-        <div className="flex items-center rounded-full border border-zinc-200 bg-white p-0.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex items-center rounded-full border border-border bg-surface p-0.5 shadow-xs">
           <button type="button" onClick={() => shift(-1)} aria-label="Previous month" className={navBtn}>
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -113,6 +128,7 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+        {channels.length ? (
         <div className="w-full sm:w-48">
           <FormSelect value={channel} onChange={(e) => setChannel(e.target.value)} aria-label="Channel">
             <option value="all">All channels</option>
@@ -121,11 +137,11 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
             ))}
           </FormSelect>
         </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        {/* Month grid */}
-        <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900/60">
+        <div className="overflow-hidden rounded-2xl border border-border bg-surface">
           <div className="grid grid-cols-7 border-b border-zinc-100 dark:border-zinc-800">
             {WEEKDAYS.map((d) => (
               <div key={d} className="py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
@@ -137,7 +153,7 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
           <div className="grid grid-cols-7">
             {cells.map((day, idx) => {
               if (!day)
-                return <div key={`e${idx}`} className="min-h-14 border-b border-r border-zinc-100 bg-zinc-50/50 md:min-h-28 dark:border-zinc-800/70 dark:bg-zinc-950/20 [&:nth-child(7n)]:border-r-0" />;
+                return <div key={`e${idx}`} className="min-h-14 border-b border-r border-border bg-surface-2 md:min-h-28 [&:nth-child(7n)]:border-r-0" />;
               const key = keyOf(y, m, day);
               const list = byDay.get(key) ?? [];
               const isToday = key === today;
@@ -145,14 +161,16 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
               return (
                 <div
                   key={key}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={dropOn(key)}
                   className={cx(
-                    'relative min-h-14 border-b border-r border-zinc-100 md:min-h-28 dark:border-zinc-800/70 [&:nth-child(7n)]:border-r-0',
-                    isSel && 'bg-electric-50/60 dark:bg-electric-950/25'
+                    'relative min-h-14 border-b border-r border-border md:min-h-28 [&:nth-child(7n)]:border-r-0',
+                    isSel && 'bg-accent/10'
                   )}
                 >
                   <button
                     type="button"
-                    onClick={() => setSelected(key)}
+                    onClick={() => (list.length ? setSelected(key) : onCreateOnDay(key))}
                     aria-label={`${prettyDay(key)}, ${list.length} ${list.length === 1 ? 'post' : 'posts'}`}
                     aria-pressed={isSel}
                     className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-electric-500"
@@ -161,17 +179,20 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
                     <span
                       className={cx(
                         'flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums md:self-end',
-                        isToday ? 'bg-electric-600 text-white' : 'text-zinc-700 dark:text-zinc-300'
+                        isToday ? 'bg-accent text-white' : 'text-text',
+                        // Phones: the selected date gets a ring as well as the cell tint.
+                        isSel && !isToday && 'max-md:ring-2 max-md:ring-accent'
                       )}
                     >
                       {day}
                     </span>
                     {/* Phones: one dot per post */}
                     {list.length ? (
-                      <span className="mt-1 flex gap-0.5 md:hidden">
+                      <span className="mt-1 flex items-center gap-0.5 md:hidden" aria-hidden="true">
                         {list.slice(0, 3).map((i) => (
-                          <span key={i.id} className={cx('h-1.5 w-1.5 rounded-full', STAGE_STYLES[i.status]?.dot ?? 'bg-zinc-400')} />
+                          <span key={i.id} className={cx('h-1.5 w-1.5 rounded-full', STAGE_STYLES[normalizeStatus(i.status)].dot)} />
                         ))}
+                        {list.length > 3 ? <span className="text-[9px] font-bold leading-none text-zinc-500">+{list.length - 3}</span> : null}
                       </span>
                     ) : null}
                     {/* Larger screens: post titles */}
@@ -180,10 +201,12 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
                         <button
                           key={i.id}
                           type="button"
+                          draggable
+                          onDragStart={(e) => e.dataTransfer.setData('text/post-id', String(i.id))}
                           onClick={() => onSelectItem(i)}
-                          className="pointer-events-auto flex w-full items-center gap-1.5 rounded-md bg-zinc-100 px-1.5 py-1 text-left text-[11.5px] font-medium text-zinc-800 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                          className="pointer-events-auto flex w-full items-center gap-1.5 rounded-md bg-surface-2 px-1.5 py-1 text-left text-[11.5px] font-medium text-text transition-colors hover:bg-border"
                         >
-                          <span className={cx('mt-[5px] h-1.5 w-1.5 shrink-0 self-start rounded-full', STAGE_STYLES[i.status]?.dot ?? 'bg-zinc-400')} />
+                          <span className={cx('mt-[5px] h-1.5 w-1.5 shrink-0 self-start rounded-full', STAGE_STYLES[normalizeStatus(i.status)].dot)} />
                           <span className="line-clamp-2 leading-snug">{i.title}</span>
                         </button>
                       ))}
@@ -199,7 +222,7 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
         </div>
 
         {/* Selected day */}
-        <aside aria-label="Posts on the selected day" className="min-w-0 self-start rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+        <aside aria-label="Posts on the selected day" className="min-w-0 self-start rounded-2xl border border-border bg-surface p-4">
           <p className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">{prettyDay(selected)}</p>
           {selectedItems.length === 0 ? (
             <div className="flex flex-col items-center py-8 text-center">
@@ -240,6 +263,28 @@ export function CalendarView({ items, channels, onSelectItem }: CalendarViewProp
           )}
         </aside>
       </div>
+      {unscheduled.length ? (
+        <section aria-label="Made posts with no date" onDragOver={(e) => e.preventDefault()} className="rounded-2xl border border-dashed border-border-strong p-3">
+          <p className="text-sm font-semibold">Made, not scheduled</p>
+          <p className="mt-0.5 text-xs text-muted">Drag one onto a day.</p>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {unscheduled.map((i) => (
+              <li key={i.id}>
+                <button
+                  type="button"
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData('text/post-id', String(i.id))}
+                  onClick={() => onSelectItem(i)}
+                  className="flex items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-sm font-medium"
+                >
+                  <StagePill status={i.status} />
+                  {i.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </section>
   );
 }

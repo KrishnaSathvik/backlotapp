@@ -12,7 +12,6 @@ import {
   History,
   ImageIcon,
   Lightbulb,
-  Lock,
   Plus,
   Scissors,
   Search,
@@ -28,11 +27,11 @@ import {
 import type { ChannelItem, ContentItem, IdeaItem } from '@/src/lib/content-logic';
 import { readStreamEvents, stripRefMarkers } from '@/src/lib/slate/events';
 import type { EntityRef, PreferenceProposal } from '@/src/lib/slate/tools';
-import { SlatePreferencesSheet } from './SlatePreferencesSheet';
-import { SlateHistorySheet } from './SlateHistorySheet';
+import { SlateSheet, type SlateSheetTab } from './SlateSheet';
 import { SlateActionCards, type ActionCardState, type AppliedResult } from './SlateActionCards';
 import { PlatformIcon } from './PlatformIcon';
 import { SlateAvatar } from './SlateAvatar';
+import { ChannelScopeMenu } from './ChannelScopeMenu';
 import { SlateMarkdown } from './SlateMarkdown';
 import { copyToClipboard, cx, useFeedback } from './ui';
 
@@ -66,6 +65,17 @@ interface ImagePick {
 
 type ProposalState = PreferenceProposal & { status?: 'saving' | 'saved' | 'dismissed' | 'error' };
 
+/** Shown in the demo so the Slate screen isn’t an empty composer. Not saved. */
+const SAMPLE_THREAD: ChatTurn[] = [
+  { id: 'demo-1', role: 'user', text: 'Give me 3 hooks for the desk setup video.' },
+  {
+    id: 'demo-2',
+    role: 'model',
+    text: 'Here are three, based on your desk setup video:\n\n1. “I rebuilt my desk for one reason.”\n2. “This $40 light changed every shot.”\n3. “Stop filming at eye level.”',
+    refs: [{ type: 'post', id: 100, title: 'Minimalist Desk Camera Rig Breakdown 2026' }],
+  },
+];
+
 /** What Slate is working on: one attached post or idea. */
 export type ChatFocus = { kind: 'post'; id: number } | { kind: 'idea'; id: number };
 
@@ -78,6 +88,10 @@ interface StudioChatPanelProps {
   authToken: string | null;
   focus: ChatFocus | null;
   onFocusChange: (focus: ChatFocus | null) => void;
+  /** Whether the Slate tab is showing. The panel stays mounted (hidden) on other tabs. */
+  active?: boolean;
+  /** Demo workspace: open on a sample conversation instead of the empty composer. */
+  sample?: boolean;
   /** Explicitly replaces a post's caption with a reply. Never called without the user asking. */
   onApplyCaption: (itemId: number, caption: string) => Promise<boolean>;
   onSignIn?: () => void;
@@ -138,6 +152,8 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
   historyKey,
   authToken,
   focus,
+  active = true,
+  sample = false,
   onFocusChange,
   onApplyCaption,
   onSignIn,
@@ -148,7 +164,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   /** The saved conversation this thread belongs to (null until the first reply starts). */
   const [conversationId, setConversationIdState] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [sheetTab, setSheetTab] = useState<SlateSheetTab | null>(null);
   const [imagePick, setImagePick] = useState<ImagePick | null>(null);
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
@@ -165,7 +181,6 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
   const [nudge, setNudge] = useState(false);
   /** What Slate is looking up right now, e.g. "Searching your posts". */
   const [toolLabel, setToolLabel] = useState<string | null>(null);
-  const [prefsOpen, setPrefsOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
@@ -196,14 +211,23 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
   // A pick belongs to the attached post or idea; drop it if that changes.
   const activePick = imagePick && imageOptions.some((o) => o.url === imagePick.url && o.slot === imagePick.slot && o.index === imagePick.index) ? imagePick : null;
 
+  // The demo opens on a sample conversation. Leaving the demo drops only those messages.
+  useEffect(() => {
+    if (sample) {
+      setMessages(SAMPLE_THREAD);
+      return;
+    }
+    setMessages((current) => (current.some((m) => m.id.startsWith('demo-')) ? [] : current));
+  }, [sample]);
+
   // Jump to the latest message on open, then follow new messages smoothly.
   const scrolledOnceRef = useRef(false);
   useEffect(() => {
     const el = threadRef.current;
-    if (!el) return;
+    if (!el || !active) return;
     el.scrollTo({ top: el.scrollHeight, behavior: scrolledOnceRef.current && !sending ? 'smooth' : 'auto' });
     scrolledOnceRef.current = true;
-  }, [messages, sending, error]);
+  }, [messages, sending, error, active]);
 
   const setConversationId = useCallback(
     (id: string | null) => {
@@ -506,7 +530,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
         if (locked) onSignIn?.();
         else sendMessage();
       }}
-      className={cx('mx-auto w-full max-w-3xl px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-4', empty ? 'order-3 lg:order-2' : 'order-3')}
+      className={cx('mx-auto w-full max-w-3xl shrink-0 px-3 pb-2 sm:px-6 md:pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:pb-4', empty ? 'order-3 lg:order-2' : 'order-3')}
     >
       <div
         ref={pickerRef}
@@ -518,7 +542,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
         {post || idea ? (
           <div className="px-3 pt-3">
             <span className="inline-flex h-8 max-w-full items-center gap-2 rounded-xl bg-zinc-100 pl-2.5 pr-1 text-[13px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-              {post ? <PlatformIcon platform={post.platform} size={15} /> : <Lightbulb className="h-4 w-4 text-cantaloupe-500" aria-hidden="true" />}
+              {post ? <PlatformIcon platform={post.platform} size={15} /> : <Lightbulb className="h-4 w-4 text-muted" aria-hidden="true" />}
               <span className="truncate">{attachedTitle}</span>
               <button
                 type="button"
@@ -587,11 +611,22 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
           </div>
         ) : null}
 
+        <div className="flex items-end gap-1 p-1.5 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:p-0">
+        <button
+          type="button"
+          onClick={() => setPickerOpen((v) => !v)}
+          aria-expanded={pickerOpen}
+          aria-label="Attach a post or idea"
+          title="Attach a post or idea"
+          className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 md:col-start-1 md:row-start-2 md:mb-2.5 md:ml-2.5 md:mt-1 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+        >
+          <Plus className="h-[18px] w-[18px]" aria-hidden="true" />
+        </button>
+
         <textarea
           ref={inputRef}
           rows={1}
           value={input}
-          disabled={locked}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -600,45 +635,34 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
             }
           }}
           placeholder={
-            locked
-              ? 'Sign in to chat with Slate'
-              : post || idea
+            post || idea
               ? `Ask about “${clip(attachedTitle, 40)}”…`
               : 'Message Slate'
           }
           aria-label="Message Slate"
           maxLength={8000}
-          className="block max-h-[200px] w-full resize-none bg-transparent px-5 pb-1 pt-4 text-[16px] leading-6 text-zinc-950 placeholder:text-zinc-400 focus:outline-none disabled:cursor-not-allowed sm:text-[15px] dark:text-zinc-50 dark:placeholder:text-zinc-500"
+          className="block max-h-[200px] min-w-0 flex-1 resize-none bg-transparent px-2 py-2.5 text-[16px] leading-6 text-zinc-950 placeholder:text-zinc-400 focus:outline-none disabled:cursor-not-allowed md:col-span-3 md:row-start-1 md:w-full md:flex-none md:px-5 md:pb-1 md:pt-4 lg:text-[15px] dark:text-zinc-50 dark:placeholder:text-zinc-500"
         />
 
-        <div className="flex items-center gap-1.5 p-2.5 pt-1">
-          <button
-            type="button"
-            onClick={() => setPickerOpen((v) => !v)}
-            aria-expanded={pickerOpen}
-            aria-label="Attach a post or idea"
-            title="Attach a post or idea"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
-          >
-            <Plus className="h-[18px] w-[18px]" aria-hidden="true" />
-          </button>
-
+        <div className="mb-0.5 flex shrink-0 items-center gap-1.5 md:col-start-3 md:row-start-2 md:mb-2.5 md:mr-2.5 md:mt-1 md:justify-self-end">
           {locked ? (
-            <span className="ml-1 flex min-w-0 items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">Demo · chat needs an account</span>
-            </span>
-          ) : null}
-
-          {locked ? (
-            onSignIn ? (
+            onSignIn && input.trim() ? (
               <button
                 type="submit"
                 className="ml-auto h-9 shrink-0 rounded-full bg-zinc-950 px-4 text-[13px] font-semibold text-white transition-colors hover:bg-electric-600 dark:bg-white dark:text-zinc-950 dark:hover:bg-electric-500 dark:hover:text-white"
               >
                 Sign in
               </button>
-            ) : null
+            ) : (
+            <button
+              type="button"
+              disabled
+              aria-label="Send message"
+              className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+            >
+              <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.5} aria-hidden="true" />
+            </button>
+            )
           ) : sending ? (
             <button
               type="button"
@@ -665,6 +689,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
             </button>
           )}
         </div>
+        </div>
 
         {pickerOpen ? (
           <div className="animate-pop-in absolute bottom-full left-0 z-20 mb-2 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
@@ -676,13 +701,13 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
                 onChange={(e) => setPickerQuery(e.target.value)}
                 placeholder="Find a post or idea…"
                 aria-label="Find a post or idea"
-                className="h-11 w-full bg-transparent pl-9 pr-3 text-sm focus:outline-none"
+                className="h-11 w-full bg-transparent pl-9 pr-3 text-base focus:outline-none lg:text-sm"
               />
             </div>
             <div className="max-h-72 overflow-y-auto p-1.5">
               {[
                 { label: 'Posts', rows: pickPosts.map((i) => ({ key: `p-${i.id}`, title: i.title, icon: <PlatformIcon platform={i.platform} size={16} />, onPick: () => pick({ kind: 'post', id: i.id }) })) },
-                { label: 'Ideas', rows: pickIdeas.map((i) => ({ key: `i-${i.id}`, title: i.title, icon: <Lightbulb className="h-4 w-4 text-cantaloupe-500" aria-hidden="true" />, onPick: () => pick({ kind: 'idea', id: i.id }) })) },
+                { label: 'Ideas', rows: pickIdeas.map((i) => ({ key: `i-${i.id}`, title: i.title, icon: <Lightbulb className="h-4 w-4 text-muted" aria-hidden="true" />, onPick: () => pick({ kind: 'idea', id: i.id }) })) },
               ].map((group) =>
                 group.rows.length ? (
                   <div key={group.label} className="mb-1">
@@ -718,44 +743,17 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
     <section aria-label="Chat with Slate" className="flex min-h-0 flex-1 flex-col">
       {/* Top bar: Slate + channel focus on the left, new chat on the right */}
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-3 sm:px-5">
-        <label className="relative flex h-10 min-w-0 cursor-pointer items-center gap-2 rounded-xl px-2.5 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/70">
-          <SlateAvatar size={26} chip={false} />
-          <span className="font-display text-[17px] font-bold tracking-tight">Slate</span>
-          <span className="min-w-0 truncate text-[15px] text-zinc-500 dark:text-zinc-400">{scopeLabel}</span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
-          <select
-            value={scope}
-            onChange={(e) => setScope(e.target.value)}
-            aria-label="Channel Slate should focus on"
-            className="absolute inset-0 cursor-pointer opacity-0"
-          >
-            <option value="all">All channels</option>
-            {channels.map((c) => (
-              <option key={c.id} value={String(c.id)}>{c.name}</option>
-            ))}
-          </select>
-        </label>
+        <ChannelScopeMenu value={scope} onChange={setScope} channels={channels} items={items} />
         <div className="flex shrink-0 items-center gap-1">
           {authToken ? (
             <button
               type="button"
-              onClick={() => setHistoryOpen(true)}
-              aria-label="Your chats"
-              title="Your chats"
+              onClick={() => setSheetTab('chats')}
+              aria-label="Chats and preferences"
+              title="Chats and preferences"
               className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800/70 dark:hover:text-white"
             >
               <History className="h-[19px] w-[19px]" aria-hidden="true" />
-            </button>
-          ) : null}
-          {authToken ? (
-            <button
-              type="button"
-              onClick={() => setPrefsOpen(true)}
-              aria-label="Creative preferences"
-              title="Creative preferences"
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800/70 dark:hover:text-white"
-            >
-              <SlidersHorizontal className="h-[19px] w-[19px]" aria-hidden="true" />
             </button>
           ) : null}
           <button
@@ -780,20 +778,20 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
           <>
             <div className="order-1 my-auto px-6 text-center lg:mb-7 lg:mt-auto">
               <SlateAvatar size={56} chip={false} className="mx-auto animate-float" />
-              <h2 className="mt-4 font-display text-2xl font-bold tracking-tight sm:text-[30px]">
-                {post || idea ? 'Let’s work on this together' : 'What are we creating today?'}
+              <h2 className="mt-4 text-2xl font-bold tracking-tight sm:text-[30px]">
+                {post || idea ? 'Let’s work on this together' : 'What’s on your mind?'}
               </h2>
               <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
                 {post
                   ? 'I can see this post’s caption, tags and notes.'
                   : idea
                   ? 'I can see this idea’s notes and link.'
-                  : 'Ask about your ideas, captions and channels.'}
+                  : 'Ask Slate about your content, ideas, or what you’re planning next.'}
               </p>
             </div>
 
-            <div className="order-2 pb-3 lg:order-3 lg:mb-auto lg:pb-[14vh] lg:pt-4">
-              <div className="mx-auto flex max-w-3xl gap-2 overflow-x-auto px-3 [scrollbar-width:none] sm:px-6 lg:flex-wrap lg:justify-center [&::-webkit-scrollbar]:hidden">
+            <div className="order-2 pb-2 lg:order-3 lg:mb-auto lg:pb-[14vh] lg:pt-4">
+              <div className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2 px-4 sm:px-6">
                 {suggestions.map((s) => (
                   <button
                     key={s.title}
@@ -847,7 +845,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
                               {r.type === 'post' ? (
                                 <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                               ) : (
-                                <Lightbulb className="h-3.5 w-3.5 shrink-0 text-cantaloupe-500" aria-hidden="true" />
+                                <Lightbulb className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden="true" />
                               )}
                               <span className={cx('truncate', r.missing && 'line-through')}>{r.title}</span>
                               {r.missing ? <span className="shrink-0 text-[11px] font-normal text-zinc-400">deleted</span> : null}
@@ -868,7 +866,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
                             <p className="text-[13.5px] text-zinc-800 dark:text-zinc-200">{p.label}</p>
                           </div>
                           {p.status === 'saved' ? (
-                            <Check className="h-4 w-4 text-emerald-600" aria-label="Saved" />
+                            <Check className="h-4 w-4 text-link" aria-label="Saved" />
                           ) : p.status === 'dismissed' ? (
                             <span className="text-xs text-zinc-400">Dismissed</span>
                           ) : (
@@ -905,7 +903,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
                       ) : null}
                       {turn.notice ? <p className="mt-2 text-[12.5px] text-zinc-500 dark:text-zinc-400">{turn.notice}</p> : null}
                       {turn.id === streamingId ? null : (
-                      <div className="-ml-2 mt-2 flex items-center gap-0.5 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 lg:[.group:last-child_&]:opacity-100">
+                      <div className="-ml-2 mt-2 flex items-center gap-0.5 transition-opacity lg:pointer-fine:opacity-0 lg:pointer-fine:group-hover:opacity-100 lg:pointer-fine:group-focus-within:opacity-100 lg:pointer-fine:[.group:last-child_&]:opacity-100">
                         <button
                           type="button"
                           onClick={() => handleCopy(turn)}
@@ -920,7 +918,7 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
                             type="button"
                             onClick={() => applyCaption(turn)}
                             disabled={appliedId === turn.id}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:text-emerald-600 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-100 dark:disabled:text-emerald-400"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-text disabled:text-text disabled:hover:bg-transparent"
                           >
                             {appliedId === turn.id ? <Check className="h-4 w-4" aria-hidden="true" /> : <FileText className="h-4 w-4" aria-hidden="true" />}
                             {appliedId === turn.id ? 'Caption updated' : 'Use as caption'}
@@ -952,22 +950,24 @@ export const StudioChatPanel: React.FC<StudioChatPanelProps> = ({
 
         {composer}
       </div>
-      {historyOpen && authToken ? (
-        <SlateHistorySheet
+      {sheetTab && authToken ? (
+        <SlateSheet
+          tab={sheetTab}
+          onTabChange={setSheetTab}
           authToken={authToken}
-          currentId={conversationId}
-          onOpen={(id) => {
-            setHistoryOpen(false);
+          channels={channels}
+          currentConversationId={conversationId}
+          onOpenConversation={(id) => {
+            setSheetTab(null);
             openConversation(id);
           }}
-          onDeleted={() => {
+          onConversationDeleted={() => {
             setConversationId(null);
             setMessages([]);
           }}
-          onClose={() => setHistoryOpen(false)}
+          onClose={() => setSheetTab(null)}
         />
       ) : null}
-      {prefsOpen && authToken ? <SlatePreferencesSheet authToken={authToken} channels={channels} onClose={() => setPrefsOpen(false)} /> : null}
     </section>
   );
 };

@@ -1,17 +1,37 @@
 'use client';
 
 import Link from 'next/link';
-import React from 'react';
-import { ArrowLeft, CalendarDays, Hash, LayoutGrid, Lightbulb, LogIn, MessageSquare, Plus } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ArrowLeft, CalendarDays, Hash, LayoutGrid, Lightbulb, LogIn, MessageSquare, PanelLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { ThemePreference } from '@/src/lib/content-logic';
-import { channelPlatform, type ChannelItem, type ContentItem, type LibraryFilters } from '@/src/lib/content-logic';
+import { platformOfChannel, type ChannelItem, type ContentItem } from '@/src/lib/content-logic';
 import { AccountMenu, SidebarAccount, type AccountInfo } from './AccountMenu';
 import { PlatformIcon } from './PlatformIcon';
 import { SlateAvatar } from './SlateAvatar';
 import { LogoMark, Logo } from './site/Logo';
-import { cx, STAGE_STYLES } from './ui';
+import { ActionMenu, cx, useModalLayer } from './ui';
 
 export type ActiveTab = 'library' | 'ideas' | 'calendar' | 'chat';
+
+export type AppBreakpoint = 'phone' | 'tablet' | 'desktop';
+
+/** Which shell is on screen. Null until the browser width is known. */
+export function useAppBreakpoint(): AppBreakpoint | null {
+  const [bp, setBp] = useState<AppBreakpoint | null>(null);
+  useLayoutEffect(() => {
+    const md = window.matchMedia('(min-width: 768px)');
+    const lg = window.matchMedia('(min-width: 1024px)');
+    const apply = () => setBp(lg.matches ? 'desktop' : md.matches ? 'tablet' : 'phone');
+    apply();
+    md.addEventListener('change', apply);
+    lg.addEventListener('change', apply);
+    return () => {
+      md.removeEventListener('change', apply);
+      lg.removeEventListener('change', apply);
+    };
+  }, []);
+  return bp;
+}
 
 export const TABS: Array<{ key: ActiveTab; label: string; short: string; icon: React.ElementType }> = [
   { key: 'library', label: 'Library', short: 'Library', icon: LayoutGrid },
@@ -37,43 +57,46 @@ interface ShellProps {
 /* Desktop sidebar                                                     */
 /* ------------------------------------------------------------------ */
 
-export function Sidebar({
-  counts,
-  channels,
-  items,
-  activeChannel,
-  onChannel,
-  onAddChannel,
-  ...shell
-}: ShellProps & {
+export type SidebarProps = ShellProps & {
   counts: Record<ActiveTab, number | null>;
   channels: ChannelItem[];
   items: ContentItem[];
   activeChannel: string;
   onChannel: (name: string) => void;
   onAddChannel: () => void;
-}) {
-  const { activeTab, onTab, onNewPost, account } = shell;
+  onEditChannel: (channel: ChannelItem) => void;
+  onDeleteChannel: (channel: ChannelItem) => void;
+};
+
+/** Desktop (1024px+): the permanent sidebar. */
+export function Sidebar(props: SidebarProps) {
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[256px] flex-col border-r border-zinc-200/80 bg-zinc-50/80 backdrop-blur-xl lg:flex dark:border-zinc-800/80 dark:bg-zinc-950/80">
-      <div className="flex h-16 items-center px-5">
-        <Link href="/" aria-label="Backlot website" className="rounded-lg">
-          <Logo />
-        </Link>
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[256px] flex-col border-r border-border bg-bg lg:flex">
+      <div className="px-5 pt-5">
+        <Logo />
+        {props.account.isPreview ? <DemoBackLink className="mt-3 w-full" /> : null}
       </div>
+      <SidebarBody {...props} />
+    </aside>
+  );
+}
 
-      <div className="px-3">
-        <button
-          type="button"
-          onClick={onNewPost}
-          className="group flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-zinc-950 text-[13.5px] font-semibold text-white shadow-sm transition-all hover:bg-electric-600 dark:bg-white dark:text-zinc-950 dark:hover:bg-electric-500 dark:hover:text-white"
-        >
-          <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" aria-hidden="true" />
-          New post
-        </button>
-      </div>
-
-      <nav aria-label="Sections" className="mt-5 space-y-0.5 px-3">
+/** Sections, channels and account controls: shared by the desktop sidebar and the drawer. */
+function SidebarBody({
+  counts,
+  channels,
+  items,
+  activeChannel,
+  onChannel,
+  onAddChannel,
+  onEditChannel,
+  onDeleteChannel,
+  ...shell
+}: SidebarProps) {
+  const { activeTab, onTab, account } = shell;
+  return (
+    <>
+      <nav aria-label="Sections" className="mt-2 space-y-0.5 px-3">
         {TABS.map(({ key, label, icon: Icon }) => {
           const on = activeTab === key && !(key === 'library' && activeChannel !== 'all');
           const count = counts[key];
@@ -84,24 +107,24 @@ export function Sidebar({
               onClick={() => onTab(key)}
               aria-current={on ? 'page' : undefined}
               className={cx(
-                'group relative flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors',
+                'group relative flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-[15px]',
                 on
-                  ? 'bg-white text-zinc-950 shadow-sm ring-1 ring-zinc-200/80 dark:bg-zinc-900 dark:text-white dark:ring-zinc-800'
-                  : 'text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900/70 dark:hover:text-white'
+                  ? 'bg-surface text-text shadow-sm ring-1 ring-border'
+                  : 'text-muted hover:bg-surface-2 hover:text-text'
               )}
             >
-              {on ? <span className="absolute -left-3 top-2 h-5 w-1 rounded-r-full bg-electric-500" aria-hidden="true" /> : null}
+              {on ? <span className="absolute -left-3 top-2 h-5 w-1 rounded-r-full bg-accent" aria-hidden="true" /> : null}
               {key === 'chat' ? (
                 <SlateAvatar size={18} chip={false} className={on ? '' : 'opacity-70 grayscale'} />
               ) : (
-                <Icon className={cx('h-4 w-4', on ? 'text-electric-600 dark:text-electric-400' : 'text-zinc-400')} aria-hidden="true" />
+                <Icon className={cx('h-4 w-4', on ? 'text-link' : 'text-faint')} aria-hidden="true" />
               )}
               {label}
               {count !== null ? (
                 <span
                   className={cx(
                     'ml-auto rounded-md px-1.5 text-[11px] font-semibold tabular-nums',
-                    on ? 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300' : 'text-zinc-400'
+                    on ? 'bg-surface-2 text-muted' : 'text-faint'
                   )}
                 >
                   {count}
@@ -120,29 +143,25 @@ export function Sidebar({
               onClick={onAddChannel}
               aria-label="Add channel"
               title="Add channel"
-              className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-200/70 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors pointer-coarse:h-9 pointer-coarse:w-9 hover:bg-zinc-200/70 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </div>
           {channels.length === 0 ? (
-            <button
-              type="button"
-              onClick={onAddChannel}
-              className="flex h-10 w-full items-center gap-2 rounded-lg border border-dashed border-zinc-300 px-2.5 text-[13px] text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-900 dark:border-zinc-700 dark:hover:text-white"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add your first channel
-            </button>
+            <div className="px-2.5 py-1.5">
+              <p className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400">No channels yet</p>
+              <p className="mt-0.5 text-[12px] leading-snug text-zinc-400 dark:text-zinc-500">Your channels will appear here when you add them.</p>
+            </div>
           ) : null}
           <div className="space-y-0.5">
             {channels.map((ch) => {
               const on = activeTab === 'library' && activeChannel === ch.name;
               const n = items.filter((i) => i.channelName === ch.name).length;
-              const platform = channelPlatform(items, ch.name);
+              const platform = platformOfChannel(channels, items, ch.name);
               return (
+                <div key={ch.id} className="group/ch relative">
                 <button
-                  key={ch.id}
                   type="button"
                   onClick={() => onChannel(on ? 'all' : ch.name)}
                   aria-pressed={on}
@@ -156,7 +175,7 @@ export function Sidebar({
                   )}
                 >
                   {platform ? (
-                    <PlatformIcon platform={platform} size={18} />
+                    <PlatformIcon platform={platform} size={18} colored />
                   ) : (
                     <Hash className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
                   )}
@@ -164,8 +183,18 @@ export function Sidebar({
                     <span className={cx('block truncate text-[13px]', on && 'font-semibold')}>{ch.name}</span>
                     {ch.handle ? <span className="block truncate text-[11px] text-zinc-400">{ch.handle}</span> : null}
                   </span>
-                  <span className="text-[11px] tabular-nums text-zinc-400">{n}</span>
+                  <span className="text-[11px] tabular-nums text-zinc-400 transition-opacity group-hover/ch:opacity-0 group-focus-within/ch:opacity-0 pointer-coarse:hidden">{n}</span>
                 </button>
+                <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2 opacity-0 transition-opacity group-hover/ch:opacity-100 group-focus-within/ch:opacity-100 has-[[aria-expanded=true]]:opacity-100 pointer-coarse:opacity-100">
+                  <ActionMenu
+                    label={`More for ${ch.name}`}
+                    items={[
+                      { label: 'Edit channel', icon: Pencil, onSelect: () => onEditChannel(ch) },
+                      { label: 'Delete channel', icon: Trash2, onSelect: () => onDeleteChannel(ch), tone: 'danger' },
+                    ]}
+                  />
+                </div>
+                </div>
               );
             })}
           </div>
@@ -173,9 +202,9 @@ export function Sidebar({
 
       <div className="space-y-2 p-3">
         {account.isPreview ? (
-          <div data-preview-badge className="relative overflow-hidden rounded-2xl border border-cantaloupe-200/80 bg-gradient-to-br from-cantaloupe-50 to-white p-3.5 dark:border-cantaloupe-900/50 dark:from-cantaloupe-950/40 dark:to-zinc-950">
-            <p className="flex items-center gap-1.5 text-[12px] font-bold text-cantaloupe-700 dark:text-cantaloupe-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-cantaloupe-500" aria-hidden="true" />
+          <div data-preview-badge className="relative overflow-hidden rounded-2xl border border-border bg-surface-2 p-3.5">
+            <p className="flex items-center gap-1.5 text-[12px] font-bold text-text">
+              <span className="h-1.5 w-1.5 rounded-full bg-faint" aria-hidden="true" />
               Demo workspace
             </p>
             <p className="mt-1 text-[12px] leading-snug text-zinc-600 dark:text-zinc-400">
@@ -185,7 +214,7 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={shell.onSignIn}
-                className="mt-2.5 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-white text-[12.5px] font-semibold text-zinc-900 shadow-sm ring-1 ring-zinc-200 transition-colors hover:bg-zinc-50 dark:bg-zinc-900 dark:text-white dark:ring-zinc-800 dark:hover:bg-zinc-800"
+                className="mt-2.5 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-surface text-[12.5px] font-semibold text-text shadow-sm ring-1 ring-border transition-colors hover:bg-bg"
               >
                 <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
                 Sign in with Google
@@ -193,14 +222,199 @@ export function Sidebar({
             ) : null}
           </div>
         ) : null}
+        <SidebarAccount account={account} onSignOut={shell.onSignOut} onOpenSettings={shell.onOpenSettings} />
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Phones and tablets: slide-out drawer                                */
+/* ------------------------------------------------------------------ */
+
+/** The full sidebar as a drawer (below 1024px). Picking a destination closes it. */
+export function NavDrawer({ open, onClose, ...props }: SidebarProps & { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return <NavDrawerPanel {...props} onClose={onClose} />;
+}
+
+function NavDrawerPanel({ onClose, ...props }: SidebarProps & { onClose: () => void }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useModalLayer(panelRef, onClose);
+
+  // The permanent sidebar takes over at desktop widths (e.g. rotating a tablet).
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => mq.matches && onCloseRef.current();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [onCloseRef]);
+
+  const thenClose =
+    <A extends unknown[]>(fn: (...args: A) => void) =>
+    (...args: A) => {
+      onClose();
+      fn(...args);
+    };
+
+  return (
+    <div className="fixed inset-0 z-50 lg:hidden">
+      <div className="animate-fade-in absolute inset-0 bg-zinc-950/50 backdrop-blur-[2px] dark:bg-black/70" onClick={onClose} aria-hidden="true" />
+      <div
+        ref={panelRef}
+        id="app-nav-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+        tabIndex={-1}
+        data-sheet-panel
+        className="animate-drawer-in absolute inset-y-0 left-0 flex w-[min(18rem,86vw)] flex-col border-r border-border bg-bg pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] shadow-2xl outline-none"
+      >
+        <div className="flex h-14 shrink-0 items-center justify-between pl-5 pr-2">
+          <Logo />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Collapse sidebar"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-text"
+          >
+            <PanelLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+        <SidebarBody
+          {...props}
+          onTab={thenClose(props.onTab)}
+          onChannel={thenClose(props.onChannel)}
+          onAddChannel={thenClose(props.onAddChannel)}
+          onEditChannel={thenClose(props.onEditChannel)}
+          onDeleteChannel={thenClose(props.onDeleteChannel)}
+          onOpenSettings={props.onOpenSettings ? thenClose(props.onOpenSettings) : undefined}
+          onSignIn={props.onSignIn ? thenClose(props.onSignIn) : undefined}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Tablets (768–1023px): a collapsed icon rail. Icons switch pages. The profile icon opens account actions. */
+export function TabletRail({
+  activeTab,
+  onTab,
+  activeChannel,
+  channels,
+  items,
+  onChannel,
+  onAddChannel,
+  account,
+  onSignOut,
+  onOpenSettings,
+}: Pick<
+  SidebarProps,
+  | 'activeTab'
+  | 'onTab'
+  | 'activeChannel'
+  | 'channels'
+  | 'items'
+  | 'onChannel'
+  | 'onAddChannel'
+  | 'account'
+  | 'onSignOut'
+  | 'onOpenSettings'
+>) {
+  return (
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-16 flex-col items-center border-r border-border bg-bg pb-[env(safe-area-inset-bottom)] pt-[calc(0.5rem+env(safe-area-inset-top))] md:flex lg:hidden">
+      <div className="mb-3 mt-1 flex flex-col items-center gap-2">
+        <LogoMark />
         {account.isPreview ? (
-          // Demo: no account menu, just a way back to the website.
-          <div data-preview-badge>
-            <DemoBackLink className="w-full" />
-          </div>
-        ) : (
-          <SidebarAccount account={account} onSignOut={shell.onSignOut} onOpenSettings={shell.onOpenSettings} />
-        )}
+          <Link
+            href="/"
+            aria-label="Back to home"
+            title="Back to home"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-text"
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          </Link>
+        ) : null}
+      </div>
+      <nav aria-label="Sections" className="flex flex-col items-center gap-1">
+        {TABS.map(({ key, label, icon: Icon }) => {
+          const on = activeTab === key && !(key === 'library' && activeChannel !== 'all');
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onTab(key)}
+              aria-label={label}
+              title={label}
+              aria-current={on ? 'page' : undefined}
+              className={cx(
+                'relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors',
+                on
+                  ? 'bg-surface text-link shadow-sm ring-1 ring-border'
+                  : 'text-muted hover:bg-surface-2 hover:text-text'
+              )}
+            >
+              {on ? <span className="absolute -left-2.5 top-3 h-5 w-1 rounded-r-full bg-accent" aria-hidden="true" /> : null}
+              {key === 'chat' ? (
+                <SlateAvatar size={20} chip={false} className={on ? '' : 'opacity-70 grayscale'} />
+              ) : (
+                <Icon className="h-5 w-5" aria-hidden="true" />
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="mt-3 w-8 border-t border-border" aria-hidden="true" />
+      <div className="mt-3 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto no-scrollbar">
+        <p className="sr-only">Your channels</p>
+        {channels.map((ch) => {
+          const on = activeTab === 'library' && activeChannel === ch.name;
+          const platform = platformOfChannel(channels, items, ch.name);
+          return (
+            <button
+              key={ch.id}
+              type="button"
+              onClick={() => onChannel(on ? 'all' : ch.name)}
+              aria-pressed={on}
+              aria-label={ch.name}
+              title={ch.name}
+              className={cx(
+                'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors',
+                on
+                  ? 'bg-surface text-link shadow-sm ring-1 ring-border'
+                  : 'text-muted hover:bg-surface-2 hover:text-text'
+              )}
+            >
+              {on ? <span className="absolute -left-2.5 top-3 h-5 w-1 rounded-r-full bg-accent" aria-hidden="true" /> : null}
+              {platform ? (
+                <PlatformIcon platform={platform} size={20} colored />
+              ) : (
+                <Hash className="h-5 w-5" aria-hidden="true" />
+              )}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={onAddChannel}
+          aria-label="Add channel"
+          title="Add channel"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-text"
+        >
+          <Plus className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="mt-auto flex w-full shrink-0 justify-center border-t border-border px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+        <AccountMenu
+          account={account}
+          onSignOut={onSignOut}
+          onOpenSettings={onOpenSettings}
+          avatarSize={32}
+          buttonClassName="flex h-11 w-11 items-center justify-center rounded-2xl bg-surface ring-1 ring-border"
+          menuClassName="bottom-0 left-full ml-3 origin-bottom-left"
+        />
       </div>
     </aside>
   );
@@ -216,140 +430,82 @@ function DemoBackLink({ className }: { className?: string }) {
     <Link
       href="/"
       className={cx(
-        'flex h-9 items-center justify-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3.5 text-[13px] font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-700 dark:hover:text-white',
+        'flex h-9 items-center justify-center gap-1.5 rounded-full border border-border bg-surface px-3.5 text-[13px] font-semibold text-text transition-colors hover:border-border-strong',
         className
       )}
     >
       <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-      Back
+      Back to home
     </Link>
   );
 }
 
+/** Phones (below 768px): logo and account. Sections live in the bottom tab bar. */
 export function MobileTopBar(shell: ShellProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl backdrop-saturate-150 lg:hidden dark:border-zinc-800/70 dark:bg-zinc-950/80">
-      <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-4 sm:px-6">
-        <Link href="/" aria-label="Backlot website" className="flex items-center gap-2.5 rounded-lg">
+    <header className="sticky top-0 z-30 shrink-0 border-b border-border bg-bg pt-[env(safe-area-inset-top)] md:hidden">
+      <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-2 pl-4 pr-4 sm:pr-6">
+        <div className="flex items-center gap-2.5">
           <LogoMark />
-          <span className="font-display text-[16px] font-bold tracking-tight">Backlot</span>
-        </Link>
+          <span className="text-[16px] font-bold tracking-tight">Backlot</span>
+        </div>
         {shell.account.isPreview ? (
-          <span data-preview-badge className="rounded-full bg-cantaloupe-100 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-cantaloupe-700 dark:bg-cantaloupe-950 dark:text-cantaloupe-300">
-            Demo
-          </span>
+          <Link
+            href="/"
+            className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-[13px] font-semibold text-text"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            Back
+          </Link>
         ) : null}
         <div className="ml-auto flex items-center gap-2">
-          {shell.account.isPreview ? (
-            <span data-preview-badge>
-              <DemoBackLink />
-            </span>
-          ) : (
-            <AccountMenu account={shell.account} onSignOut={shell.onSignOut} onOpenSettings={shell.onOpenSettings} />
-          )}
+          <AccountMenu
+            account={shell.account}
+            onSignOut={shell.onSignOut}
+            onOpenSettings={shell.onOpenSettings}
+            avatarSize={32}
+            buttonClassName="flex h-11 w-11 items-center justify-center rounded-2xl bg-surface ring-1 ring-border"
+          />
         </div>
       </div>
     </header>
   );
 }
 
-export function MobileTabBar({ activeTab, onTab, onNewPost }: Pick<ShellProps, 'activeTab' | 'onTab' | 'onNewPost'>) {
-  const tab = (t: (typeof TABS)[number]) => {
-    const on = activeTab === t.key;
-    const Icon = t.icon;
+/* ------------------------------------------------------------------ */
+/* Phone tab bar                                                       */
+/* ------------------------------------------------------------------ */
+
+/** Phones: Library, Ideas, create, Calendar, Slate. Account stays in the header. */
+export function PhoneTabBar({ activeTab, onTab, onNew }: { activeTab: ActiveTab; onTab: (t: ActiveTab) => void; onNew: () => void }) {
+  const left = TABS.filter((t) => t.key === 'library' || t.key === 'ideas');
+  const right = TABS.filter((t) => t.key === 'calendar' || t.key === 'chat');
+  const tab = (key: ActiveTab, label: string, Icon: React.ElementType) => {
+    const on = activeTab === key;
     return (
       <button
-        key={t.key}
+        key={key}
         type="button"
-        onClick={() => onTab(t.key)}
+        onClick={() => onTab(key)}
         aria-current={on ? 'page' : undefined}
-        className={cx(
-          'flex h-full flex-col items-center justify-center gap-1.5 text-[11px] font-semibold leading-none transition-colors',
-          on ? 'text-zinc-950 dark:text-white' : 'text-zinc-400 dark:text-zinc-500'
-        )}
+        className={cx('flex min-h-11 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold', on ? 'text-text' : 'text-muted')}
       >
-        <span className="flex h-6 w-6 items-center justify-center" aria-hidden="true">
-          {t.key === 'chat' ? (
-            <SlateAvatar size={24} chip={false} className={cx('transition-opacity', !on && 'opacity-60 grayscale')} />
-          ) : (
-            <Icon className={cx('h-[22px] w-[22px]', on && 'text-electric-600 dark:text-electric-400')} />
-          )}
-        </span>
-        {t.short}
+        {key === 'chat' ? <SlateAvatar size={20} chip={false} className={on ? '' : 'opacity-70 grayscale'} /> : <Icon className="h-5 w-5" aria-hidden="true" />}
+        {label}
       </button>
     );
   };
   return (
-    <nav
-      aria-label="Sections"
-      className="fixed inset-x-3 bottom-[calc(0.6rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-md rounded-[24px] border border-zinc-200/80 bg-white/85 shadow-[0_12px_40px_-12px_rgba(10,20,60,0.25)] backdrop-blur-xl backdrop-saturate-150 lg:hidden dark:border-zinc-800 dark:bg-zinc-900/85 dark:shadow-black/60"
-    >
-      <div className="grid h-[64px] grid-cols-5 items-stretch px-1">
-        {TABS.slice(0, 2).map(tab)}
+    <nav aria-label="Sections" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg pb-[env(safe-area-inset-bottom)] md:hidden">
+      <div className="grid grid-cols-5 items-center px-1">
+        {left.map(({ key, label, icon }) => tab(key, label, icon))}
         <div className="flex items-center justify-center">
-          <button
-            type="button"
-            data-testid="mobile-add-btn"
-            onClick={onNewPost}
-            aria-label="New post"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-electric-600 text-white shadow-md shadow-electric-600/30 transition-transform active:scale-90"
-          >
+          <button type="button" onClick={onNew} aria-label="Create" className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent text-white shadow-sm">
             <Plus className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
-        {TABS.slice(2).map(tab)}
+        {right.map(({ key, short, icon }) => tab(key, short, icon))}
       </div>
     </nav>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Library overview stats                                              */
-/* ------------------------------------------------------------------ */
-
-type StageFilter = LibraryFilters['status'];
-
-/** Overview cards that double as the stage filter for the library. */
-export function StatsStrip({ items, active, onSelect }: { items: ContentItem[]; active: StageFilter; onSelect: (s: StageFilter) => void }) {
-  const total = items.length;
-  const by = (s: string) => items.filter((i) => i.status === s).length;
-  const inProgress = by('scripting') + by('editing');
-  const stats: Array<{ key: StageFilter; label: string; value: number; hint: string; dot: string; bar: string; ring: string }> = [
-    { key: 'all', label: 'All posts', value: total, hint: 'Every stage', dot: 'bg-zinc-900 dark:bg-white', bar: 'bg-zinc-900 dark:bg-zinc-200', ring: 'ring-zinc-900 dark:ring-white' },
-    { key: 'idea', label: 'Planned', value: by('idea'), hint: 'Not started yet', dot: STAGE_STYLES.idea.dot, bar: 'bg-zinc-400 dark:bg-zinc-500', ring: 'ring-zinc-400' },
-    { key: 'in_progress', label: 'In progress', value: inProgress, hint: `${by('scripting')} scripting · ${by('editing')} editing`, dot: STAGE_STYLES.editing.dot, bar: 'bg-cantaloupe-500', ring: 'ring-cantaloupe-500' },
-    { key: 'ready', label: 'Ready to post', value: by('ready'), hint: 'Waiting to go live', dot: STAGE_STYLES.ready.dot, bar: 'bg-electric-500', ring: 'ring-electric-500' },
-    { key: 'posted', label: 'Posted', value: by('posted'), hint: 'Live on your channels', dot: STAGE_STYLES.posted.dot, bar: 'bg-emerald-500', ring: 'ring-emerald-500' },
-  ];
-  return (
-    <div role="radiogroup" aria-label="Filter by stage" className="-mx-4 mb-4 flex snap-x scroll-px-4 gap-2.5 overflow-x-auto px-4 pb-1 pt-1 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 md:mx-0 md:mb-5 md:grid md:grid-cols-5 md:gap-3 md:overflow-visible md:px-0 md:pt-0 [&::-webkit-scrollbar]:hidden">
-      {stats.map((s) => {
-        const on = active === s.key || (s.key === 'all' && !stats.some((x) => x.key === active));
-        return (
-          <button
-            key={s.key}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onSelect(on && s.key !== 'all' ? 'all' : s.key)}
-            className={cx(
-              'group relative overflow-hidden rounded-2xl border bg-white p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 sm:px-4 sm:py-3.5 dark:bg-zinc-900/60',
-              'w-[8.75rem] shrink-0 snap-start md:w-auto',
-              on && s.key !== 'all' ? cx('border-transparent ring-2', s.ring) : 'border-zinc-200/80 dark:border-zinc-800 dark:hover:border-zinc-700'
-            )}
-          >
-            <p className="flex items-center gap-1.5 text-[12px] font-medium text-zinc-500 dark:text-zinc-400">
-              <span className={cx('h-1.5 w-1.5 rounded-full', s.dot)} aria-hidden="true" />
-              {s.label}
-            </p>
-            <p className="mb-1.5 mt-1 font-display text-[24px] font-bold leading-none tracking-tight tabular-nums sm:mt-1.5 sm:text-[26px] xl:mb-0">{s.value}</p>
-            <p className="mt-1.5 hidden truncate text-[11.5px] text-zinc-400 xl:block">{s.hint}</p>
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-zinc-100 dark:bg-zinc-800">
-              <div className={cx('h-full transition-[width] duration-700', s.bar)} style={{ width: total ? `${Math.max(4, (s.value / total) * 100)}%` : '0%' }} />
-            </div>
-          </button>
-        );
-      })}
-    </div>
   );
 }

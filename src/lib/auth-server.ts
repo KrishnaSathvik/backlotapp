@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth } from './firebase-admin.ts';
+import { verifyRequestIdentity } from './supabase/server.ts';
 import { getOrCreateUser } from '../db/users.ts';
 import { db } from '../db/index.ts';
 import { deletionFor } from './account/deletion.ts';
@@ -8,7 +8,7 @@ import { errorKind, opsEvent } from './ops-log.ts';
 export interface AuthenticatedUser {
   uid: string;
   email: string;
-  /** When the user last actually signed in (seconds since epoch), from the ID token. */
+  /** When the user last actually signed in (seconds since epoch), from the verified token's `amr`. */
   authTime: number;
 }
 
@@ -20,21 +20,8 @@ export interface RequireUserOptions {
   allowDeleting?: boolean;
 }
 
-/** Cookie the client sets so plain <img>/<video> requests to /api/files can be authenticated. */
-export const SESSION_COOKIE = 'cv_session';
-
 // Upsert each user once per server process instead of on every request.
 const knownUsers = new Set<string>();
-
-function readToken(request: NextRequest): string | null {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice('Bearer '.length).trim();
-    if (token) return token;
-  }
-  const cookie = request.cookies.get(SESSION_COOKIE)?.value;
-  return cookie || null;
-}
 
 /**
  * Resolves the signed-in user, or a ready-made error response.
@@ -44,22 +31,19 @@ export async function requireUser(
   request: NextRequest,
   opts: RequireUserOptions = {}
 ): Promise<{ user: AuthenticatedUser; response?: never } | { user?: never; response: NextResponse }> {
-  const token = readToken(request);
-  if (!token) {
-    return { response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  }
-
-  let uid: string;
-  let email: string;
-  let authTime: number;
+  // Supabase Auth: the uid comes from the verified access token (Bearer header, or the session
+  // cookies for plain <img>/<video> requests), never from the request body or query.
+  let identity;
   try {
-    const decoded = await adminAuth.verifyIdToken(token);
-    uid = decoded.uid;
-    email = decoded.email ?? '';
-    authTime = decoded.auth_time;
-  } catch {
+    identity = await verifyRequestIdentity(request);
+  } catch (error) {
+    opsEvent('auth.unavailable', { error: errorKind(error) }, 'ERROR');
+    return { response: NextResponse.json({ error: 'Sign-in is unavailable. Try again shortly.' }, { status: 503 }) };
+  }
+  if (!identity) {
     return { response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
+  const { uid, email, authTime } = identity;
 
   // Account deletion lock. Checked on every request (not cached per instance), before the
   // profile upsert, so a deleted account can't be recreated by a token that's still valid.

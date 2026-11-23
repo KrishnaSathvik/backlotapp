@@ -28,19 +28,20 @@ import { errorKind, opsEvent } from '../ops-log.ts';
  *
  * 1. Request: the signed-in creator confirms (fresh sign-in + typed confirmation). One
  *    `account_deletions` row is inserted. From that moment every authenticated route refuses the
- *    account (see requireUser), so nothing new can be read or written, and Firebase refresh
+ *    account (see requireUser), so nothing new can be read or written, and Supabase refresh
  *    tokens are revoked so no new sign-in tokens are issued.
  * 2. Grace period (default 3 minutes): requests already in flight when the lock went on (a Slate
  *    reply, a chunk upload) finish before the job starts. The final check below catches anything
  *    that still slips through.
- * 3. Job: a background worker (POST /api/internal/account-deletions, every few minutes) claims
- *    the job with a lease and runs each step in order. Every step is idempotent and its
+ * 3. Job: started right after the request (startDeletionSoon, via Next.js after()), and resumed
+ *    by the hourly recovery run (Vercel Cron → /api/internal/account-deletions) if that start
+ *    is cut short or a step fails. Either way the job is claimed with a lease and runs each step in order. Every step is idempotent and its
  *    completion time is recorded, so a crash or error resumes at the step that didn't finish.
  *    Failures retry with backoff for as long as it takes; the job never gives up silently.
- * 4. Completion: only after a final check finds no rows left in any table and no Firebase user.
+ * 4. Completion: only after a final check finds no rows left in any table and no Supabase Auth user.
  *    The row then stays as a tombstone (uid, dates; no content) for the status page.
  *
- * The Firebase sign-in is removed near the end, after everything it could be used to reach is
+ * The Supabase Auth sign-in is removed near the end, after everything it could be used to reach is
  * gone. The job doesn't need it: it runs server-side, keyed by uid.
  */
 
@@ -396,8 +397,12 @@ function rowFromSql(r: Record<string, unknown>): DeletionRow {
 
 const rowsOf = (r: unknown): Record<string, unknown>[] => (Array.isArray(r) ? r : ((r as { rows?: Record<string, unknown>[] }).rows ?? []));
 
-/** Claims one due job with a lease (SKIP LOCKED: two workers never get the same job). */
-export async function claimDueDeletion(db: Db, now: Date): Promise<DeletionRow | null> {
+/**
+ * Claims one due job with a lease (SKIP LOCKED: two workers never get the same job). With
+ * `jobId`, only that job is considered (the prompt start after a request).
+ */
+export async function claimDueDeletion(db: Db, now: Date, jobId?: number): Promise<DeletionRow | null> {
+  const only = jobId === undefined ? sql`` : sql`and id = ${jobId}`;
   const result = await db.execute(sql`
     update account_deletions set
       status = 'running',
@@ -409,6 +414,7 @@ export async function claimDueDeletion(db: Db, now: Date): Promise<DeletionRow |
       where status in ('pending', 'running')
         and next_attempt_at <= ${ts(now)}::timestamp
         and (locked_until is null or locked_until <= ${ts(now)}::timestamp)
+        ${only}
       order by next_attempt_at
       for update skip locked
       limit 1
@@ -475,26 +481,53 @@ export async function runDeletion(deps: DeletionDeps, job: DeletionRow): Promise
     .update(accountDeletions)
     .set({ status: 'completed', completedAt: t, lockedUntil: null, lastError: null, updatedAt: t })
     .where(eq(accountDeletions.id, job.id));
-  // uid: the out-of-database record used to re-apply deletions after a restore (docs/OPERATIONS.md).
+  // uid: the out-of-database record used to re-apply deletions after a restore (docs/BACKUPS.md).
   opsEvent('account_deletion.completed', { job: job.id, uid: job.userUid, attempts: job.attempts, hours: Math.round((t.getTime() - job.requestedAt.getTime()) / 36e5) }, 'NOTICE');
   return { completed: true };
 }
 
 /** Worker entry point: runs due jobs until none are left or the time budget is used. */
-export async function processDueDeletions(deps: DeletionDeps, opts: { budgetMs?: number; maxJobs?: number } = {}) {
+export async function processDueDeletions(
+  deps: DeletionDeps,
+  opts: { budgetMs?: number; maxJobs?: number; jobId?: number } = {}
+) {
   const now = deps.now ?? (() => new Date());
   const started = Date.now();
   let completed = 0;
   let retrying = 0;
   for (let i = 0; i < (opts.maxJobs ?? 20); i++) {
     if (Date.now() - started > (opts.budgetMs ?? 4 * MINUTE)) break;
-    const job = await claimDueDeletion(deps.db, now());
+    const job = await claimDueDeletion(deps.db, now(), opts.jobId);
     if (!job) break;
     const result = await runDeletion(deps, job);
     if (result.completed) completed += 1;
     else retrying += 1;
   }
   return { completed, retrying };
+}
+
+/**
+ * Prompt start, run after the request's response (Next.js `after()`): waits out the grace
+ * period, then runs this one job within `budgetMs`. Best effort only. If the function is cut
+ * short, or a step fails, the job stays in the database (leased, then retried with backoff) and
+ * the hourly recovery run (GET /api/internal/account-deletions) picks it up. Never throws.
+ */
+export async function startDeletionSoon(
+  deps: DeletionDeps,
+  job: Pick<DeletionRow, 'id' | 'nextAttemptAt'>,
+  opts: { budgetMs?: number; maxWaitMs?: number; sleep?: (ms: number) => Promise<void> } = {}
+): Promise<{ completed: number; retrying: number } | null> {
+  const now = deps.now ?? (() => new Date());
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const wait = job.nextAttemptAt.getTime() - now().getTime() + 1_000;
+  if (wait > (opts.maxWaitMs ?? DEFAULT_GRACE_MS + MINUTE)) return null; // not soon: leave it to the recovery run
+  try {
+    if (wait > 0) await sleep(wait);
+    return await processDueDeletions(deps, { jobId: job.id, maxJobs: 1, budgetMs: opts.budgetMs ?? 90_000 });
+  } catch (err) {
+    opsEvent('account_deletion.prompt_start_failed', { job: job.id, error: errorKind(err) }, 'WARNING');
+    return null;
+  }
 }
 
 /** Daily cleanup: removes completed tombstones after the record period. */

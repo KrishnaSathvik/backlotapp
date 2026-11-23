@@ -37,10 +37,11 @@ import {
   requestAccountDeletion,
   runDeletion,
   statusView,
+  startDeletionSoon,
   type IdentityProvider,
 } from './deletion.ts';
 
-/** L2: account deletion job. Real SQL (PGlite), local store on a temp dir, fake Firebase. */
+/** L2: account deletion job. Real SQL (PGlite), local store on a temp dir, fake Supabase Auth. */
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -79,7 +80,7 @@ class FakeIdentity implements IdentityProvider {
   async deleteUser(uid: string) {
     if (this.deleteFailures > 0) {
       this.deleteFailures -= 1;
-      throw Object.assign(new Error('firebase down'), { code: 'auth/internal-error' });
+      throw Object.assign(new Error('auth down'), { code: 'auth/internal-error' });
     }
     this.users.delete(uid);
   }
@@ -358,4 +359,44 @@ test('AD8. the write guard allows foreign-key cascades and a transaction-scoped 
     (err: unknown) => isAccountLockedError(err),
     'outside that transaction the guard is back'
   );
+});
+
+test('AD9. the prompt start waits out the grace period, runs only its own job, and leaves failures to the recovery run', async () => {
+  const identity = new FakeIdentity('u-gil', 'u-hana');
+  await seed('u-gil');
+  await seed('u-hana');
+  // Another account's job is already due; the prompt start must not take it.
+  const other = await requestAccountDeletion(db, 'u-hana', { now: T0, graceMs: 0 });
+  const mine = await requestAccountDeletion(db, 'u-gil', { now: T0 });
+
+  let clock = T0;
+  const slept: number[] = [];
+  const deps = { db, store, identity, now: () => clock };
+  const sleep = async (ms: number) => {
+    slept.push(ms);
+    clock = new Date(clock.getTime() + ms);
+  };
+  // Auth is down once: the prompt start retries nothing itself and never claims completion.
+  identity.deleteFailures = 1;
+  const first = await silent(() => startDeletionSoon(deps, mine.row, { sleep }));
+  assert.deepEqual(first, { completed: 0, retrying: 1 });
+  assert.equal(slept[0], 3 * 60_000 + 1_000, 'waited out the grace period');
+  const pending = (await deletionFor(db, 'u-gil'))!;
+  assert.notEqual(pending.status, 'completed', 'not marked complete after a failure');
+  assert.ok(pending.nextAttemptAt > clock && pending.lockedUntil === null, 'scheduled for a retry, lease released');
+  assert.equal((await deletionFor(db, 'u-hana'))!.status, 'pending', 'other account untouched by the prompt start');
+
+  // The hourly recovery run finishes both.
+  const recovery = await silent(() => processDueDeletions({ ...deps, now: () => at(70) }));
+  assert.equal(recovery.retrying, 0);
+  assert.equal((await deletionFor(db, 'u-gil'))!.status, 'completed');
+  const hana = (await deletionFor(db, 'u-hana'))!;
+  assert.equal(hana.id, other.row.id);
+  assert.equal(hana.status, 'completed');
+  assert.equal(identity.users.size, 0);
+
+  // A job due far in the future is left to the recovery run; errors never escape.
+  assert.equal(await startDeletionSoon(deps, { id: mine.row.id, nextAttemptAt: at(60 * 24) }, { sleep }), null);
+  const broken = { ...deps, db: { execute: () => Promise.reject(new Error('db down')) } as never };
+  assert.equal(await silent(() => startDeletionSoon(broken, { id: 1, nextAttemptAt: T0 }, { sleep: async () => {} })), null);
 });

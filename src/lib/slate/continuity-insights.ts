@@ -9,7 +9,7 @@ import type { IdeaRecord, PostRecord } from './types.ts';
  */
 
 const DAY = 86_400_000;
-const STAGE: Record<string, string> = { idea: 'Planned', scripting: 'Scripting', editing: 'Editing', ready: 'Ready', posted: 'Posted' };
+const STAGE: Record<string, string> = { idea: 'Planned', scripting: 'Planned', editing: 'Planned', ready: 'Made', posted: 'Posted' };
 
 /** Topic words for a record: its tags plus content words from the title (4+ letters, crude plural folding). */
 export function topicsOf(title: string, tags: string[]): string[] {

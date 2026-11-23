@@ -3,6 +3,8 @@ import { Landing } from '@/src/components/site/Landing';
 import { JsonLd } from '@/src/components/site/JsonLd';
 import { pageMetadata } from '@/src/lib/seo';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, absoluteUrl, contactEmail } from '@/src/lib/site';
+import { storageQuotaBytes } from '@/src/lib/storage-quota';
+import { formatLimit, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '@/src/lib/upload-limits';
 
 export function generateMetadata(): Metadata {
   return pageMetadata({ path: '/', title: `${SITE_NAME} — ${SITE_TAGLINE}`, description: SITE_DESCRIPTION, absoluteTitle: true });
@@ -57,7 +59,9 @@ export default function HomePage() {
   return (
     <>
       <JsonLd data={homeJsonLd()} />
-      <Landing />
+      <Landing
+        limits={{ image: formatLimit(MAX_IMAGE_BYTES), video: formatLimit(MAX_VIDEO_BYTES), storage: formatLimit(storageQuotaBytes()) }}
+      />
     </>
   );
 }

@@ -6,7 +6,7 @@ import { ThemeToggle } from '../ThemeToggle';
 import { cx } from '../ui';
 import { Logo } from './Logo';
 
-/** Landing / sign-in header: logo and theme switch. */
+/** Public header: logo and theme switch. */
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
 
@@ -58,14 +58,14 @@ export function SiteFooter() {
   const year = new Date().getFullYear();
   return (
     <footer className="border-t border-zinc-200/80 dark:border-zinc-800/80">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-8 pb-[calc(2rem+env(safe-area-inset-bottom))] text-center sm:flex-row sm:px-6 sm:text-left">
+      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 pb-[calc(2rem+env(safe-area-inset-bottom))] text-center sm:flex-row sm:px-6 sm:text-left">
         <div className="flex items-center gap-3">
-          <Logo />
+          <span className="font-display text-[17px] font-bold tracking-tight text-zinc-950 dark:text-white">Backlot</span>
           <span className="hidden text-sm text-zinc-500 md:inline dark:text-zinc-400">· Every post, one backlot.</span>
         </div>
-        <div className="flex flex-col items-center gap-3 text-xs text-zinc-600 sm:flex-row sm:gap-5 dark:text-zinc-400">
+        <div className="flex flex-col items-center gap-3 text-[13px] text-zinc-600 sm:flex-row sm:gap-6 dark:text-zinc-400">
           <nav aria-label="Footer">
-            <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+            <ul className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
               {FOOTER_LINKS.map(([href, label]) => (
                 <li key={href}>
                   <Link href={href} className="rounded underline-offset-2 hover:text-zinc-900 hover:underline dark:hover:text-zinc-200">
@@ -75,7 +75,7 @@ export function SiteFooter() {
               ))}
             </ul>
           </nav>
-          <p>© {year} Backlot. Your content stays yours.</p>
+          <p>© {year} Backlot.</p>
         </div>
       </div>
     </footer>

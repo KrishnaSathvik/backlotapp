@@ -1,24 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
-import { reauthenticateWithPopup, type User } from 'firebase/auth';
-import { AlertTriangle, ChevronLeft, ShieldCheck, Trash2 } from 'lucide-react';
-import { googleAuthProvider } from '@/src/lib/firebase';
-import { creatorIdentity } from '@/src/lib/identity';
-import { Avatar } from './AccountMenu';
-import { ThemeToggle } from './ThemeToggle';
+import {
+  currentGoogleAccountId,
+  setReauthIntent,
+  signInWithGoogle,
+  signInWithGoogleIdToken,
+  signInWithPassword,
+  supabaseBrowser,
+  type AuthUser,
+} from '@/src/lib/supabase/browser';
+import { peekGoogleIdToken, type GoogleCredential } from '@/src/lib/google-identity';
+import { GoogleSignInButton } from './GoogleSignInButton';
 import { buttonStyles, cx, inputStyles, labelStyles, Sheet, SheetCloseButton, sizes } from './ui';
 
 const CONFIRM = 'DELETE';
-
-const REMOVED = [
-  'Your Backlot account and sign-in',
-  'Channels, posts, captions, hashtags, notes and dates',
-  'Saved ideas and their links and screenshots',
-  'Every file you uploaded (covers, videos, slides, screenshots), including unfinished uploads',
-  'Slate conversations, messages and Slate’s notes on them',
-  'Saved creative preferences, search index entries, suggested changes and their history',
-];
 
 async function postDeletion(token: string) {
   const res = await fetch('/api/account/deletion', {
@@ -31,141 +27,143 @@ async function postDeletion(token: string) {
 }
 
 /**
- * Settings: appearance, privacy, and Delete account. Deleting needs a typed confirmation and a
- * fresh Google sign-in (the server refuses a sign-in older than 10 minutes).
+ * Settings: one dialog, "Delete my account". Deleting needs a fresh sign-in (the server refuses a
+ * sign-in older than 10 minutes, read from the verified token).
+ *
+ * - Email/password accounts: the creator enters their password. Supabase verifies it and issues a
+ *   fresh session for the same account; only then is deletion requested. A wrong password never
+ *   reaches the deletion API.
+ * - Google accounts: the creator types DELETE. If the sign-in is older than 10 minutes, Google's
+ *   own button confirms it's them; the chosen Google account must be the one linked to this
+ *   Backlot account (checked before anything happens); then deletion continues.
  */
 export function AccountSettingsSheet({
   user,
+  getToken,
+  intent,
   onClose,
   onDeletionStarted,
 }: {
-  user: User;
+  user: AuthUser;
+  getToken: () => Promise<string | null>;
+  intent: 'reauthed' | 'reauth_mismatch' | null;
   onClose: () => void;
   onDeletionStarted: (statusToken: string) => void;
 }) {
-  const [step, setStep] = useState<'settings' | 'delete'>('settings');
+  const usesPassword = !user.hasGoogle;
   const [typed, setTyped] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const name = creatorIdentity(user.uid).name;
+  const [googleStep, setGoogleStep] = useState(false);
+  const [error, setError] = useState<string | null>(
+    intent === 'reauth_mismatch' ? 'You came back signed in with a different Google account, so nothing was deleted.' : null
+  );
 
-  const confirmDelete = async () => {
+  /** Posts the deletion. Returns false when the server wants a fresh sign-in first. */
+  const startDeletion = async (): Promise<boolean> => {
+    const token = await getToken();
+    if (!token) throw new Error('Your session ended. Sign in again. Your account was not deleted.');
+    const { res, data } = await postDeletion(token);
+    if (res.status === 401 && data.code === 'reauth_required') return false;
+    if (!res.ok || !data.deletion?.statusToken) throw new Error(data.error || 'Couldn’t delete your account. Nothing was deleted. Try again.');
+    onDeletionStarted(data.deletion.statusToken);
+    return true;
+  };
+
+  const fail = (err: unknown) => {
+    setError(err instanceof Error ? err.message : 'Something went wrong. Your account was not deleted.');
+    setBusy(false);
+  };
+
+  /** "Yes, delete". */
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      let { res, data } = await postDeletion(await user.getIdToken());
-      if (res.status === 401 && data.code === 'reauth_required') {
-        // Confirm it's really them: Google sign-in again, then retry with the new token.
-        await reauthenticateWithPopup(user, googleAuthProvider);
-        ({ res, data } = await postDeletion(await user.getIdToken(true)));
+      if (usesPassword) {
+        try {
+          await signInWithPassword(user.email, password);
+        } catch {
+          throw new Error('That password isn’t correct. Nothing was deleted.');
+        }
+        setPassword('');
+        // Same account? (The email is unique, but never delete on an assumption.)
+        const { data } = await supabaseBrowser().auth.getSession();
+        if (data.session?.user.id !== user.uid) throw new Error('Couldn’t confirm it’s you. Nothing was deleted.');
+        if (!(await startDeletion())) throw new Error('Couldn’t confirm your sign-in. Nothing was deleted. Try again.');
+        return;
       }
-      if (!res.ok || !data.deletion?.statusToken) throw new Error(data.error || 'Couldn’t start deleting your account. Nothing was deleted. Try again.');
-      onDeletionStarted(data.deletion.statusToken);
-    } catch (err) {
-      const code = (err as { code?: string })?.code ?? '';
-      setError(
-        code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request'
-          ? 'Sign-in was cancelled. Your account was not deleted.'
-          : code === 'auth/user-mismatch'
-            ? 'That was a different Google account. Sign in with the account you want to delete.'
-            : err instanceof Error
-              ? err.message
-              : 'Something went wrong. Your account was not deleted.'
-      );
+      if (await startDeletion()) return;
+      setGoogleStep(true); // sign-in older than 10 minutes: confirm with Google
       setBusy(false);
+    } catch (err) {
+      fail(err);
     }
   };
 
+  /** Google's button returned a credential: same Google account? Then refresh the sign-in and continue. */
+  const confirmWithGoogle = async (credential: GoogleCredential) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const chosen = peekGoogleIdToken(credential.idToken)?.sub;
+      const linked = await currentGoogleAccountId();
+      if (!chosen || !linked || chosen !== linked) {
+        throw new Error('That was a different Google account, so nothing was deleted. Choose the one you use for Backlot.');
+      }
+      await signInWithGoogleIdToken(credential);
+      if (!(await startDeletion())) throw new Error('Couldn’t confirm your sign-in. Nothing was deleted. Try again.');
+    } catch (err) {
+      fail(err);
+    }
+  };
+
+  /** Fallback when Google's button can't load: full-page Google sign-in, then confirm again. */
+  const confirmWithGoogleRedirect = async () => {
+    setBusy(true);
+    setReauthIntent(user.uid);
+    try {
+      await signInWithGoogle('/app', { selectAccount: true });
+    } catch (err) {
+      fail(err);
+    }
+  };
+
+  const spinner = <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />;
+  const ready = usesPassword ? password.length > 0 : typed.trim() === CONFIRM;
+
   return (
-    <Sheet onClose={busy ? () => undefined : onClose} label={step === 'settings' ? 'Settings' : 'Delete account'} size="sm">
-      <div className="overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6">
+    <Sheet onClose={busy ? () => undefined : onClose} label="Delete my account" size="md">
+      <form onSubmit={submit} className="overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:p-9">
         <div className="flex items-start justify-between gap-4">
-          {step === 'delete' ? (
-            <button
-              type="button"
-              onClick={() => {
-                setStep('settings');
-                setError(null);
-              }}
-              disabled={busy}
-              className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-              Settings
-            </button>
-          ) : (
-            <h2 className="text-base font-semibold">Settings</h2>
-          )}
+          <h2 className="text-2xl font-bold tracking-tight sm:text-[28px]">Delete my account</h2>
           <SheetCloseButton onClick={busy ? () => undefined : onClose} />
         </div>
 
-        {step === 'settings' ? (
-          <div className="mt-5 space-y-6">
-            <div className="flex items-center gap-3">
-              <Avatar account={{ uid: user.uid, isPreview: false }} size={40} />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">{name}</p>
-                <p className="truncate text-[13px] text-zinc-500">Signed in with Google{user.email ? ` · ${user.email}` : ''}</p>
-              </div>
-            </div>
+        <p className="mt-4 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+          This permanently deletes your account and everything in it: posts, ideas, files and Slate conversations. It can’t be undone.
+        </p>
 
-            <section>
-              <h3 className={labelStyles}>Appearance</h3>
-              <ThemeToggle className="w-fit" />
-            </section>
-
-            <section>
-              <h3 className={labelStyles}>Privacy</h3>
-              <a
-                href="/privacy"
-                className="flex items-center gap-2 text-sm font-medium text-zinc-700 hover:text-electric-700 dark:text-zinc-300 dark:hover:text-electric-400"
-              >
-                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                Privacy Policy
-              </a>
-            </section>
-
-            <section className="rounded-2xl border border-red-200 p-4 dark:border-red-900/60">
-              <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Delete account</h3>
-              <p className="mt-1 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-                Permanently delete your Backlot account and everything in it. This can’t be undone.
-              </p>
-              <button type="button" onClick={() => setStep('delete')} className={cx(buttonStyles.secondary, sizes.sm, 'mt-3 text-red-700 dark:text-red-400')}>
-                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Delete account…
-              </button>
-            </section>
-          </div>
-        ) : (
-          <div className="mt-4 space-y-4 text-[13.5px] leading-relaxed text-zinc-700 dark:text-zinc-300">
-            <div className="flex gap-3 rounded-2xl bg-red-50 p-3.5 text-red-800 dark:bg-red-950/40 dark:text-red-300">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <p>
-                <strong>This permanently deletes your account.</strong> It can’t be undone, and Backlot can’t restore anything afterwards.
-                Download any files you want to keep first.
-              </p>
-            </div>
-
-            <div>
-              <p className="font-semibold text-zinc-900 dark:text-zinc-100">What gets deleted</p>
-              <ul className="mt-1.5 list-disc space-y-1 pl-5">
-                {REMOVED.map((r) => (
-                  <li key={r}>{r}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-semibold text-zinc-900 dark:text-zinc-100">What happens next</p>
-              <ul className="mt-1.5 list-disc space-y-1 pl-5">
-                <li>You’re signed out right away, and your account can’t be used again.</li>
-                <li>Your data is deleted in the background, usually within 15 minutes (longer if a service is down; it resumes on its own). You’ll get a page that shows the progress.</li>
-                <li>Your uploaded files are erased from storage, with no recovery copy.</li>
-                <li>Your Google account itself isn’t affected.</li>
-              </ul>
-            </div>
-
-            <div>
+        <div className="mt-6">
+          {usesPassword ? (
+            <>
+              <label htmlFor="confirm-password" className={labelStyles}>
+                Enter your password to confirm
+              </label>
+              <input
+                id="confirm-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={busy}
+                autoFocus
+                className={cx(inputStyles, 'h-11')}
+              />
+            </>
+          ) : (
+            <>
               <label htmlFor="confirm-delete" className={labelStyles}>
                 Type <span className="font-mono">{CONFIRM}</span> to confirm
               </label>
@@ -176,41 +174,49 @@ export function AccountSettingsSheet({
                 autoComplete="off"
                 autoCapitalize="characters"
                 spellCheck={false}
-                disabled={busy}
-                className={cx(inputStyles, 'h-10 font-mono')}
+                disabled={busy || googleStep}
+                autoFocus
+                className={cx(inputStyles, 'h-11 font-mono')}
               />
-              <p className="mt-1.5 text-xs text-zinc-500">You’ll be asked to sign in with Google again to confirm it’s you.</p>
-            </div>
+            </>
+          )}
+        </div>
 
-            {error ? (
-              <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-                {error}
-              </p>
-            ) : null}
+        {googleStep && !error ? (
+          <p role="status" className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+            For your security, confirm it’s you with Google.
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        ) : null}
 
-            <button
-              type="button"
-              onClick={confirmDelete}
-              disabled={busy || typed.trim() !== CONFIRM}
-              className={cx(buttonStyles.danger, sizes.md, 'w-full')}
-            >
-              {busy ? (
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-              ) : (
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              )}
-              {busy ? 'Deleting…' : 'Delete my account'}
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          {googleStep ? (
+            <GoogleSignInButton busy={busy} onCredential={confirmWithGoogle}>
+              <button
+                type="button"
+                onClick={confirmWithGoogleRedirect}
+                disabled={busy}
+                className={cx(buttonStyles.danger, sizes.md, 'w-full sm:min-w-44')}
+              >
+                {busy ? spinner : null}
+                {busy ? 'Confirming…' : 'Confirm with Google'}
+              </button>
+            </GoogleSignInButton>
+          ) : (
+            <button type="submit" disabled={busy || !ready} className={cx(buttonStyles.danger, sizes.md, 'sm:min-w-32')}>
+              {busy ? spinner : null}
+              {busy ? 'Deleting…' : 'Yes, delete'}
             </button>
-            <p className="text-xs text-zinc-500">
-              Can’t sign in, or prefer to ask? You can still request deletion by email; see{' '}
-              <a href="/privacy#deletion" className="underline underline-offset-2">
-                the Privacy Policy
-              </a>
-              .
-            </p>
-          </div>
-        )}
-      </div>
+          )}
+          <button type="button" onClick={onClose} disabled={busy} className={cx(buttonStyles.secondary, sizes.md, 'sm:min-w-28')}>
+            Cancel
+          </button>
+        </div>
+      </form>
     </Sheet>
   );
 }
