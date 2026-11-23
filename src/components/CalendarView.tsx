@@ -2,8 +2,10 @@
 
 import React, { useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getPlatformShortLabel, normalizeStatus, type ChannelItem, type ContentItem } from '@/src/lib/content-logic';
+import { getPlatformShortLabel, normalizeStatus, referencePreview, type ChannelItem, type ContentItem } from '@/src/lib/content-logic';
+import { firstPreviewLink } from '@/src/lib/link-preview';
 import { FormSelect } from './CustomSelect';
+import { LinkThumbnail } from './LinkThumbnail';
 import { MediaImage } from './MediaImage';
 import { PlatformIcon } from './PlatformIcon';
 import { cx, StagePill, STAGE_STYLES } from './ui';
@@ -28,6 +30,8 @@ function prettyDay(key: string) {
 interface CalendarViewProps {
   items: ContentItem[];
   channels: ChannelItem[];
+  /** For TikTok thumbnails. YouTube pictures need no token. */
+  authToken?: string | null;
   onSelectItem: (item: ContentItem) => void;
   /** Dragging a post onto a day sets its target date. */
   onReschedule: (item: ContentItem, targetDate: string) => void;
@@ -36,7 +40,7 @@ interface CalendarViewProps {
 }
 
 /** Month view of posts by target or posted date. Read-only: opening a post edits it as usual. */
-export function CalendarView({ items, channels, onSelectItem, onReschedule, onCreateOnDay }: CalendarViewProps) {
+export function CalendarView({ items, channels, authToken = null, onSelectItem, onReschedule, onCreateOnDay }: CalendarViewProps) {
   const today = todayKey();
   const [cursor, setCursor] = useState(() => {
     const t = new Date();
@@ -233,6 +237,7 @@ export function CalendarView({ items, channels, onSelectItem, onReschedule, onCr
             <ul className="mt-3 space-y-2">
               {selectedItems.map((i) => {
                 const thumb = i.coverAsset?.url || i.slides[0]?.url || null;
+                const previewLink = firstPreviewLink(i.liveLink, referencePreview(i.attachedReferences).link);
                 return (
                   <li key={i.id}>
                     <button
@@ -241,7 +246,11 @@ export function CalendarView({ items, channels, onSelectItem, onReschedule, onCr
                       className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
                     >
                       <span className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
-                        {thumb ? <MediaImage src={thumb} alt="" className="h-full w-full object-cover" /> : null}
+                        {thumb ? (
+                          <MediaImage src={thumb} alt="" className="h-full w-full object-cover" />
+                        ) : previewLink ? (
+                          <LinkThumbnail link={previewLink} authToken={authToken} className="h-full w-full object-cover" fallback={null} />
+                        ) : null}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">{i.title}</span>

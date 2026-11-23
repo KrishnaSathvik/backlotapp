@@ -1096,6 +1096,7 @@ const VaultShell: React.FC = () => {
           <CalendarView
             items={items}
             channels={channels}
+            authToken={authToken}
             onSelectItem={setSelectedItem}
             onReschedule={(item, targetDate) => handleUpdateItemFields(item.id, { targetDate })}
             onCreateOnDay={(date) => {

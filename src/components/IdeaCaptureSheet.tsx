@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { ExternalLink, ImagePlus, Link2, X } from 'lucide-react';
 import { extractDomainAndTitle, MAX_IDEA_IMAGES, type PlatformKey } from '@/src/lib/content-logic';
+import { hasLinkPreview } from '@/src/lib/link-preview';
+import { LinkThumbnail } from './LinkThumbnail';
 import { uploadAssetResumable } from '@/src/lib/upload-client';
 import { IMAGE_TYPES } from '@/src/lib/upload-limits';
 import { MediaImage } from './MediaImage';
@@ -185,6 +187,11 @@ export function IdeaCaptureSheet({
                   <span className="shrink-0 font-semibold text-zinc-700 dark:text-zinc-300">{preview.domain}</span>
                   <span className="min-w-0 truncate">· {preview.suggestedTitle}</span>
                 </p>
+              ) : null}
+              {hasLinkPreview(preview.validUrl) ? (
+                <div className="mt-2 aspect-video max-h-40 overflow-hidden rounded-xl border border-border bg-surface-2">
+                  <LinkThumbnail link={preview.validUrl} authToken={authToken} className="h-full w-full object-cover" fallback={null} />
+                </div>
               ) : null}
             </div>
             <div>

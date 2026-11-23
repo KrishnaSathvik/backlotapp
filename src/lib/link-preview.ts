@@ -56,6 +56,15 @@ export function hasLinkPreview(raw: string): boolean {
   return !!youtubeId(raw) || isTikTokLink(raw);
 }
 
+/** The first YouTube or TikTok link. Other addresses have no thumbnail. */
+export function firstPreviewLink(...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    const link = (candidate ?? '').trim();
+    if (link && hasLinkPreview(link)) return link;
+  }
+  return '';
+}
+
 /** The oEmbed request for a link: only YouTube's and TikTok's fixed endpoints, never the link itself. */
 export function oembedUrl(raw: string): string | null {
   const id = youtubeId(raw);

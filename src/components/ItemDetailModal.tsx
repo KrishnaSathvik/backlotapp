@@ -27,6 +27,7 @@ import {
   type StatusKey,
   referencePreview,
 } from '@/src/lib/content-logic';
+import { firstPreviewLink } from '@/src/lib/link-preview';
 import { fetchAssetAsBlob, resolveAssetUrl } from '@/src/lib/local-vault';
 import { FormSelect } from './CustomSelect';
 import { LinkThumbnail } from './LinkThumbnail';
@@ -459,13 +460,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   ))}
                 </div>
               </div>
-            ) : item.coverAsset?.url || referencePreview(item.attachedReferences).screenshotUrl || referencePreview(item.attachedReferences).link ? (
+            ) : item.coverAsset?.url || referencePreview(item.attachedReferences).screenshotUrl || firstPreviewLink(draft.liveLink, referencePreview(item.attachedReferences).link) ? (
               <div className="aspect-video max-h-56 w-full overflow-hidden rounded-xl border border-border bg-surface-2 sm:max-h-64 md:aspect-[16/10] md:max-h-72">
                 {(() => {
                   const ref = referencePreview(item.attachedReferences);
+                  const previewLink = firstPreviewLink(draft.liveLink, ref.link);
                   const fallback = <MediaImage src={null} alt={item.title} fallbackLabel="No video or cover uploaded yet" />;
                   if (item.coverAsset?.url || ref.screenshotUrl) return <MediaImage src={item.coverAsset?.url || ref.screenshotUrl} alt={item.title} />;
-                  return <LinkThumbnail link={ref.link} authToken={authToken} className="h-full w-full object-cover" fallback={fallback} />;
+                  return <LinkThumbnail link={previewLink} authToken={authToken} className="h-full w-full object-cover" fallback={fallback} />;
                 })()}
               </div>
             ) : null}

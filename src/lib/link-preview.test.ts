@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hasLinkPreview, isTikTokLink, oembedUrl, youtubeId, youtubeThumbnail } from './link-preview.ts';
+import { firstPreviewLink, hasLinkPreview, isTikTokLink, oembedUrl, youtubeId, youtubeThumbnail } from './link-preview.ts';
 
 test('LP1. YouTube ids from every common link shape; nothing from look-alikes', () => {
   const id = 'dQw4w9WgXcQ';
@@ -27,4 +27,6 @@ test('LP2. TikTok links; only the fixed oEmbed endpoints are ever requested', ()
   assert.match(oembedUrl('https://youtu.be/dQw4w9WgXcQ')!, /^https:\/\/www\.youtube\.com\/oembed\?/);
   assert.match(oembedUrl('https://www.tiktok.com/@u/video/1')!, /^https:\/\/www\.tiktok\.com\/oembed\?url=/);
   assert.equal(oembedUrl('https://example.com/video'), null);
+  assert.equal(firstPreviewLink('', 'https://instagram.com/reel/abc', 'https://youtu.be/dQw4w9WgXcQ'), 'https://youtu.be/dQw4w9WgXcQ');
+  assert.equal(firstPreviewLink('not a link'), '');
 });

@@ -13,6 +13,7 @@ import {
   type LibrarySort,
   referencePreview,
 } from '@/src/lib/content-logic';
+import { firstPreviewLink } from '@/src/lib/link-preview';
 import { FormSelect } from './CustomSelect';
 import { PlatformIcon } from './PlatformIcon';
 import { LinkThumbnail } from './LinkThumbnail';
@@ -128,6 +129,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           {pageItems.map((item) => {
             const ref = referencePreview(item.attachedReferences);
             const thumbUrl = item.coverAsset?.url || item.slides[0]?.url || ref.screenshotUrl || null;
+            const previewLink = firstPreviewLink(item.liveLink, ref.link);
             const slideCount = item.slides.length;
             const date = item.postDate || item.targetDate;
 
@@ -137,7 +139,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 hover:border-border-strong"
               >
                 <div className="relative aspect-[16/10] overflow-hidden bg-surface-2">
-                  {thumbUrl || !ref.link ? (
+                  {thumbUrl || !previewLink ? (
                     <MediaImage
                       src={thumbUrl}
                       alt=""
@@ -147,7 +149,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     />
                   ) : (
                     <LinkThumbnail
-                      link={ref.link}
+                      link={previewLink}
                       authToken={authToken}
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                       fallback={<MediaImage src={null} alt="" fallbackLabel={item.title} isVideo={!!item.videoAsset} />}
