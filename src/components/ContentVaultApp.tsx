@@ -984,7 +984,7 @@ const VaultShell: React.FC = () => {
             sample={!authUser}
             focus={chatFocus}
             onFocusChange={setChatFocus}
-            onApplyCaption={(itemId, caption) => handleUpdateItemFields(itemId, { caption })}
+            onApplyCaption={async (itemId, caption) => (await handleUpdateItemFields(itemId, { caption })) != null}
             onActionApplied={handleSlateApplied}
             onSignIn={authUser ? undefined : goToSignIn}
             onOpenRef={(ref) => {
