@@ -30,16 +30,32 @@ export function PostFiles({
 
   const upload = async (files: File[]) => {
     const usable = files.filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/'));
-    if (!usable.length) return;
-    const uploaded: MediaAsset[] = [];
-    for (let i = 0; i < usable.length; i += 1) {
-      setProgress(`Uploading ${i + 1} of ${usable.length}`);
-      uploaded.push(await uploadAssetResumable({ file: usable[i], authToken, onProgress: (p) => setProgress(`Uploading ${i + 1} of ${usable.length} · ${Math.round(p * 100)}%`) }));
+    if (!usable.length) {
+      setProgress('Choose an image or a video.');
+      return;
     }
-    const next = placeUploadedAssets(item, uploaded);
-    setProgress('Saving…');
-    await onPatch(next);
-    setProgress('');
+    try {
+      const uploaded: MediaAsset[] = [];
+      for (let i = 0; i < usable.length; i += 1) {
+        // onProgress is already 0–100. Multiplying again showed 11% as 1100%.
+        uploaded.push(
+          await uploadAssetResumable({
+            file: usable[i],
+            authToken,
+            onProgress: (p) => {
+              const percent = Math.max(0, Math.min(100, Math.round(p)));
+              setProgress(`Uploading ${i + 1} of ${usable.length} · ${percent}%`);
+            },
+          })
+        );
+      }
+      const next = placeUploadedAssets(item, uploaded);
+      setProgress('Saving…');
+      const saved = await onPatch(next);
+      setProgress(saved ? '' : 'The file uploaded, but it could not be saved on this post.');
+    } catch (err) {
+      setProgress(err instanceof Error && err.message ? err.message : 'Upload failed.');
+    }
   };
 
   const patchSlides = (slides: MediaAsset[]) => onPatch({ slides: slides.map((s, i) => ({ ...s, order: i })) });

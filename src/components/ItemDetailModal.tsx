@@ -17,6 +17,7 @@ import {
 import {
   formatTagsForCopy,
   getPlatformLabel,
+  normalizeStatus,
   parseTagsInput,
   PLATFORM_OPTIONS,
   type ChannelItem,
@@ -47,6 +48,56 @@ import { PostFiles } from './PostFiles';
 
 const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
 
+type PostDraft = {
+  title: string;
+  caption: string;
+  tags: string;
+  status: StatusKey;
+  platform: PlatformKey;
+  channelName: string;
+  targetDate: string;
+  postDate: string;
+  liveLink: string;
+  notes: string;
+};
+
+/** Date inputs only accept yyyy-mm-dd. A longer stored value still starts with that. */
+const dateInputValue = (value: string) => (/^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : value);
+
+const draftFrom = (src: ContentItem | null): PostDraft => ({
+  title: src?.title ?? '',
+  caption: src?.caption ?? '',
+  tags: formatTagsForCopy(src?.tags ?? []),
+  status: (src?.status ?? 'idea') as StatusKey,
+  platform: (src?.platform ?? 'youtube_long') as PlatformKey,
+  channelName: src?.channelName ?? '',
+  targetDate: dateInputValue(src?.targetDate ?? ''),
+  postDate: dateInputValue(src?.postDate ?? ''),
+  liveLink: src?.liveLink ?? '',
+  notes: src?.notes ?? '',
+});
+
+/**
+ * The shape the server stores. Title and the live URL are trimmed, tags are rewritten with
+ * hashes, and retired stages fold into Planned. Comparing the raw input to that row left the
+ * dialog dirty after a save that had already succeeded.
+ */
+const canonicalDraft = (d: PostDraft): PostDraft => ({
+  ...d,
+  title: d.title.trim(),
+  tags: formatTagsForCopy(parseTagsInput(d.tags)),
+  status: normalizeStatus(d.status),
+  liveLink: d.liveLink.trim(),
+  targetDate: dateInputValue(d.targetDate),
+  postDate: dateInputValue(d.postDate),
+});
+
+const sameDraft = (a: PostDraft, b: PostDraft) => {
+  const left = canonicalDraft(a);
+  const right = canonicalDraft(b);
+  return (Object.keys(left) as Array<keyof PostDraft>).every((k) => left[k] === right[k]);
+};
+
 export type ItemFieldsPatch = Partial<
   Pick<
     ContentItem,
@@ -76,7 +127,7 @@ interface ItemDetailModalProps {
   onOpenIdea?: (id: number) => void;
   onDelete: (item: ContentItem) => Promise<void>;
   onDuplicate: (item: ContentItem) => Promise<void>;
-  onUpdateFields: (itemId: number, patch: ItemFieldsPatch) => Promise<boolean>;
+  onUpdateFields: (itemId: number, patch: ItemFieldsPatch) => Promise<ContentItem | null>;
   onAskAI: (item: ContentItem) => void;
 }
 
@@ -101,18 +152,6 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   }>({ key: '', url: '' });
 
   // Everything on the right is edited in place; one Save writes all of it.
-  const draftFrom = (src: ContentItem | null) => ({
-    title: src?.title ?? '',
-    caption: src?.caption ?? '',
-    tags: formatTagsForCopy(src?.tags ?? []),
-    status: (src?.status ?? 'idea') as StatusKey,
-    platform: (src?.platform ?? 'youtube_long') as PlatformKey,
-    channelName: src?.channelName ?? '',
-    targetDate: src?.targetDate ?? '',
-    postDate: src?.postDate ?? '',
-    liveLink: src?.liveLink ?? '',
-    notes: src?.notes ?? '',
-  });
   const [draft, setDraft] = useState(() => draftFrom(item));
   const [saving, setSaving] = useState(false);
   const liveLinkRef = useRef<HTMLInputElement>(null);
@@ -260,24 +299,32 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   };
 
   const saved = draftFrom(item);
-  const changedKeys = (Object.keys(draft) as Array<keyof typeof draft>).filter((k) => draft[k] !== saved[k]);
-  const dirty = changedKeys.length > 0;
+  const current = canonicalDraft(draft);
+  const previous = canonicalDraft(saved);
+  const changedKeys = (Object.keys(current) as Array<keyof PostDraft>).filter((k) => current[k] !== previous[k]);
+  const dirty = !sameDraft(draft, saved);
 
   const handleSave = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!draft.title.trim()) {
+    if (!current.title) {
       toast('Give the post a title', 'error');
       return;
     }
     const patch: ItemFieldsPatch = {};
     for (const k of changedKeys) {
       if (k === 'tags') patch.tags = parseTagsInput(draft.tags);
-      else if (k === 'title') patch.title = draft.title.trim();
-      else Object.assign(patch, { [k]: draft[k] });
+      else if (k === 'status') patch.status = current.status;
+      else if (k === 'title') patch.title = current.title;
+      else if (k === 'liveLink') patch.liveLink = current.liveLink;
+      else if (k === 'postDate') patch.postDate = current.postDate;
+      else if (k === 'targetDate') patch.targetDate = current.targetDate;
+      else Object.assign(patch, { [k]: current[k] });
     }
     setSaving(true);
     try {
-      await onUpdateFields(item.id, patch);
+      const savedItem = await onUpdateFields(item.id, patch);
+      // Adopt the saved row so X closes. The server's copy is the new baseline.
+      if (savedItem) setDraft(draftFrom(savedItem));
     } finally {
       setSaving(false);
     }
@@ -439,7 +486,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             <PostFiles
               item={item}
               authToken={authToken}
-              onPatch={(patch) => onUpdateFields(item.id, patch)}
+              onPatch={async (patch) => (await onUpdateFields(item.id, patch)) != null}
               onDownload={downloadSingleAsset}
               onDownloadAll={handleDownloadAllZip}
               zipBusy={zipProgress}

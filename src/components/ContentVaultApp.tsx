@@ -593,31 +593,34 @@ const VaultShell: React.FC = () => {
   };
 
 
-  const handleUpdateItemFields = async (itemId: number, fields: ItemFieldsPatch): Promise<boolean> => {
+  const handleUpdateItemFields = async (itemId: number, fields: ItemFieldsPatch): Promise<ContentItem | null> => {
     const patch: ItemFieldsPatch & { channelId?: number | null } = { ...fields };
     if (fields.channelName !== undefined) {
       patch.channelId = channels.find((c) => c.name === fields.channelName)?.id ?? null;
     }
     try {
+      let saved: ContentItem | null = null;
       const token = await getFreshToken();
       if (token) {
         const data = await api(token, `/api/items/${itemId}`, 'PATCH', { ...patch, expectedVersion: postVersion(itemId) });
-        rememberPost(data.item);
-        setItems((prev) => prev.map((i) => (i.id === itemId ? data.item : i)));
-        if (selectedItem?.id === itemId) setSelectedItem(data.item);
+        saved = data.item as ContentItem;
+        rememberPost(saved);
+        setItems((prev) => prev.map((i) => (i.id === itemId ? saved ?? i : i)));
+        if (selectedItem?.id === itemId) setSelectedItem(saved);
       } else {
         const nextItems = items.map((item) =>
           item.id === itemId ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item
         );
         setItems(nextItems);
-        if (selectedItem?.id === itemId) setSelectedItem(nextItems.find((i) => i.id === itemId) ?? null);
+        saved = nextItems.find((i) => i.id === itemId) ?? null;
+        if (selectedItem?.id === itemId) setSelectedItem(saved);
       }
       toast('Saved');
-      return true;
+      return saved;
     } catch (err) {
       if (isConflict(err)) handleConflict(err);
       fail(err, 'Could not save changes.');
-      return false;
+      return null;
     }
   };
 

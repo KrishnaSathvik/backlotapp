@@ -178,22 +178,26 @@ async function uploadDirect(file: File, uploadId: string, authToken: string, pla
         for (const p of signed.data.parts) {
           const start = (p.partNumber - 1) * plan.partSize;
           const body = file.slice(start, start + sizeOf(p.partNumber));
-          for (let attempt = 1; ; attempt++) {
+          let stored = false;
+          for (let attempt = 1; attempt <= 4 && !stored; attempt++) {
             signal?.throwIfAborted();
             try {
               const res = await fetch(p.url, { method: 'PUT', body, signal });
-              if (res.ok) break;
-              // 403: the URL expired while queued; the next round signs it again.
-              if (res.status === 403 || attempt >= 4) break;
+              if (res.ok) {
+                stored = true;
+                break;
+              }
+              // 403: the URL expired while queued; the next round signs a new one.
+              if (res.status === 403) break;
             } catch (err) {
               if (signal?.aborted) throw err;
-              if (attempt >= 4) break;
             }
-            await sleep(700 * attempt);
+            if (!stored && attempt < 4) await sleep(700 * attempt);
           }
+          // Only a part R2 accepted counts. A failed PUT used to be marked done, so completion
+          // kept reporting it missing and the upload failed after looking finished.
+          if (stored) done.add(p.partNumber);
         }
-        // Progress counts only what the server will confirm at completion; optimistic here.
-        for (const p of signed.data.parts) done.add(p.partNumber);
         report();
       }
     };
