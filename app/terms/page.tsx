@@ -42,8 +42,8 @@ export default function TermsPage() {
           <p>
             {/* OWNER REVIEW: was Google-only, with the age test tied to Google accounts. Email and password sign-in is also
                 supported now; the minimum age is still a LEGAL REVIEW item. */}
-            You sign in with a Google account or with an email address and password. You’re responsible for activity on your Backlot
-            account and for keeping your password and Google account secure. You must be old enough to agree to these
+            You sign in with an email address and password. You’re responsible for activity on your Backlot
+            account and for keeping your password secure. You must be old enough to agree to these
             terms where you live.
           </p>
         </Section>

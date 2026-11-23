@@ -190,7 +190,7 @@ export function DeletionStatus() {
                 )
               }
             />
-            <Step done={signIn} active={files && !signIn} title="Backlot sign-in removed" detail={signIn ? 'Your Google or email account itself isn’t affected.' : undefined} />
+            <Step done={signIn} active={files && !signIn} title="Backlot sign-in removed" detail={signIn ? 'Your email account itself isn’t affected.' : undefined} />
             <Step
               done={complete}
               active={signIn && !complete}

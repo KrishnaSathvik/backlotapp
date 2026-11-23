@@ -173,7 +173,7 @@ function faq(limits: LandingLimits) {
     },
     {
       q: 'Can I try it without signing up?',
-      a: 'Yes. Choose “Try the live demo”. It runs in your browser and saves nothing. Create an account with Google or an email and password when you want to keep your own.',
+      a: 'Yes. Choose “Try the live demo”. It runs in your browser and saves nothing. Create an account with an email and password when you want to keep your own.',
     },
     {
       q: 'Does it work on my phone?',

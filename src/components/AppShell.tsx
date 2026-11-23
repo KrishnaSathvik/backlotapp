@@ -217,7 +217,7 @@ function SidebarBody({
                 className="mt-2.5 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-surface text-[12.5px] font-semibold text-text shadow-sm ring-1 ring-border transition-colors hover:bg-bg"
               >
                 <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
-                Sign in with Google
+                Sign in
               </button>
             ) : null}
           </div>

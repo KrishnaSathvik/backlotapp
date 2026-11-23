@@ -25,8 +25,8 @@ export default function SupportPage() {
           <FaqItem q="How do I try Backlot?">
             <p>
               Choose <strong>Try the live demo</strong> on the home page. It runs in your browser, doesn’t save
-              anything and resets when you refresh. To keep your own work, choose <strong>Get started</strong> and sign up with Google or
-              with an email and password.
+              anything and resets when you refresh. To keep your own work, choose <strong>Get started</strong> and sign up with an email
+              and password.
             </p>
           </FaqItem>
           <FaqItem q="What should I set up first?">
@@ -90,7 +90,7 @@ export default function SupportPage() {
 
         <Section id="account" title="Sign-in and account">
           <FaqItem q="How do I sign in?">
-            <p>With Google, or with the email and password you signed up with.</p>
+            <p>With the email and password you signed up with.</p>
           </FaqItem>
           <FaqItem q="Can I install Backlot on my phone?">
             <p>

@@ -60,7 +60,7 @@ export default function PrivacyPage() {
             <p>When you sign in, Backlot stores:</p>
             <ul className="list-disc space-y-1.5 pl-5">
               {/* OWNER REVIEW: sign-in is now Google or email and password (was: emailed sign-in links). */}
-              <li><strong>Your account:</strong> your account id and email address, from Google sign-in or the address you sign up with. If you use a password, Supabase Authentication stores it in hashed form; your browser sends it straight to Supabase, and Backlot’s servers never receive or store it.</li>
+              <li><strong>Your account:</strong> your account id and the email address you sign up with. Supabase Authentication stores your password in hashed form; your browser sends it straight to Supabase, and Backlot’s servers never receive or store it.</li>
               <li><strong>Your workspace:</strong> channels (name and handle), posts (title, platform, stage, caption, hashtags, notes, dates, live link and attached references), and ideas (title, notes, reference link and screenshot).</li>
               <li><strong>Files you upload:</strong> covers, videos, slides and idea screenshots, with their file name, type and size.</li>
               <li><strong>Slate data:</strong> your Slate conversations (see below), search index entries for your posts and ideas, the creative preferences you save, and the changes Slate suggests (the proposed text or dates, and whether you applied or dismissed them), plus a record of those decisions that contains ids, versions and outcomes but not your content.</li>
@@ -165,7 +165,6 @@ export default function PrivacyPage() {
 
           <Section id="providers" title="Service providers">
             <ul className="list-disc space-y-1.5 pl-5">
-              <li><strong>Google</strong> for Google sign-in. Google’s sign-in button loads from Google on the sign-in screen and is subject to Google’s privacy policy.</li>
               <li><strong>Vercel</strong> to host and run the Backlot website and app.</li>
               <li><strong>Supabase</strong> to manage sign-in (Supabase Authentication) and to host Backlot’s database (your workspace, Slate conversations and settings).</li>
               {/* OWNER REVIEW: removed the Cloudflare scheduler (deletion now runs on Vercel) and the GitHub backups line
@@ -183,7 +182,7 @@ export default function PrivacyPage() {
             </p>
             <p>
               <strong>Deleting your account.</strong> In the app, open <strong>Settings</strong> and choose <strong>Delete account</strong>.
-              You type a confirmation and confirm it’s you again (with Google, or with your password). Then:
+              You type a confirmation and confirm it’s you again with your password. Then:
             </p>
             <ul className="list-disc space-y-1.5 pl-5">
               <li><strong>Immediately:</strong> you’re signed out and the account is locked. Nothing in it can be opened or changed from then on, by you or anyone else.</li>
@@ -193,7 +192,7 @@ export default function PrivacyPage() {
                 hashtags, notes and dates), ideas and their links, every uploaded file and any unfinished uploads, Slate conversations,
                 messages and Slate’s notes on them, saved preferences, search index entries, Slate’s suggested changes and the record of your
                 decisions, and your Slate usage records. Backlot’s sign-in record for you in Supabase Authentication is removed last. Your
-                Google account or email account itself isn’t affected.
+                email account itself isn’t affected.
               </li>
               <li>
                 <strong>Confirmation:</strong> the deletion is only marked complete after a final check finds nothing left. If a service Backlot

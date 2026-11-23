@@ -17,7 +17,7 @@ export function GET() {
 
 > ${SITE_DESCRIPTION}
 
-Backlot is a web app (installable as a progressive web app on phones and desktops) for solo creators and small studios who make their own content. Sign-in is with a Google account or an email address and password. A demo with sample data runs entirely in the browser without signing in.
+Backlot is a web app (installable as a progressive web app on phones and desktops) for solo creators and small studios who make their own content. Sign-in is with an email address and password. A demo with sample data runs entirely in the browser without signing in.
 
 ## What it does
 
