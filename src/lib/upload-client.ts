@@ -191,6 +191,11 @@ async function uploadDirect(file: File, uploadId: string, authToken: string, pla
               if (res.status === 403) break;
             } catch (err) {
               if (signal?.aborted) throw err;
+              // A CORS block or a dead connection fails the same way every time. Stop instead of
+              // retrying every part for several rounds while the label stays at 0%.
+              if (err instanceof TypeError && attempt >= 2) {
+                throw new Error('The browser blocked the upload before it reached storage.');
+              }
             }
             if (!stored && attempt < 4) await sleep(700 * attempt);
           }

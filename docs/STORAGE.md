@@ -81,7 +81,7 @@ Supported types: images (JPEG, PNG, WebP, GIF, AVIF, HEIC/HEIF) and videos (MP4,
    ```json
    [
      {
-       "AllowedOrigins": ["https://YOUR-PRODUCTION-ORIGIN", "https://YOUR-PREVIEW-ORIGIN.vercel.app"],
+       "AllowedOrigins": ["https://backlotapp.vercel.app", "http://localhost:3000"],
        "AllowedMethods": ["GET", "HEAD", "PUT"],
        "AllowedHeaders": ["content-type"],
        "ExposeHeaders": ["ETag"],
