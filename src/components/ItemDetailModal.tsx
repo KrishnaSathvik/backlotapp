@@ -49,6 +49,45 @@ import { PostFiles } from './PostFiles';
 
 const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
 
+/** Cover first, then slides. A cover that is already the first slide is not shown twice. */
+function galleryFrames(item: ContentItem): MediaAsset[] {
+  const slides = [...item.slides].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const cover = item.coverAsset;
+  if (cover && !slides.some((slide) => slide.id === cover.id || slide.url === cover.url)) {
+    return [cover, ...slides];
+  }
+  return slides;
+}
+
+function PlayableVideo({ url, className }: { url: string; className?: string }) {
+  const isIdb = url.startsWith('idb://');
+  const [src, setSrc] = useState(isIdb ? '' : url);
+
+  useEffect(() => {
+    if (!isIdb) {
+      setSrc(url);
+      return;
+    }
+    let active = true;
+    let revokeUrl: string | null = null;
+    resolveAssetUrl(url).then((resolved) => {
+      if (!active) {
+        if (resolved.startsWith('blob:')) URL.revokeObjectURL(resolved);
+        return;
+      }
+      if (resolved.startsWith('blob:')) revokeUrl = resolved;
+      setSrc(resolved);
+    });
+    return () => {
+      active = false;
+      if (revokeUrl) URL.revokeObjectURL(revokeUrl);
+    };
+  }, [isIdb, url]);
+
+  if (!src) return <div className={className} />;
+  return <video src={src} controls playsInline className={className} />;
+}
+
 type PostDraft = {
   title: string;
   caption: string;
@@ -147,10 +186,6 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [slideIndex, setSlideIndex] = useState(0);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [zipProgress, setZipProgress] = useState(false);
-  const [resolvedVideoEntry, setResolvedVideoEntry] = useState<{
-    key: string;
-    url: string;
-  }>({ key: '', url: '' });
 
   // Everything on the right is edited in place; one Save writes all of it.
   const [draft, setDraft] = useState(() => draftFrom(item));
@@ -169,38 +204,52 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     if (next === 'posted') requestAnimationFrame(() => liveLinkRef.current?.focus());
   };
 
-  const rawVideoUrl = item?.videoAsset?.url ?? '';
-  const isIdbVideo = rawVideoUrl.startsWith('idb://');
+  const frames = item ? galleryFrames(item) : [];
+  const frameIndex = frames.length ? Math.min(slideIndex, frames.length - 1) : 0;
+  const frame = frames[frameIndex] ?? null;
 
   useEffect(() => {
-    if (!rawVideoUrl || !isIdbVideo) return;
-    let active = true;
-    let revokeUrl: string | null = null;
+    setSlideIndex(0);
+  }, [item?.id]);
 
-    resolveAssetUrl(rawVideoUrl).then((resolved) => {
-      if (!active) {
-        if (resolved.startsWith('blob:')) URL.revokeObjectURL(resolved);
-        return;
-      }
-      if (resolved.startsWith('blob:')) revokeUrl = resolved;
-      setResolvedVideoEntry({ key: rawVideoUrl, url: resolved });
-    });
-
-    return () => {
-      active = false;
-      if (revokeUrl) URL.revokeObjectURL(revokeUrl);
+  useEffect(() => {
+    if (frames.length < 2) return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      event.preventDefault();
+      setSlideIndex((current) => {
+        const index = Math.min(current, frames.length - 1);
+        if (event.key === 'ArrowRight') return (index + 1) % frames.length;
+        return index === 0 ? frames.length - 1 : index - 1;
+      });
     };
-  }, [rawVideoUrl, isIdbVideo]);
-
-  const videoSrc = !rawVideoUrl
-    ? ''
-    : isIdbVideo
-    ? resolvedVideoEntry.key === rawVideoUrl
-      ? resolvedVideoEntry.url
-      : ''
-    : rawVideoUrl;
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [frames.length]);
 
   if (!item) return null;
+
+  const showNext = () => {
+    if (frames.length < 2) return;
+    setSlideIndex((current) => (Math.min(current, frames.length - 1) + 1) % frames.length);
+  };
+  const showPrevious = () => {
+    if (frames.length < 2) return;
+    setSlideIndex((current) => {
+      const index = Math.min(current, frames.length - 1);
+      return index === 0 ? frames.length - 1 : index - 1;
+    });
+  };
+  const removeFrame = (asset: MediaAsset) => {
+    if (item.coverAsset?.id === asset.id) {
+      void onUpdateFields(item.id, { coverAsset: null });
+      return;
+    }
+    const slides = item.slides.filter((slide) => slide.id !== asset.id).map((slide, index) => ({ ...slide, order: index }));
+    void onUpdateFields(item.id, { slides });
+  };
 
   const copyText = async (key: string, value: string) => {
     if (!value.trim()) return;
@@ -210,27 +259,6 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     } else {
       toast('Could not copy to clipboard', 'error');
     }
-  };
-
-  const downloadSingleAsset = async (asset: MediaAsset) => {
-    const blob = await fetchAssetAsBlob(asset.url);
-    if (blob) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = asset.name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      return;
-    }
-    const a = document.createElement('a');
-    a.href = asset.url.includes('?') ? `${asset.url}&download=1` : `${asset.url}?download=1`;
-    a.download = asset.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
   };
 
   const handleDownloadAllZip = async () => {
@@ -394,74 +422,73 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         <div className="grid grid-cols-1 items-start gap-5 p-5 sm:p-6">
           {/* Media and files, then the form. One scrolling column on phone, tablet and desktop. */}
           <div className="min-w-0 space-y-4">
-            {videoSrc ? (
-              <div className="overflow-hidden rounded-xl border border-zinc-200 bg-black dark:border-zinc-800">
-                <video
-                  src={videoSrc}
-                  controls
-                  playsInline
-                  className="max-h-56 w-full sm:max-h-64 md:max-h-[300px]"
-                />
+            {item.videoAsset?.url ? (
+              <div className="group relative overflow-hidden rounded-xl border border-zinc-200 bg-black dark:border-zinc-800">
+                <PlayableVideo url={item.videoAsset.url} className="max-h-56 w-full sm:max-h-64 md:max-h-[300px]" />
+                <button
+                  type="button"
+                  aria-label="Remove video"
+                  onClick={() => void onUpdateFields(item.id, { videoAsset: null })}
+                  className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-            ) : item.slides.length > 0 ? (
-              <div className="space-y-3">
-                <div className="relative aspect-video max-h-56 w-full overflow-hidden rounded-xl border border-border bg-surface-2 sm:max-h-64 md:aspect-[4/3] md:max-h-none">
-                  <FramedImage
-                    src={item.slides[slideIndex]?.url}
-                    alt={`Slide ${slideIndex + 1}`}
-                    fallbackLabel={`Slide ${slideIndex + 1}`}
-                    preferFull
-                  />
-                  {item.slides.length > 1 ? (
-                    <div className="absolute inset-x-3 top-1/2 flex -translate-y-1/2 items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSlideIndex((i) =>
-                            i === 0 ? item.slides.length - 1 : i - 1
-                          )
-                        }
-                        aria-label="Previous slide"
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSlideIndex((i) => (i + 1) % item.slides.length)
-                        }
-                        aria-label="Next slide"
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : null}
-                  <div className="absolute bottom-2.5 right-2.5 rounded-md bg-black/75 px-2 py-1 font-mono text-xs text-white tabular-nums">
-                    {slideIndex + 1} / {item.slides.length}
-                  </div>
-                </div>
-
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {item.slides.map((slide, idx) => (
+            ) : null}
+            {frame ? (
+              <div className="group relative aspect-video max-h-56 w-full overflow-hidden rounded-xl border border-border bg-surface-2 sm:max-h-64 md:aspect-[4/3] md:max-h-none">
+                {frame.mimeType.startsWith('video/') ? (
+                  <PlayableVideo url={frame.url} className="absolute inset-0 h-full w-full bg-black object-contain" />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={showNext}
+                    aria-label={frames.length > 1 ? 'Next image' : frame.name}
+                    className={cx('absolute inset-0 block h-full w-full', frames.length > 1 ? 'cursor-pointer' : 'cursor-default')}
+                  >
+                    <FramedImage
+                      src={frame.url}
+                      alt={frame.name || `Image ${frameIndex + 1}`}
+                      fallbackLabel={`Image ${frameIndex + 1}`}
+                      preferFull
+                    />
+                  </button>
+                )}
+                {frames.length > 1 ? (
+                  <div className="pointer-events-none absolute inset-x-3 top-1/2 z-10 flex -translate-y-1/2 items-center justify-between">
                     <button
-                      key={slide.id}
                       type="button"
-                      onClick={() => setSlideIndex(idx)}
-                      aria-label={`View slide ${idx + 1}`}
-                      className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 ${
-                        idx === slideIndex
-                          ? 'border-electric-600'
-                          : 'border-zinc-200 dark:border-zinc-800'
-                      }`}
+                      onClick={showPrevious}
+                      aria-label="Previous image"
+                      className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
                     >
-                      <MediaImage src={slide.url} alt={slide.name} />
+                      <ChevronLeft className="h-4 w-4" />
                     </button>
-                  ))}
-                </div>
+                    <button
+                      type="button"
+                      onClick={showNext}
+                      aria-label="Next image"
+                      className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
+                {frames.length > 1 ? (
+                  <div className="absolute bottom-2.5 right-2.5 z-10 rounded-md bg-black/75 px-2 py-1 font-mono text-xs text-white tabular-nums">
+                    {frameIndex + 1} / {frames.length}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label={frame.mimeType.startsWith('video/') ? 'Remove this video' : 'Remove this image'}
+                  onClick={() => removeFrame(frame)}
+                  className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-            ) : item.coverAsset?.url || referencePreview(item.attachedReferences).screenshotUrl || firstPreviewLink(draft.liveLink, referencePreview(item.attachedReferences).link) ? (
+            ) : !item.videoAsset?.url && (item.coverAsset?.url || referencePreview(item.attachedReferences).screenshotUrl || firstPreviewLink(draft.liveLink, referencePreview(item.attachedReferences).link)) ? (
               <div className="aspect-video max-h-56 w-full overflow-hidden rounded-xl border border-border bg-surface-2 sm:max-h-64 md:aspect-[16/10] md:max-h-72">
                 {(() => {
                   const ref = referencePreview(item.attachedReferences);
@@ -490,7 +517,6 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               item={item}
               authToken={authToken}
               onPatch={async (patch) => (await onUpdateFields(item.id, patch)) != null}
-              onDownload={downloadSingleAsset}
               onDownloadAll={handleDownloadAllZip}
               zipBusy={zipProgress}
             />

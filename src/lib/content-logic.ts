@@ -481,8 +481,9 @@ export function prevWorkflowStatus(current: string): StageKey {
 }
 
 /**
- * Dropped files land on the post: a video replaces the video, a single image with nothing
- * else on the post becomes the cover, and every other image is appended as a slide.
+ * Dropped files land on the post. The first video is the post video. Any video after that
+ * is kept as a slide, so a second video still shows in the gallery. A single image with
+ * nothing else on the post becomes the cover, and every other image is appended as a slide.
  */
 export function placeUploadedAssets(
   current: { coverAsset: MediaAsset | null; videoAsset: MediaAsset | null; slides: MediaAsset[] },
@@ -494,6 +495,7 @@ export function placeUploadedAssets(
   const images = incoming.filter((a) => a.mimeType.startsWith('image/'));
   const videos = incoming.filter((a) => a.mimeType.startsWith('video/'));
   if (videos[0]) video = videos[0];
+  for (const extra of videos.slice(1)) slides.push({ ...extra, order: slides.length });
   if (images.length === 1 && !cover && slides.length === 0) {
     cover = images[0];
   } else {

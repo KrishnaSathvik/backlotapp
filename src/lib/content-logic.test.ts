@@ -9,6 +9,7 @@ import {
   postInChannel,
   formatFileSize,
   formatTagsForCopy,
+  placeUploadedAssets,
   groupItemsByStatus,
   nextWorkflowStatus,
   parseTagsInput,
@@ -113,6 +114,19 @@ test('groupItemsByStatus groups items into the three stages', () => {
   assert.equal(grouped.idea.length, 0);
   assert.equal(grouped.ready.length, 1);
   assert.equal(grouped.posted.length, 1);
+});
+
+test('placeUploadedAssets keeps a second video in the gallery instead of dropping it', () => {
+  const file = (id: string, mimeType: string) => ({ id, name: id, url: id, mimeType, size: 1 });
+  const next = placeUploadedAssets(
+    { coverAsset: null, videoAsset: null, slides: [] },
+    [file('clip-a', 'video/mp4'), file('clip-b', 'video/mp4'), file('still', 'image/jpeg')]
+  );
+  assert.equal(next.videoAsset?.id, 'clip-a');
+  assert.deepEqual(
+    next.slides.map((slide) => slide.id),
+    ['clip-b', 'still']
+  );
 });
 
 test('reorderSlides moves slides immutably and reassigns sequential order', () => {
