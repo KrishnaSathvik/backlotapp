@@ -7,7 +7,9 @@ import {
   convertIdeaToPostDraft,
   extractDomainAndTitle,
   filterContentItems,
+  ideaInChannel,
   platformOfChannel,
+  postInChannel,
   type ChannelItem,
   type ContentItem,
   type IdeaItem,
@@ -460,11 +462,13 @@ const VaultShell: React.FC = () => {
       } else {
         setChannels((prev) => prev.map((c) => (c.id === channel.id ? { ...c, name, handle, platform } : c)));
         if (name !== channel.name) {
-          setItems((prev) => prev.map((i) => (i.channelName === channel.name ? { ...i, channelName: name, channelId: channel.id } : i)));
-          setIdeas((prev) => prev.map((i) => (i.channelName === channel.name ? { ...i, channelName: name } : i)));
+          setItems((prev) => prev.map((i) => (postInChannel(i, channel, channels) ? { ...i, channelName: name, channelId: channel.id } : i)));
+          setIdeas((prev) => prev.map((i) => (ideaInChannel(i, channel, channels) ? { ...i, channelName: name } : i)));
         }
       }
-      if (filters.channel === channel.name && name !== channel.name) setFilters((f) => ({ ...f, channel: name }));
+      if (filters.channel.toLowerCase() === channel.name.toLowerCase() && name !== channel.name && !channels.some((c) => c.id !== channel.id && c.name.toLowerCase() === channel.name.toLowerCase())) {
+        setFilters((f) => ({ ...f, channel: name }));
+      }
       toast('Channel updated');
       return true;
     } catch (err) {
@@ -488,11 +492,13 @@ const VaultShell: React.FC = () => {
         const data = await api(token, `/api/channels/${channel.id}`, 'DELETE');
         mergeChanged(data.items, data.ideas);
       } else {
-        setItems((prev) => prev.map((i) => (i.channelName === channel.name || i.channelId === channel.id ? { ...i, channelName: '', channelId: null } : i)));
-        setIdeas((prev) => prev.map((i) => (i.channelName === channel.name ? { ...i, channelName: '' } : i)));
+        setItems((prev) => prev.map((i) => (postInChannel(i, channel, channels) ? { ...i, channelName: '', channelId: null } : i)));
+        setIdeas((prev) => prev.map((i) => (ideaInChannel(i, channel, channels) ? { ...i, channelName: '' } : i)));
       }
       setChannels((prev) => prev.filter((c) => c.id !== channel.id));
-      if (filters.channel === channel.name) setFilters((f) => ({ ...f, channel: 'all' }));
+      if (filters.channel === String(channel.id) || (filters.channel.toLowerCase() === channel.name.toLowerCase() && !channels.some((c) => c.id !== channel.id && c.name.toLowerCase() === channel.name.toLowerCase()))) {
+        setFilters((f) => ({ ...f, channel: 'all' }));
+      }
       toast(`Channel “${channel.name}” deleted`);
     } catch (err) {
       fail(err, 'Could not delete the channel.');
@@ -514,11 +520,19 @@ const VaultShell: React.FC = () => {
     coverAsset: MediaAsset | null;
     videoAsset: MediaAsset | null;
     slides: MediaAsset[];
+    /** Which channel, when two share a name. */
+    channelId?: number | null;
   }): Promise<ContentItem | null> => {
     // Errors propagate to the editor, which shows them inline.
     let created: ContentItem | null = null;
     const token = await getFreshToken();
-    const channelId = channels.find((c) => c.name === payload.channelName)?.id ?? null;
+    const named = channels.filter((c) => c.name.toLowerCase() === payload.channelName.trim().toLowerCase());
+    const prefer = payload.channelId ?? (payload.id ? items.find((i) => i.id === payload.id)?.channelId : null);
+    const channelId = !payload.channelName.trim()
+      ? null
+      : named.some((c) => c.id === prefer)
+        ? prefer ?? null
+        : named[0]?.id ?? null;
 
     if (token) {
       if (payload.id) {
@@ -570,13 +584,14 @@ const VaultShell: React.FC = () => {
   };
 
   /** Title and platform, then open the new post with the drop zone ready. */
-  const handleQuickCreatePost = async (title: string, platform: PlatformKey, channelName: string) => {
+  const handleQuickCreatePost = async (title: string, platform: PlatformKey, channelName: string, channelId: number | null = null) => {
     const date = pendingDate.current;
     pendingDate.current = '';
     const created = await handleSaveItem({
       title,
       platform,
       channelName,
+      channelId,
       status: 'idea',
       caption: '',
       tags: [],
@@ -596,7 +611,9 @@ const VaultShell: React.FC = () => {
   const handleUpdateItemFields = async (itemId: number, fields: ItemFieldsPatch): Promise<ContentItem | null> => {
     const patch: ItemFieldsPatch & { channelId?: number | null } = { ...fields };
     if (fields.channelName !== undefined) {
-      patch.channelId = channels.find((c) => c.name === fields.channelName)?.id ?? null;
+      const named = channels.filter((c) => c.name.toLowerCase() === fields.channelName!.trim().toLowerCase());
+      const current = items.find((i) => i.id === itemId)?.channelId;
+      patch.channelId = !fields.channelName.trim() ? null : named.some((c) => c.id === current) ? current ?? null : named[0]?.id ?? null;
     }
     try {
       let saved: ContentItem | null = null;
@@ -847,7 +864,16 @@ const VaultShell: React.FC = () => {
     }
   };
 
-  const filteredItems = useMemo(() => filterContentItems(items, filters), [items, filters]);
+  const selectedChannel =
+    filters.channel !== 'all'
+      ? channels.find((c) => String(c.id) === filters.channel) ??
+        channels.find((c) => c.name.toLowerCase() === filters.channel.toLowerCase()) ??
+        null
+      : null;
+  const filteredItems = useMemo(() => {
+    const list = filterContentItems(items, selectedChannel ? { ...filters, channel: 'all' } : filters);
+    return selectedChannel ? list.filter((i) => postInChannel(i, selectedChannel, channels)) : list;
+  }, [items, filters, selectedChannel, channels]);
 
   // The demo uses the same screens and handlers; without a token every change stays in memory.
   const isDemo = !authUser;
@@ -889,13 +915,10 @@ const VaultShell: React.FC = () => {
   } · ${channels.length} ${channels.length === 1 ? 'channel' : 'channels'}`;
 
   // A channel page: header, stats and posts for one channel only.
-  const activeChannel =
-    activeTab === 'library' && filters.channel !== 'all'
-      ? channels.find((c) => c.name.toLowerCase() === filters.channel.toLowerCase()) ?? null
-      : null;
-  const scopedItems = activeChannel ? items.filter((i) => i.channelName === activeChannel.name) : items;
-  const channelIdeas = activeChannel ? ideas.filter((i) => i.channelName === activeChannel.name).length : 0;
-  const channelLogo = activeChannel ? platformOfChannel(channels, items, activeChannel.name) : null;
+  const activeChannel = activeTab === 'library' ? selectedChannel : null;
+  const scopedItems = activeChannel ? items.filter((i) => postInChannel(i, activeChannel, channels)) : items;
+  const channelIdeas = activeChannel ? ideas.filter((i) => ideaInChannel(i, activeChannel, channels)).length : 0;
+  const channelLogo = activeChannel ? platformOfChannel(activeChannel, items, channels) : null;
   const goTab = (tab: ActiveTab) => {
     // "Library" always means everything; leaving a channel clears its filter.
     if (tab === 'library') setFilters((f) => ({ ...f, channel: 'all' }));
@@ -923,7 +946,7 @@ const VaultShell: React.FC = () => {
     counts: { library: items.length, ideas: ideas.filter((i) => !i.convertedItemId).length, calendar: null, chat: null },
     channels,
     items,
-    activeChannel: activeChannel?.name ?? 'all',
+    activeChannel: activeChannel ? String(activeChannel.id) : 'all',
     onAddChannel: () => setChannelDialogOpen(true),
     onEditChannel: setEditingChannel,
     onDeleteChannel: handleDeleteChannel,
@@ -1159,7 +1182,7 @@ const VaultShell: React.FC = () => {
       {newPostOpen ? (
         <NewPostDialog
           channels={channels}
-          initialChannel={activeChannel?.name ?? ''}
+          initialChannel={activeChannel ? String(activeChannel.id) : ''}
           onCreate={handleQuickCreatePost}
           onClose={() => setNewPostOpen(false)}
         />

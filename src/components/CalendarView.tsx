@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getPlatformShortLabel, normalizeStatus, referencePreview, type ChannelItem, type ContentItem } from '@/src/lib/content-logic';
+import { getPlatformShortLabel, normalizeStatus, postInChannel, referencePreview, type ChannelItem, type ContentItem } from '@/src/lib/content-logic';
 import { firstPreviewLink } from '@/src/lib/link-preview';
 import { FormSelect } from './CustomSelect';
 import { LinkThumbnail } from './LinkThumbnail';
@@ -49,7 +49,10 @@ export function CalendarView({ items, channels, authToken = null, onSelectItem, 
   const [selected, setSelected] = useState(today);
   const [channel, setChannel] = useState('all');
 
-  const scoped = channel === 'all' ? items : items.filter((i) => i.channelName === channel);
+  const scoped = channel === 'all' ? items : items.filter((i) => {
+    const chosen = channels.find((c) => String(c.id) === channel);
+    return chosen ? postInChannel(i, chosen, channels) : i.channelName === channel;
+  });
 
   const byDay = useMemo(() => {
     const map = new Map<string, ContentItem[]>();
@@ -136,9 +139,13 @@ export function CalendarView({ items, channels, authToken = null, onSelectItem, 
         <div className="w-full sm:w-48">
           <FormSelect value={channel} onChange={(e) => setChannel(e.target.value)} aria-label="Channel">
             <option value="all">All channels</option>
-            {channels.map((c) => (
-              <option key={c.id} value={c.name}>{c.name}</option>
-            ))}
+            {channels.map((c) => {
+              const shared = channels.some((other) => other.id !== c.id && other.name.toLowerCase() === c.name.toLowerCase());
+              const mark = c.platform ? getPlatformShortLabel(c.platform) : '';
+              return (
+                <option key={c.id} value={c.id}>{shared && mark ? `${c.name} · ${mark}` : c.name}</option>
+              );
+            })}
           </FormSelect>
         </div>
         ) : null}

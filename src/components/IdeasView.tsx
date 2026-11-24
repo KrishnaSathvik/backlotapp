@@ -3,13 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import { Calendar, CheckCircle2, ImageIcon, Lightbulb, Link2 } from 'lucide-react';
 import { formatTagsForCopy, getPlatformShortLabel, ideaImages, SORT_OPTIONS, sortIdeas, type ChannelItem, type IdeaItem, type LibrarySort, type PlatformKey } from '@/src/lib/content-logic';
+import { hasLinkPreview } from '@/src/lib/link-preview';
 import { FormSelect } from './CustomSelect';
 import { IdeaCaptureSheet, type IdeaCapturePayload } from './IdeaCaptureSheet';
 import { IdeaDetailSheet, type IdeaFieldsPatch } from './IdeaDetailSheet';
 import { LinkThumbnail } from './LinkThumbnail';
 import { MediaImage } from './MediaImage';
 import { PlatformIcon } from './PlatformIcon';
-import { buttonStyles, chipClass, cx, PAGE_SIZE, Pager } from './ui';
+import { buttonStyles, cx, PAGE_SIZE, Pager } from './ui';
 
 interface IdeasViewProps {
   ideas: IdeaItem[];
@@ -56,26 +57,19 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
     // Only on mount: the request is consumed once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [kind, setKind] = useState<'all' | 'links' | 'images' | 'notes' | 'used'>('all');
   const [sort, setSort] = useState<LibrarySort>('updated');
   const [page, setPage] = useState(1);
   const [busyIdeaId, setBusyIdeaId] = useState<number | null>(null);
 
-  const kindOf = (idea: IdeaItem) => (idea.linkUrl ? 'links' : ideaImages(idea).length ? 'images' : 'notes');
-  const visible = ideas.filter((i) => {
-    if (kind === 'all') return true;
-    if (kind === 'used') return !!i.convertedItemId;
-    return !i.convertedItemId && kindOf(i) === kind;
-  });
-  const listKey = `${kind}|${sort}`;
+  const listKey = sort;
   const [pageKey, setPageKey] = useState(listKey);
   if (pageKey !== listKey) {
     setPageKey(listKey);
     setPage(1);
   }
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(ideas.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const pageItems = sortIdeas(visible, sort).slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageItems = sortIdeas(ideas, sort).slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const openIdea = ideas.find((i) => i.id === openIdeaId) ?? null;
 
   const makePost = async (idea: IdeaItem, platform?: PlatformKey) => {
@@ -127,48 +121,26 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
         </div>
       ) : (
         <>
-          <div role="tablist" aria-label="Filter ideas" className="flex flex-wrap gap-2">
-            {([
-              ['all', 'All'],
-              ['links', 'Links'],
-              ['images', 'Images'],
-              ['notes', 'Notes'],
-              ['used', 'Used'],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={kind === key}
-                onClick={() => setKind(key)}
-                className={cx('h-8 rounded-full px-3 text-[13px] font-semibold', chipClass(kind === key))}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {visible.length === 0 ? (
-            <div className="flex flex-col items-center rounded-2xl border border-dashed border-border-strong px-6 py-14 text-center">
-              <p className="text-sm font-semibold">No ideas in this group</p>
-            </div>
-          ) : (
             <div data-testid="ideas-grid" className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
               {pageItems.map((idea) => {
                 const busy = busyIdeaId === idea.id;
                 const converted = !!idea.convertedItemId;
+                const images = ideaImages(idea);
+                // A picture only when there is one. A note, or a link with no thumbnail, is a text card.
+                const picture = images.length > 0 || hasLinkPreview(idea.linkUrl);
                 return (
                   <article
                     key={idea.id}
                     className={cx(
-                      'group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 hover:border-border-strong',
+                      'group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 hover:border-border-strong',
                       busy && 'opacity-60'
                     )}
                   >
+                    {picture ? (
                     <div className="relative aspect-[16/10] overflow-hidden bg-surface-2">
-                      {ideaImages(idea).length ? (
+                      {images.length ? (
                         <MediaImage
-                          src={ideaImages(idea)[0]}
+                          src={images[0]}
                           alt=""
                           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                         />
@@ -177,18 +149,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                           link={idea.linkUrl}
                           authToken={authToken}
                           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                          fallback={
-                            <div className="flex h-full flex-col items-center justify-center gap-2 bg-surface-2 px-4 text-center">
-                              {idea.linkDomain ? (
-                                <Link2 className="h-6 w-6 text-muted" aria-hidden="true" />
-                              ) : (
-                                <Lightbulb className="h-6 w-6 text-muted" aria-hidden="true" />
-                              )}
-                              <span className="line-clamp-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                                {idea.linkDomain || 'Note'}
-                              </span>
-                            </div>
-                          }
+                          fallback={null}
                         />
                       )}
                       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-2.5">
@@ -200,10 +161,10 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                         ) : (
                           <span />
                         )}
-                        {ideaImages(idea).length > 1 ? (
+                        {images.length > 1 ? (
                           <span className="ml-auto mr-1.5 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur tabular-nums">
                             <ImageIcon className="h-3 w-3" aria-hidden="true" />
-                            {ideaImages(idea).length}
+                            {images.length}
                           </span>
                         ) : null}
                         {idea.targetDate ? (
@@ -214,9 +175,11 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                         ) : null}
                       </div>
                     </div>
+                    ) : null}
 
-                    <div className="flex flex-1 flex-col p-4">
-                      {idea.platform !== 'other' || idea.channelName ? (
+                    <div className={cx('flex flex-1 flex-col p-4', !picture && 'min-h-52 p-5')}>
+                      <div className={cx(!picture && 'flex flex-1 flex-col justify-center')}>
+                      {idea.platform !== 'other' || idea.channelName || (!picture && (converted || idea.targetDate)) ? (
                         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
                           {idea.platform !== 'other' ? (
                             <>
@@ -230,10 +193,24 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                               <span className="truncate">{idea.channelName}</span>
                             </span>
                           ) : null}
+                          {!picture && converted ? (
+                            <span className="inline-flex items-center gap-1 font-semibold text-text">
+                              {(idea.platform !== 'other' || idea.channelName) ? <span aria-hidden="true">·</span> : null}
+                              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              Linked post
+                            </span>
+                          ) : null}
+                          {!picture && idea.targetDate ? (
+                            <span className="inline-flex items-center gap-1 tabular-nums">
+                              {(idea.platform !== 'other' || idea.channelName || converted) ? <span aria-hidden="true">·</span> : null}
+                              <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                              {idea.targetDate}
+                            </span>
+                          ) : null}
                         </div>
                       ) : null}
 
-                      <h3 className="mt-1.5 line-clamp-2 text-[16.5px] font-bold leading-snug tracking-tight">
+                      <h3 className={cx(picture ? 'line-clamp-2 text-[16.5px]' : 'line-clamp-6 text-[22px] leading-snug', 'font-bold tracking-tight', (idea.platform !== 'other' || idea.channelName || (!picture && (converted || idea.targetDate))) && 'mt-1.5')}>
                         {/* Stretched button: the whole card opens the idea. */}
                         <button
                           type="button"
@@ -243,11 +220,18 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                           {idea.title}
                         </button>
                       </h3>
-                      {idea.notes ? (
-                        <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-zinc-500 dark:text-zinc-400">{idea.notes}</p>
-                      ) : idea.tags.length ? (
-                        <p className="mt-1.5 truncate font-mono text-[11px] text-zinc-500">{formatTagsForCopy(idea.tags)}</p>
+                      {!picture && idea.linkDomain ? (
+                        <p className="mt-2 flex min-w-0 items-center gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                          <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          <span className="truncate">{idea.linkDomain}</span>
+                        </p>
                       ) : null}
+                      {idea.notes ? (
+                        <p className={cx('mt-2 text-[13px] leading-relaxed text-zinc-500 dark:text-zinc-400', picture ? 'line-clamp-2' : 'line-clamp-4')}>{idea.notes}</p>
+                      ) : idea.tags.length ? (
+                        <p className="mt-2 truncate font-mono text-[11px] text-zinc-500">{formatTagsForCopy(idea.tags)}</p>
+                      ) : null}
+                      </div>
 
                       <p className="mt-auto pt-4 text-xs font-medium text-muted">Click to edit</p>
                     </div>
@@ -255,7 +239,6 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                 );
               })}
             </div>
-          )}
           <Pager page={currentPage} pageCount={pageCount} onPage={setPage} label="Idea pages" />
         </>
       )}

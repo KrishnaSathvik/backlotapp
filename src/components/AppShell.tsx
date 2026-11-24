@@ -4,7 +4,7 @@ import Link from 'next/link';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowLeft, CalendarDays, Hash, LayoutGrid, Lightbulb, LogIn, MessageSquare, PanelLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { ThemePreference } from '@/src/lib/content-logic';
-import { platformOfChannel, type ChannelItem, type ContentItem } from '@/src/lib/content-logic';
+import { platformOfChannel, postInChannel, type ChannelItem, type ContentItem } from '@/src/lib/content-logic';
 import { AccountMenu, SidebarAccount, type AccountInfo } from './AccountMenu';
 import { PlatformIcon } from './PlatformIcon';
 import { SlateAvatar } from './SlateAvatar';
@@ -156,14 +156,14 @@ function SidebarBody({
           ) : null}
           <div className="space-y-0.5">
             {channels.map((ch) => {
-              const on = activeTab === 'library' && activeChannel === ch.name;
-              const n = items.filter((i) => i.channelName === ch.name).length;
-              const platform = platformOfChannel(channels, items, ch.name);
+              const on = activeTab === 'library' && activeChannel === String(ch.id);
+              const n = items.filter((i) => postInChannel(i, ch, channels)).length;
+              const platform = platformOfChannel(ch, items, channels);
               return (
                 <div key={ch.id} className="group/ch relative">
                 <button
                   type="button"
-                  onClick={() => onChannel(on ? 'all' : ch.name)}
+                  onClick={() => onChannel(on ? 'all' : String(ch.id))}
                   aria-pressed={on}
                   title={`Open ${ch.name}`}
                   className={cx(
@@ -359,13 +359,13 @@ export function TabletRail({
       <div className="mt-3 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto no-scrollbar">
         <p className="sr-only">Your channels</p>
         {channels.map((ch) => {
-          const on = activeTab === 'library' && activeChannel === ch.name;
-          const platform = platformOfChannel(channels, items, ch.name);
+          const on = activeTab === 'library' && activeChannel === String(ch.id);
+          const platform = platformOfChannel(ch, items, channels);
           return (
             <button
               key={ch.id}
               type="button"
-              onClick={() => onChannel(on ? 'all' : ch.name)}
+              onClick={() => onChannel(on ? 'all' : String(ch.id))}
               aria-pressed={on}
               aria-label={ch.name}
               title={ch.name}

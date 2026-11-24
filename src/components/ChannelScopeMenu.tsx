@@ -29,7 +29,7 @@ export function ChannelScopeMenu({
 
   const options = [
     { value: 'all', label: 'All channels', platform: null as ReturnType<typeof platformOfChannel> },
-    ...channels.map((c) => ({ value: String(c.id), label: c.name, platform: platformOfChannel(channels, items, c.name) })),
+    ...channels.map((c) => ({ value: String(c.id), label: c.name, platform: platformOfChannel(c, items, channels) })),
   ];
   const current = options.find((o) => o.value === value) ?? options[0];
 

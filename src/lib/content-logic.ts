@@ -117,18 +117,40 @@ export function getPlatformLabel(platform: PlatformKey): string {
 }
 
 /**
- * A channel's platform: the one saved on the channel, else the one its posts use most (channels
- * added before platforms were saved). Null when neither is known.
+ * A post belongs to this channel. A saved id wins, so two channels can share a name.
+ * A post from before ids existed stays with the oldest channel of that name.
  */
-export function platformOfChannel(channels: ChannelItem[], items: ContentItem[], channelName: string): PlatformKey | null {
-  const saved = channels.find((c) => c.name === channelName)?.platform;
-  return saved && saved !== 'other' ? saved : channelPlatform(items, channelName);
+export function postInChannel(item: Pick<ContentItem, 'channelId' | 'channelName'>, channel: ChannelItem, channels: ChannelItem[]): boolean {
+  if (typeof item.channelId === 'number') return item.channelId === channel.id;
+  if (!item.channelName || item.channelName.toLowerCase() !== channel.name.toLowerCase()) return false;
+  return oldestNamed(channels, channel.name)?.id === channel.id;
 }
 
-/** The platform a channel posts to most, for showing its logo. Null if it has no posts yet. */
-export function channelPlatform(items: ContentItem[], channelName: string): PlatformKey | null {
+/** The first channel created with this name. Name-only posts and ideas stay with it. */
+function oldestNamed(channels: ChannelItem[], name: string): ChannelItem | null {
+  const same = channels.filter((c) => c.name.toLowerCase() === name.toLowerCase());
+  return same.reduce<ChannelItem | null>((best, c) => (best === null || c.id < best.id ? c : best), null);
+}
+
+/** An idea has no channel id, so it stays with the oldest channel of its name. */
+export function ideaInChannel(idea: Pick<IdeaItem, 'channelName'>, channel: ChannelItem, channels: ChannelItem[]): boolean {
+  if (!idea.channelName || idea.channelName.toLowerCase() !== channel.name.toLowerCase()) return false;
+  return oldestNamed(channels, channel.name)?.id === channel.id;
+}
+
+/**
+ * A channel's platform: the one saved on the channel, else the one its own posts use most
+ * (channels added before platforms were saved). Null when neither is known.
+ */
+export function platformOfChannel(channel: ChannelItem, items: ContentItem[], channels: ChannelItem[] = [channel]): PlatformKey | null {
+  if (channel.platform && channel.platform !== 'other') return channel.platform;
+  return channelPlatform(items, channel, channels);
+}
+
+/** The platform a channel's own posts use most. Null if it has no posts yet. */
+export function channelPlatform(items: ContentItem[], channel: ChannelItem, channels: ChannelItem[]): PlatformKey | null {
   const counts = new Map<PlatformKey, number>();
-  for (const i of items) if (i.channelName === channelName) counts.set(i.platform, (counts.get(i.platform) ?? 0) + 1);
+  for (const i of items) if (postInChannel(i, channel, channels)) counts.set(i.platform, (counts.get(i.platform) ?? 0) + 1);
   let best: PlatformKey | null = null;
   let max = 0;
   for (const [k, v] of counts) if (v > max) [best, max] = [k, v];

@@ -4,6 +4,8 @@ import {
   convertIdeaToPostDraft,
   extractDomainAndTitle,
   filterContentItems,
+  platformOfChannel,
+  postInChannel,
   formatFileSize,
   formatTagsForCopy,
   groupItemsByStatus,
@@ -87,6 +89,21 @@ test('filterContentItems filters by platform, channel, status, and search across
     })[0]?.id,
     1
   );
+});
+
+test('two channels with the same name keep their own icon and posts', () => {
+  const youtube = { id: 1, name: 'CodeByKrishna', handle: 'https://youtube.com/@x', platform: 'youtube_long' as const };
+  const instagram = { id: 2, name: 'CodeByKrishna', handle: 'https://instagram.com/x', platform: 'instagram_reel' as const };
+  const channels = [youtube, instagram];
+  const posts = [
+    { channelId: 1, channelName: 'CodeByKrishna', platform: 'youtube_long' as const },
+    { channelId: 1, channelName: 'CodeByKrishna', platform: 'youtube_long' as const },
+    { channelId: null, channelName: 'CodeByKrishna', platform: 'youtube_long' as const },
+  ];
+  assert.equal(platformOfChannel(instagram, [], channels), 'instagram_reel');
+  assert.equal(platformOfChannel(youtube, [], channels), 'youtube_long');
+  assert.equal(posts.filter((p) => postInChannel(p, youtube, channels)).length, 3);
+  assert.equal(posts.filter((p) => postInChannel(p, instagram, channels)).length, 0);
 });
 
 test('groupItemsByStatus groups items into the three stages', () => {

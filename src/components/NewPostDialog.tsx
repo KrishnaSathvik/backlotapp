@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { PLATFORM_OPTIONS, type ChannelItem, type PlatformKey } from '@/src/lib/content-logic';
+import { getPlatformShortLabel, PLATFORM_OPTIONS, type ChannelItem, type PlatformKey } from '@/src/lib/content-logic';
 import { FormSelect } from './CustomSelect';
 import { PlatformIcon } from './PlatformIcon';
 import { buttonStyles, chipClass, cx, inputStyles, labelStyles, Sheet, SheetCloseButton, sizes } from './ui';
@@ -40,13 +40,13 @@ export function NewPostDialog({
   /** Set when creating from a channel's page. That channel and its platform are used as-is. */
   initialChannel?: string;
   /** Creates the post; rejects with a message to show. */
-  onCreate: (title: string, platform: PlatformKey, channelName: string) => Promise<void>;
+  onCreate: (title: string, platform: PlatformKey, channelName: string, channelId: number | null) => Promise<void>;
   onClose: () => void;
 }) {
-  const channel = channels.find((c) => c.name === initialChannel) ?? null;
+  const channel = channels.find((c) => String(c.id) === initialChannel) ?? channels.find((c) => c.name === initialChannel) ?? null;
   const [title, setTitle] = useState('');
   const [platform, setPlatform] = useState<PlatformKey>(channel?.platform || 'youtube_long');
-  const [channelName, setChannelName] = useState(channel ? channel.name : '');
+  const [channelId, setChannelId] = useState<number | null>(channel?.id ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +56,8 @@ export function NewPostDialog({
     setSaving(true);
     setError(null);
     try {
-      await onCreate(title.trim(), channel?.platform ?? platform, channel?.name ?? channelName);
+      const chosen = channel ?? channels.find((c) => c.id === channelId) ?? null;
+      await onCreate(title.trim(), chosen?.platform ?? platform, chosen?.name ?? '', chosen?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t create the post. Try again.');
       setSaving(false);
@@ -129,18 +130,22 @@ export function NewPostDialog({
                     Channel <span className="font-normal text-zinc-400">· optional</span>
                   </legend>
                   <div className="flex flex-wrap gap-2">
-                    {[{ id: -1, name: '' }, ...channels].map((c) => (
+                    {[{ id: -1, name: 'No channel', platform: undefined }, ...channels].map((c) => {
+                      const shared = c.id !== -1 && channels.some((other) => other.id !== c.id && other.name.toLowerCase() === c.name.toLowerCase());
+                      const label = shared && c.platform ? `${c.name} · ${getPlatformShortLabel(c.platform)}` : c.name;
+                      return (
                       <button
                         key={c.id}
                         type="button"
-                        aria-pressed={channelName === c.name}
+                        aria-pressed={c.id === -1 ? channelId === null : channelId === c.id}
                         disabled={saving}
-                        onClick={() => setChannelName(c.name)}
-                        className={chip(channelName === c.name)}
+                        onClick={() => setChannelId(c.id === -1 ? null : c.id)}
+                        className={chip(c.id === -1 ? channelId === null : channelId === c.id)}
                       >
-                        <span className="truncate">{c.name || 'No channel'}</span>
+                        <span className="truncate">{label}</span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </fieldset>
                 {/* Desktop: the dropdown. */}
@@ -148,13 +153,17 @@ export function NewPostDialog({
                   <label htmlFor="new-post-channel" className={labelStyles}>
                     Channel <span className="font-normal text-zinc-400">· optional</span>
                   </label>
-                  <FormSelect id="new-post-channel" value={channelName} onChange={(e) => setChannelName(e.target.value)} disabled={saving}>
+                  <FormSelect id="new-post-channel" value={channelId === null ? '' : String(channelId)} onChange={(e) => setChannelId(e.target.value ? Number(e.target.value) : null)} disabled={saving}>
                     <option value="">No channel yet</option>
-                    {channels.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
+                    {channels.map((c) => {
+                      const shared = channels.some((other) => other.id !== c.id && other.name.toLowerCase() === c.name.toLowerCase());
+                      const mark = c.platform ? getPlatformShortLabel(c.platform) : '';
+                      return (
+                      <option key={c.id} value={c.id}>
+                        {shared && mark ? `${c.name} · ${mark}` : c.name}
                       </option>
-                    ))}
+                      );
+                    })}
                   </FormSelect>
                 </div>
               </>
