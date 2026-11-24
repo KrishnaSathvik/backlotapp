@@ -9,6 +9,7 @@ import {
   filterContentItems,
   ideaInChannel,
   platformOfChannel,
+  postForAnotherChannel,
   postInChannel,
   type ChannelItem,
   type ContentItem,
@@ -520,9 +521,10 @@ const VaultShell: React.FC = () => {
     coverAsset: MediaAsset | null;
     videoAsset: MediaAsset | null;
     slides: MediaAsset[];
+    attachedReferences?: ContentItem['attachedReferences'];
     /** Which channel, when two share a name. */
     channelId?: number | null;
-  }): Promise<ContentItem | null> => {
+  }, createdNotice = 'Post created'): Promise<ContentItem | null> => {
     // Errors propagate to the editor, which shows them inline.
     let created: ContentItem | null = null;
     const token = await getFreshToken();
@@ -569,7 +571,7 @@ const VaultShell: React.FC = () => {
           ...payload,
           id: Date.now(),
           channelId,
-          attachedReferences: [],
+          attachedReferences: payload.attachedReferences ?? [],
           sourceIdeaId: null,
           createdAt: now,
           updatedAt: now,
@@ -579,7 +581,7 @@ const VaultShell: React.FC = () => {
       }
       setItems(nextItems);
     }
-    toast(payload.id ? 'Post updated' : 'Post created');
+    toast(payload.id ? 'Post updated' : createdNotice);
     return created;
   };
 
@@ -605,6 +607,15 @@ const VaultShell: React.FC = () => {
     });
     setNewPostOpen(false);
     if (created) setSelectedItem(created);
+  };
+
+  /** A second post on another channel. The files stay the ones already stored. */
+  const handlePostToChannel = async (item: ContentItem, channel: ChannelItem) => {
+    try {
+      await handleSaveItem(postForAnotherChannel(item, channel, items, channels), `Added to ${channel.name}`);
+    } catch (err) {
+      fail(err, 'Could not add the post to that channel.');
+    }
   };
 
 
@@ -782,8 +793,7 @@ const VaultShell: React.FC = () => {
         }
       }
       setActiveTab('library');
-      setSelectedItem(newItem);
-      toast('Post created from idea');
+      if (!idea.convertedItemId) toast('Post created from idea');
     } catch (err) {
       if (isConflict(err)) handleConflict(err);
       fail(err, 'Could not create post.');
@@ -814,7 +824,7 @@ const VaultShell: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken, loadingWorkspace, ideas]);
 
-  const handleUpdateIdea = async (ideaId: number, patch: IdeaFieldsPatch): Promise<boolean> => {
+  const handleUpdateIdea = async (ideaId: number, patch: IdeaFieldsPatch, options?: { quiet?: boolean }): Promise<boolean> => {
     try {
       const token = await getFreshToken();
       if (token) {
@@ -824,7 +834,7 @@ const VaultShell: React.FC = () => {
       } else {
         setIdeas((prev) => prev.map((i) => (i.id === ideaId ? { ...i, ...patch } : i)));
       }
-      toast('Idea saved');
+      if (!options?.quiet) toast('Idea saved');
       return true;
     } catch (err) {
       if (isConflict(err)) handleConflict(err);
@@ -910,14 +920,15 @@ const VaultShell: React.FC = () => {
 
   const page = PAGE_COPY[activeTab];
   const isChat = activeTab === 'chat';
-  const librarySubtitle = `${items.length} ${items.length === 1 ? 'post' : 'posts'} · ${ideas.length} ${
-    ideas.length === 1 ? 'idea' : 'ideas'
+  const openIdeas = ideas.filter((idea) => !idea.convertedItemId);
+  const librarySubtitle = `${items.length} ${items.length === 1 ? 'post' : 'posts'} · ${openIdeas.length} ${
+    openIdeas.length === 1 ? 'idea' : 'ideas'
   } · ${channels.length} ${channels.length === 1 ? 'channel' : 'channels'}`;
 
   // A channel page: header, stats and posts for one channel only.
   const activeChannel = activeTab === 'library' ? selectedChannel : null;
   const scopedItems = activeChannel ? items.filter((i) => postInChannel(i, activeChannel, channels)) : items;
-  const channelIdeas = activeChannel ? ideas.filter((i) => ideaInChannel(i, activeChannel, channels)).length : 0;
+  const channelIdeas = activeChannel ? openIdeas.filter((i) => ideaInChannel(i, activeChannel, channels)).length : 0;
   const channelLogo = activeChannel ? platformOfChannel(activeChannel, items, channels) : null;
   const goTab = (tab: ActiveTab) => {
     // "Library" always means everything; leaving a channel clears its filter.
@@ -943,7 +954,7 @@ const VaultShell: React.FC = () => {
 
   const sidebarProps: SidebarProps = {
     ...shellProps,
-    counts: { library: items.length, ideas: ideas.filter((i) => !i.convertedItemId).length, calendar: null, chat: null },
+    counts: { library: items.length, ideas: openIdeas.length, calendar: null, chat: null },
     channels,
     items,
     activeChannel: activeChannel ? String(activeChannel.id) : 'all',
@@ -1114,6 +1125,10 @@ const VaultShell: React.FC = () => {
             onFiltersChange={setFilters}
             onSelectItem={setSelectedItem}
             onCreateNew={() => setNewPostOpen(true)}
+            channels={channels}
+            catalog={items}
+            showPostTo={Boolean(activeChannel)}
+            onPostToChannel={handlePostToChannel}
           />
         ) : activeTab === 'calendar' ? (
           <CalendarView
@@ -1132,7 +1147,7 @@ const VaultShell: React.FC = () => {
             key={sharedDraft ? 'shared-idea' : 'default-ideas'}
             initialOpenIdeaId={ideaToOpen}
             onInitialIdeaOpened={() => setIdeaToOpen(null)}
-            ideas={ideas}
+            ideas={openIdeas}
             channels={channels}
             authToken={authToken}
             initialSharedDraft={sharedDraft}

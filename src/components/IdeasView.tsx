@@ -66,7 +66,8 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
   }
   const pageCount = Math.max(1, Math.ceil(ideas.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const pageItems = sortIdeas(ideas, sort).slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = sortIdeas(ideas, sort).slice(pageStart, pageStart + PAGE_SIZE);
   const openIdea = ideas.find((i) => i.id === openIdeaId) ?? null;
 
   const makePost = async (idea: IdeaItem, platform?: PlatformKey) => {
@@ -118,7 +119,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
         </div>
       ) : (
         <>
-            <div data-testid="ideas-list" className="overflow-hidden rounded-2xl border border-border bg-surface">
+            <div data-testid="ideas-list" className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
               {pageItems.map((idea) => {
                 const busy = busyIdeaId === idea.id;
                 const named = idea.platform !== 'other';
@@ -126,41 +127,28 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
                   <article
                     key={idea.id}
                     className={cx(
-                      'group relative border-t border-border transition-colors first:border-t-0 hover:bg-surface-2',
+                      'group relative rounded-2xl border border-border bg-surface transition-colors hover:bg-surface-2',
                       busy && 'opacity-60'
                     )}
                   >
-                    <div className="flex items-center gap-3 px-3 py-3 sm:px-4 md:py-2.5">
+                    <div className="flex items-center gap-3 px-3 py-3 sm:px-4">
                       <div className="min-w-0 flex-1">
-                        <h3 className="line-clamp-2 text-[15px] font-semibold tracking-tight md:line-clamp-1">
+                        <h3 className="truncate text-[15px] font-semibold tracking-tight">
                           <button
                             type="button"
                             onClick={() => setOpenIdeaId(idea.id)}
-                            className="text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-electric-500"
+                            className="block w-full truncate text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-electric-500"
                           >
                             {idea.title}
                           </button>
                         </h3>
-                        {idea.channelName ? <p className="mt-0.5 hidden truncate text-[13px] text-zinc-500 lg:block dark:text-zinc-400">{idea.channelName}</p> : null}
-                        {named || idea.channelName ? (
-                          <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 md:hidden dark:text-zinc-400">
-                            {named ? (
-                              <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-200">
-                                <PlatformIcon platform={idea.platform} size={14} />
-                                <span className="truncate">{getPlatformShortLabel(idea.platform)}</span>
-                              </span>
-                            ) : null}
-                            {idea.channelName ? <span className="min-w-0 truncate">{idea.channelName}</span> : null}
-                          </div>
-                        ) : null}
+                        {idea.channelName ? <p className="mt-0.5 truncate text-[13px] text-zinc-500 dark:text-zinc-400">{idea.channelName}</p> : null}
                       </div>
                       {named ? (
-                        <div className="hidden shrink-0 items-center text-xs text-zinc-500 md:flex dark:text-zinc-400">
-                          <span className="inline-flex w-5 items-center gap-1.5 font-semibold text-zinc-700 lg:w-28 dark:text-zinc-200">
-                            <PlatformIcon platform={idea.platform} size={16} />
-                            <span className="hidden truncate lg:inline">{getPlatformShortLabel(idea.platform)}</span>
-                          </span>
-                        </div>
+                        <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                          <PlatformIcon platform={idea.platform} size={16} />
+                          <span className="max-w-24 truncate sm:max-w-none">{getPlatformShortLabel(idea.platform)}</span>
+                        </span>
                       ) : null}
                     </div>
                   </article>
@@ -191,9 +179,9 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
           authToken={authToken}
           onClose={() => setOpenIdeaId(null)}
           onSave={onUpdateIdea}
-          onMakePost={async (idea) => {
+          onMakePost={async (idea, platform) => {
             setOpenIdeaId(null);
-            await makePost(idea);
+            await makePost(idea, platform);
           }}
           onAskSlate={(idea) => {
             setOpenIdeaId(null);

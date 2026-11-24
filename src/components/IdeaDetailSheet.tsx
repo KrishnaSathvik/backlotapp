@@ -15,7 +15,6 @@ import {
 import { FormSelect } from './CustomSelect';
 import { IdeaReferenceImages } from './IdeaReferenceImages';
 import { LinkThumbnail } from './LinkThumbnail';
-import { PlatformIcon } from './PlatformIcon';
 import {
   ActionMenu,
   buttonStyles,
@@ -60,7 +59,7 @@ export function IdeaDetailSheet({
   /** For TikTok thumbnails (looked up; YouTube's need nothing). */
   authToken?: string | null;
   onClose: () => void;
-  onSave: (ideaId: number, patch: IdeaFieldsPatch) => Promise<boolean>;
+  onSave: (ideaId: number, patch: IdeaFieldsPatch, options?: { quiet?: boolean }) => Promise<boolean>;
   onMakePost: (idea: IdeaItem, platform?: PlatformKey) => Promise<void>;
   onAskSlate: (idea: IdeaItem) => void;
   onDelete: (idea: IdeaItem) => Promise<void>;
@@ -69,7 +68,6 @@ export function IdeaDetailSheet({
   const [draft, setDraft] = useState(() => draftFrom(idea));
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [picking, setPicking] = useState(false);
   const set = <K extends keyof typeof draft>(key: K) => (value: (typeof draft)[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
   const saved = draftFrom(idea);
@@ -89,12 +87,13 @@ export function IdeaDetailSheet({
     next();
   };
 
-  const handleSave = async (e?: React.FormEvent) => {
+  const handleSave = async (e?: React.FormEvent, options?: { quiet?: boolean }) => {
     e?.preventDefault();
     if (!draft.title.trim()) {
       toast('Give the idea a title', 'error');
-      return;
+      return false;
     }
+    if (!changed.length) return true;
     const patch: IdeaFieldsPatch = {};
     for (const k of changed) {
       if (k === 'tags') patch.tags = parseTagsInput(draft.tags);
@@ -103,17 +102,37 @@ export function IdeaDetailSheet({
         const link = extractDomainAndTitle(draft.linkUrl);
         if (link.validUrl && !isWebLink(link.validUrl)) {
           toast('Links need to start with http:// or https://', 'error');
-          return;
+          return false;
         }
         Object.assign(patch, { linkUrl: link.validUrl, linkDomain: link.domain, linkTitle: link.suggestedTitle });
       } else Object.assign(patch, { [k]: draft[k] });
     }
     setSaving(true);
     try {
-      await onSave(idea.id, patch);
+      return await onSave(idea.id, patch, options);
     } finally {
       setSaving(false);
     }
+  };
+
+  const turnIntoPost = () => {
+    void (async () => {
+      setBusy(true);
+      try {
+        const saved = await handleSave(undefined, { quiet: true });
+        if (!saved) return;
+        await onMakePost({
+          ...idea,
+          title: draft.title.trim() || idea.title,
+          notes: draft.notes,
+          platform: draft.platform || 'other',
+          channelName: draft.channelName,
+          tags: parseTagsInput(draft.tags),
+        });
+      } finally {
+        setBusy(false);
+      }
+    })();
   };
 
   const channelOptions =
@@ -134,39 +153,15 @@ export function IdeaDetailSheet({
           <SheetCloseButton onClick={() => leave(onClose)} />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {picking && !idea.convertedItemId ? (
-            PLATFORM_OPTIONS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  leave(async () => {
-                    setBusy(true);
-                    try {
-                      await onMakePost(idea, p.key);
-                    } finally {
-                      setBusy(false);
-                    }
-                  })
-                }
-                className={cx(buttonStyles.secondary, 'h-9 px-3 text-xs')}
-              >
-                <PlatformIcon platform={p.key} size={14} colored />
-                {p.shortLabel}
-              </button>
-            ))
-          ) : (
           <button
             type="button"
             disabled={busy}
-            onClick={() => (idea.convertedItemId ? leave(() => onMakePost(idea)) : setPicking(true))}
-            className={cx(idea.convertedItemId ? buttonStyles.secondary : buttonStyles.primary, sizes.sm, 'h-9')}
+            onClick={turnIntoPost}
+            className={cx(buttonStyles.primary, sizes.sm, 'h-9')}
           >
-            {idea.convertedItemId ? 'Open post' : 'Turn into post'}
+            Turn into post
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
-          )}
           <button type="button" onClick={() => leave(() => onAskSlate(idea))} className={cx(buttonStyles.secondary, sizes.sm, 'h-9')}>
             <MessageSquare className="h-3.5 w-3.5 text-cantaloupe-500" aria-hidden="true" />
             Ask Slate

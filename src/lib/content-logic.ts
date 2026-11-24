@@ -161,6 +161,39 @@ export function getPlatformShortLabel(platform: PlatformKey): string {
   return PLATFORM_OPTIONS.find((p) => p.key === platform)?.shortLabel ?? 'Other';
 }
 
+function copyAsset(asset: MediaAsset | null): MediaAsset | null {
+  return asset ? { ...asset } : null;
+}
+
+/**
+ * A new Planned post on another channel. The files are the same objects already
+ * stored: the copy keeps their URLs and uploads nothing.
+ */
+export function postForAnotherChannel(
+  item: ContentItem,
+  channel: ChannelItem,
+  items: ContentItem[],
+  channels: ChannelItem[],
+) {
+  return {
+    title: item.title,
+    platform: platformOfChannel(channel, items, channels) ?? channel.platform ?? item.platform,
+    channelName: channel.name,
+    channelId: channel.id,
+    status: 'idea' as const,
+    caption: item.caption,
+    tags: [...item.tags],
+    notes: item.notes,
+    liveLink: '',
+    postDate: '',
+    targetDate: '',
+    coverAsset: copyAsset(item.coverAsset),
+    videoAsset: copyAsset(item.videoAsset),
+    slides: item.slides.map((slide) => ({ ...slide })),
+    attachedReferences: item.attachedReferences.map((ref) => ({ ...ref })),
+  };
+}
+
 export function getStatusLabel(status: string): string {
   return STATUS_OPTIONS.find((s) => s.key === normalizeStatus(status))?.label ?? 'Planned';
 }

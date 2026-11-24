@@ -5,9 +5,11 @@ import { Calendar, Film, Layers, Sparkles } from 'lucide-react';
 import {
   filterContentItems,
   getPlatformShortLabel,
+  postInChannel,
   SORT_OPTIONS,
   sortContentItems,
   STATUS_OPTIONS,
+  type ChannelItem,
   type ContentItem,
   type LibraryFilters,
   type LibrarySort,
@@ -16,6 +18,7 @@ import {
 import { firstPreviewLink } from '@/src/lib/link-preview';
 import { FormSelect } from './CustomSelect';
 import { LayoutToggle, useLayoutMode } from './LayoutToggle';
+import { PostToChannelMenu } from './PostToChannelMenu';
 import { PlatformIcon } from './PlatformIcon';
 import { LinkThumbnail } from './LinkThumbnail';
 import { FramedImage, MediaImage } from './MediaImage';
@@ -31,9 +34,15 @@ interface LibraryViewProps {
   filters: LibraryFilters;
   /** Page title. Null when a channel header already shows it. */
   heading?: string | null;
+  channels: ChannelItem[];
+  /** Every post, so another channel's platform mark stays right. */
+  catalog: ContentItem[];
   onFiltersChange: (next: LibraryFilters) => void;
   onSelectItem: (item: ContentItem) => void;
   onCreateNew: () => void;
+  /** Shown on a channel's posts. The main library leaves this off. */
+  showPostTo?: boolean;
+  onPostToChannel: (item: ContentItem, channel: ChannelItem) => Promise<void> | void;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
@@ -43,11 +52,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   authToken = null,
   filters,
   heading = 'Library',
+  channels,
+  catalog,
   onFiltersChange,
   onSelectItem,
   onCreateNew,
+  showPostTo = false,
+  onPostToChannel,
 }) => {
   const [sort, setSort] = useState<LibrarySort>('updated');
+  const [postingId, setPostingId] = useState<number | null>(null);
   const [layout, setLayout] = useLayoutMode();
   const [page, setPage] = useState(1);
   const listKey = `${filters.status}|${filters.channel}|${sort}`;
@@ -127,10 +141,28 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       ) : (
         <div
           data-testid={layout === 'list' ? 'library-list' : 'library-grid'}
-          className={layout === 'list' ? 'overflow-hidden rounded-2xl border border-border bg-surface' : 'grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3'}
+          className={layout === 'list' ? 'overflow-hidden rounded-2xl border border-border bg-surface' : 'grid grid-cols-1 items-start gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3'}
         >
           {pageItems.map((item) => {
             const ref = referencePreview(item.attachedReferences);
+            const otherChannels = channels.filter((channel) => !postInChannel(item, channel, channels));
+            const postTo = showPostTo && channels.length > 1 ? (
+              <PostToChannelMenu
+                channels={otherChannels}
+                posts={catalog}
+                allChannels={channels}
+                busy={postingId === item.id}
+                onPick={async (channel) => {
+                  if (postingId !== null) return;
+                  setPostingId(item.id);
+                  try {
+                    await onPostToChannel(item, channel);
+                  } finally {
+                    setPostingId((current) => (current === item.id ? null : current));
+                  }
+                }}
+              />
+            ) : null;
             const thumbUrl = item.coverAsset?.url || item.slides[0]?.url || ref.screenshotUrl || null;
             const previewLink = firstPreviewLink(item.liveLink, ref.link);
             const slideCount = item.slides.length;
@@ -169,6 +201,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         {date ? <span className="shrink-0 tabular-nums">{date}</span> : null}
                       </div>
                     </div>
+                    {postTo}
                     <div className="hidden shrink-0 items-center gap-3 text-xs text-zinc-500 md:flex dark:text-zinc-400">
                       <span className="inline-flex w-5 items-center gap-1.5 font-semibold text-zinc-700 lg:w-28 dark:text-zinc-200">
                         <PlatformIcon platform={item.platform} size={16} />
@@ -184,7 +217,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               );
             }
 
-            const thumb = thumbUrl || !previewLink ? (
+            const hasPicture = Boolean(thumbUrl || previewLink);
+            const thumb = !hasPicture ? null : thumbUrl || !previewLink ? (
               <FramedImage
                 src={thumbUrl}
                 alt=""
@@ -206,6 +240,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 key={item.id}
                 className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 hover:border-border-strong"
               >
+                {hasPicture ? (
                 <div className="relative aspect-[16/10] overflow-hidden bg-surface-2">
                   {thumb}
                   <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-end p-2.5">
@@ -226,6 +261,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     ) : null}
                   </div>
                 </div>
+                ) : null}
 
                 <div className="flex flex-1 flex-col p-4">
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -259,14 +295,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </p>
                   ) : null}
 
-                  <div className="mt-auto flex flex-col items-start gap-1.5 pt-4 text-xs text-muted">
-                    {date ? (
-                      <span className="flex min-w-0 items-center gap-1.5 tabular-nums">
-                        <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                        {date}
-                      </span>
-                    ) : null}
-                    <span className="font-medium">Click to edit</span>
+                  <div className="mt-auto flex items-end justify-between gap-3 pt-4">
+                    <div className="flex flex-col items-start gap-1.5 text-xs text-muted">
+                      {date ? (
+                        <span className="flex min-w-0 items-center gap-1.5 tabular-nums">
+                          <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          {date}
+                        </span>
+                      ) : null}
+                      <span className="font-medium">Click to edit</span>
+                    </div>
+                    {postTo}
                   </div>
                 </div>
               </article>

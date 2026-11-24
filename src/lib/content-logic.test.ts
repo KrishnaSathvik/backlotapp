@@ -5,6 +5,7 @@ import {
   extractDomainAndTitle,
   filterContentItems,
   platformOfChannel,
+  postForAnotherChannel,
   postInChannel,
   formatFileSize,
   formatTagsForCopy,
@@ -14,6 +15,7 @@ import {
   prevWorkflowStatus,
   reorderSlides,
   sortContentItems,
+  type ChannelItem,
   type ContentItem,
   type IdeaItem,
 } from './content-logic.ts';
@@ -206,4 +208,37 @@ test('sortContentItems orders by most recently updated and newest created', () =
   ];
   assert.deepEqual(sortContentItems(items, 'updated').map((i) => i.id), [2, 1]);
   assert.deepEqual(sortContentItems(items, 'created').map((i) => i.id), [1, 2]);
+});
+
+test('postForAnotherChannel reuses files and starts planned on the other channel', () => {
+  const source: ContentItem = {
+    ...sampleItems[0],
+    platform: 'instagram_reel',
+    channelId: 1,
+    channelName: 'Design Feed',
+    status: 'posted',
+    liveLink: 'https://instagram.com/p/abc',
+    postDate: '2026-11-12',
+    targetDate: '2026-11-12',
+    coverAsset: { id: 'cover', name: 'cover.jpg', url: '/api/files/same-cover', mimeType: 'image/jpeg', size: 10 },
+    videoAsset: { id: 'video', name: 'clip.mp4', url: '/api/files/same-video', mimeType: 'video/mp4', size: 20 },
+    slides: [{ id: 'slide', name: 'slide.jpg', url: '/api/files/same-slide', mimeType: 'image/jpeg', size: 5 }],
+  };
+  const channels: ChannelItem[] = [
+    { id: 1, name: 'Design Feed', handle: '', platform: 'instagram_reel' },
+    { id: 2, name: 'Field Notes', handle: '', platform: 'tiktok' },
+  ];
+  const draft = postForAnotherChannel(source, channels[1], [source], channels);
+  assert.equal(draft.platform, 'tiktok');
+  assert.equal(draft.channelId, 2);
+  assert.equal(draft.channelName, 'Field Notes');
+  assert.equal(draft.status, 'idea');
+  assert.equal(draft.liveLink, '');
+  assert.equal(draft.postDate, '');
+  assert.equal(draft.targetDate, '');
+  assert.equal(draft.coverAsset?.url, '/api/files/same-cover');
+  assert.equal(draft.videoAsset?.url, '/api/files/same-video');
+  assert.equal(draft.slides[0]?.url, '/api/files/same-slide');
+  assert.notEqual(draft.coverAsset, source.coverAsset);
+  assert.equal(draft.caption, source.caption);
 });
