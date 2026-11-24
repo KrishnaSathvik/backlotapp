@@ -43,7 +43,7 @@ function homeJsonLd() {
         publisher: { '@id': `${url}#organization` },
         screenshot: absoluteUrl('/screens/desktop-library-light.jpg'),
         featureList: [
-          'Library of posts for YouTube videos, YouTube Shorts, Instagram Reels, TikTok and Instagram posts',
+          'Library of posts for YouTube videos, YouTube Shorts, Instagram Reels, TikTok, Instagram posts, LinkedIn and Facebook',
           'Covers, videos, carousel slides, captions, hashtags, notes and live links on each post',
           'Ideas inbox for links, screenshots and notes, convertible into posts',
           'Stages from idea to posted, with channels and filters',

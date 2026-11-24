@@ -21,7 +21,7 @@ Backlot is a web app (installable as a progressive web app on phones and desktop
 
 ## What it does
 
-- **Library:** one card per post for YouTube videos, YouTube Shorts, Instagram Reels, TikTok and Instagram posts (plus "Other"). Each post holds a cover, video, carousel slides, title, caption, hashtags, notes, references, a target date, its stage and the live link once posted. Filter by platform, channel or stage.
+- **Library:** one card per post for YouTube videos, YouTube Shorts, Instagram Reels, TikTok, Instagram posts, LinkedIn and Facebook (plus "Other"). Each post holds a cover, video, carousel slides, title, caption, hashtags, notes, references, a target date, its stage and the live link once posted. Filter by platform, channel or stage.
 - **Ideas:** save links, screenshots and notes, then turn an idea into a post.
 - **Stages and calendar:** move posts from idea to posted; a month calendar shows target and posted dates.
 - **Channels:** group posts by the accounts a creator runs.

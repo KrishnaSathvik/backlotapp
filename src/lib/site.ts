@@ -12,7 +12,7 @@ type Env = Record<string, string | undefined>;
 export const SITE_NAME = 'Backlot';
 export const SITE_TAGLINE = 'Every post, one backlot';
 export const SITE_DESCRIPTION =
-  'A private workspace for creators: keep every video, Reel, TikTok and post with its files, captions and ideas, plus Slate, an AI partner that knows your work.';
+  'A private workspace for creators: keep every video, Reel, TikTok, LinkedIn and Facebook post with its files, captions and ideas, plus Slate, an AI partner that knows your work.';
 
 /** Indexable public pages: path, title for breadcrumbs, and when their content last changed. */
 export const PUBLIC_PAGES = [

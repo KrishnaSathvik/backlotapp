@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import {
   ArrowRight,
+  Briefcase,
   CalendarClock,
   CalendarDays,
   Check,
@@ -29,6 +30,8 @@ const MARQUEE = [
   'Instagram Reels',
   'TikTok',
   'Instagram posts',
+  'LinkedIn',
+  'Facebook',
   'Thumbnails',
   'Captions',
   'Hashtags',
@@ -54,7 +57,7 @@ const FEATURES: Array<{
     eyebrow: 'Library',
     title: 'Every post, with everything it needs.',
     body: 'Each video’s files, caption, hashtags and stage live together. Filter by channel or stage to find anything fast.',
-    points: ['YouTube, Shorts, Reels, TikTok and Instagram posts', 'Planned, Made and Posted', 'A channel for every account you run'],
+    points: ['YouTube, Shorts, Reels, TikTok, Instagram, LinkedIn and Facebook', 'Planned, Made and Posted', 'A channel for every account you run'],
     accent: 'electric',
   },
   {
@@ -63,7 +66,7 @@ const FEATURES: Array<{
     eyebrow: 'Ideas',
     title: 'Catch ideas before they slip away.',
     body: 'Save a link, a screenshot or a quick note the moment inspiration hits. When an idea is ready, turn it into a post and everything comes with it.',
-    points: ['Save YouTube and Instagram links', 'Attach screenshots and notes', 'Turning it into a post carries everything over'],
+    points: ['Save YouTube, Instagram, LinkedIn and Facebook links', 'Attach screenshots and notes', 'Turning it into a post carries everything over'],
     accent: 'electric',
   },
   {
@@ -130,11 +133,29 @@ const PERSONAS = [
     accent: 'electric',
   },
   {
+    icon: Briefcase,
+    title: 'LinkedIn & Facebook',
+    blurb: 'Posts and updates you write before you publish them.',
+    uses: ['Draft the post with its images and notes', 'Keep a date on it until you publish', 'Copy it out when it’s time to post'],
+    accent: 'electric',
+  },
+  {
     icon: Layers,
     title: 'Multi-channel creators',
     blurb: 'A main channel, a clips channel, a side project. One backlot for all of it.',
     uses: ['Filter by channel', 'One library across every account', 'Ask Slate to plan the week'],
     accent: 'cantaloupe',
+  },
+  {
+    icon: CalendarDays,
+    title: 'Weekly planners',
+    blurb: 'You pick the day before you publish, and you want to see the month.',
+    uses: [
+      'Put a date on a post while it’s still planned',
+      'See gaps and pile-ups before the week starts',
+      'Move a post to another day when plans change',
+    ],
+    accent: 'electric',
   },
 ];
 
@@ -153,11 +174,11 @@ function faq(limits: LandingLimits) {
     },
     {
       q: 'Does Backlot post to my social accounts?',
-      a: 'No. Backlot is where you prepare, organize and track your content. It doesn’t connect to YouTube, Instagram or TikTok and never publishes for you. When you’ve posted, mark the post Posted and add its live link.',
+      a: 'No. Backlot is where you prepare, organize and track your content. It doesn’t connect to YouTube, Instagram, TikTok, LinkedIn or Facebook and never publishes for you. When you’ve posted, mark the post Posted and add its live link.',
     },
     {
       q: 'Which platforms’ content can I organize?',
-      a: 'YouTube videos, YouTube Shorts, Instagram Reels, TikTok and Instagram posts, plus an “Other” type for anything else you make.',
+      a: 'YouTube videos, YouTube Shorts, Instagram Reels, TikTok, Instagram posts, LinkedIn and Facebook, plus an “Other” type for anything else you make.',
     },
     {
       q: 'What files can I upload?',
@@ -398,7 +419,7 @@ export function Landing({ limits }: { limits: LandingLimits }) {
               title="Made for people who post, not people who manage."
               body="Solo creators and small studios who make the content themselves and are tired of losing it across apps."
             />
-            <div className="mt-14 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {PERSONAS.map((p, i) => (
                 <article
                   key={p.title}

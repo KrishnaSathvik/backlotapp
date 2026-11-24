@@ -39,7 +39,7 @@ export default function SupportPage() {
 
         <Section id="library" title="Library and content">
           <FaqItem q="Which platforms are supported?">
-            <p>YouTube videos, YouTube Shorts, Instagram Reels, TikTok and Instagram posts, plus an “Other” type.</p>
+            <p>YouTube videos, YouTube Shorts, Instagram Reels, TikTok, Instagram posts, LinkedIn and Facebook, plus an “Other” type.</p>
           </FaqItem>
           <FaqItem q="What does a post hold?">
             <p>
