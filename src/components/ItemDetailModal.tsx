@@ -31,7 +31,7 @@ import { firstPreviewLink } from '@/src/lib/link-preview';
 import { fetchAssetAsBlob, resolveAssetUrl } from '@/src/lib/local-vault';
 import { FormSelect } from './CustomSelect';
 import { LinkThumbnail } from './LinkThumbnail';
-import { MediaImage } from './MediaImage';
+import { FramedImage, MediaImage } from './MediaImage';
 import {
   ActionMenu,
   buttonStyles,
@@ -406,10 +406,11 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             ) : item.slides.length > 0 ? (
               <div className="space-y-3">
                 <div className="relative aspect-video max-h-56 w-full overflow-hidden rounded-xl border border-border bg-surface-2 sm:max-h-64 md:aspect-[4/3] md:max-h-none">
-                  <MediaImage
+                  <FramedImage
                     src={item.slides[slideIndex]?.url}
                     alt={`Slide ${slideIndex + 1}`}
                     fallbackLabel={`Slide ${slideIndex + 1}`}
+                    preferFull
                   />
                   {item.slides.length > 1 ? (
                     <div className="absolute inset-x-3 top-1/2 flex -translate-y-1/2 items-center justify-between">

@@ -1107,7 +1107,7 @@ const VaultShell: React.FC = () => {
           <LibraryView
             items={filteredItems}
             totalItemsCount={items.length}
-            allItems={items}
+            allItems={scopedItems}
             authToken={authToken}
             filters={filters}
             heading={activeChannel ? null : 'Library'}

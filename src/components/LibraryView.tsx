@@ -17,7 +17,7 @@ import { firstPreviewLink } from '@/src/lib/link-preview';
 import { FormSelect } from './CustomSelect';
 import { PlatformIcon } from './PlatformIcon';
 import { LinkThumbnail } from './LinkThumbnail';
-import { MediaImage } from './MediaImage';
+import { FramedImage, MediaImage } from './MediaImage';
 import { buttonStyles, chipClass, cx, PAGE_SIZE, Pager, StagePill } from './ui';
 
 interface LibraryViewProps {
@@ -95,9 +95,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       <div role="tablist" aria-label="Filter by stage" className="flex flex-wrap items-center gap-2">
         {([{ key: 'all' as const, label: 'All' }, ...STATUS_OPTIONS] as const).map((s) => {
           const active = filters.status === s.key;
-          const n = s.key === 'all'
-            ? filterContentItems(allItems, { ...filters, status: 'all' }).length
-            : filterContentItems(allItems, { ...filters, status: s.key }).length;
+          // allItems is already this channel's posts. The channel filter holds an id, which
+          // filterContentItems would compare to a name and count as nothing.
+          const n = filterContentItems(allItems, { ...filters, channel: 'all', status: s.key }).length;
           return (
             <button
               key={s.key}
@@ -140,12 +140,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               >
                 <div className="relative aspect-[16/10] overflow-hidden bg-surface-2">
                   {thumbUrl || !previewLink ? (
-                    <MediaImage
+                    <FramedImage
                       src={thumbUrl}
                       alt=""
                       fallbackLabel={item.title}
                       isVideo={!!item.videoAsset}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      preferFull={item.platform === 'instagram_reel' || item.platform === 'instagram_carousel'}
                     />
                   ) : (
                     <LinkThumbnail

@@ -10,6 +10,8 @@ interface MediaImageProps {
   className?: string;
   fallbackLabel?: string;
   isVideo?: boolean;
+  /** The loaded image, so a frame can show a tall picture whole instead of cropping it. */
+  onLoad?: (image: HTMLImageElement) => void;
 }
 
 export const MediaImage: React.FC<MediaImageProps> = ({
@@ -18,6 +20,7 @@ export const MediaImage: React.FC<MediaImageProps> = ({
   className = 'h-full w-full object-cover',
   fallbackLabel,
   isVideo = false,
+  onLoad,
 }) => {
   const [blobEntry, setBlobEntry] = useState<{ key: string; url: string }>({
     key: '',
@@ -84,8 +87,56 @@ export const MediaImage: React.FC<MediaImageProps> = ({
       referrerPolicy="no-referrer"
       loading="lazy"
       decoding="async"
+      onLoad={(event) => onLoad?.(event.currentTarget)}
       onError={() => setFailedSrc(src ?? null)}
       className={className}
     />
   );
 };
+
+/**
+ * A library or slide frame. A wide picture fills it. A square or tall picture (an Instagram
+ * slide) stays whole, with a blurred copy behind it so the frame does not show empty bars.
+ */
+export function FramedImage({
+  src,
+  alt,
+  fallbackLabel,
+  isVideo = false,
+  preferFull = false,
+}: {
+  src?: string | null;
+  alt: string;
+  fallbackLabel?: string;
+  isVideo?: boolean;
+  /** Start uncropped. A wide picture still fills the frame once it has loaded. */
+  preferFull?: boolean;
+}) {
+  const [full, setFull] = useState(preferFull);
+
+  return (
+    <>
+      {full && src ? (
+        <MediaImage
+          src={src}
+          alt=""
+          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
+        />
+      ) : null}
+      <MediaImage
+        src={src}
+        alt={alt}
+        fallbackLabel={fallbackLabel}
+        isVideo={isVideo}
+        onLoad={(image) => {
+          if (image.naturalWidth > 0) setFull(image.naturalWidth / image.naturalHeight < 1.25);
+        }}
+        className={
+          full
+            ? 'relative z-[1] h-full w-full object-contain'
+            : 'h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]'
+        }
+      />
+    </>
+  );
+}
