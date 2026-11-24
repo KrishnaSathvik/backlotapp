@@ -23,7 +23,7 @@ type Row = { title: string; platform: string; status: string; notes: string };
 const file = JSON.parse(readFileSync(new URL('../docs/redesign/tracker-import.json', import.meta.url), 'utf8')) as { items: Row[] };
 const items = file.items ?? [];
 
-const PLATFORMS = new Set(['youtube_long', 'youtube_shorts', 'instagram_reel', 'tiktok', 'instagram_carousel', 'other']);
+const PLATFORMS = new Set(['youtube_long', 'youtube_shorts', 'instagram_reel', 'tiktok', 'instagram_carousel', 'linkedin', 'facebook', 'other']);
 const STATUSES = new Set(['idea', 'ready', 'posted']);
 for (const item of items) {
   if (!item.title?.trim()) throw new Error('A tracker row has no title.');

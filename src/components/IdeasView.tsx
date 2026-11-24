@@ -7,7 +7,7 @@ import { FormSelect } from './CustomSelect';
 import { IdeaCaptureSheet, type IdeaCapturePayload } from './IdeaCaptureSheet';
 import { IdeaDetailSheet, type IdeaFieldsPatch } from './IdeaDetailSheet';
 import { PlatformIcon } from './PlatformIcon';
-import { buttonStyles, cx, PAGE_SIZE, Pager } from './ui';
+import { buttonStyles, cx, IDEAS_PAGE_SIZE, Pager } from './ui';
 
 interface IdeasViewProps {
   ideas: IdeaItem[];
@@ -64,10 +64,10 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
     setPageKey(listKey);
     setPage(1);
   }
-  const pageCount = Math.max(1, Math.ceil(ideas.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(ideas.length / IDEAS_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const pageStart = (currentPage - 1) * PAGE_SIZE;
-  const pageItems = sortIdeas(ideas, sort).slice(pageStart, pageStart + PAGE_SIZE);
+  const pageStart = (currentPage - 1) * IDEAS_PAGE_SIZE;
+  const pageItems = sortIdeas(ideas, sort).slice(pageStart, pageStart + IDEAS_PAGE_SIZE);
   const openIdea = ideas.find((i) => i.id === openIdeaId) ?? null;
 
   const makePost = async (idea: IdeaItem, platform?: PlatformKey) => {

@@ -14,6 +14,8 @@ const PLATFORMS: PlatformKey[] = [
   'instagram_reel',
   'tiktok',
   'instagram_carousel',
+  'linkedin',
+  'facebook',
   'other',
 ];
 const STATUSES: StatusKey[] = ['idea', 'scripting', 'editing', 'ready', 'posted'];

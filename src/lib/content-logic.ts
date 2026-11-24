@@ -4,6 +4,8 @@ export type PlatformKey =
   | 'instagram_reel'
   | 'tiktok'
   | 'instagram_carousel'
+  | 'linkedin'
+  | 'facebook'
   | 'other';
 
 export type StatusKey = 'idea' | 'scripting' | 'editing' | 'ready' | 'posted';
@@ -94,6 +96,8 @@ export const PLATFORM_OPTIONS: Array<{ key: PlatformKey; label: string; shortLab
   { key: 'instagram_reel', label: 'Instagram Reels', shortLabel: 'Reels' },
   { key: 'tiktok', label: 'TikTok', shortLabel: 'TikTok' },
   { key: 'instagram_carousel', label: 'Instagram posts', shortLabel: 'Instagram' },
+  { key: 'linkedin', label: 'LinkedIn', shortLabel: 'LinkedIn' },
+  { key: 'facebook', label: 'Facebook', shortLabel: 'Facebook' },
   { key: 'other', label: 'Other', shortLabel: 'Other' },
 ];
 
@@ -392,6 +396,10 @@ export function extractDomainAndTitle(rawUrl: string): {
       platformHint = parsed.pathname.includes('/reel')
         ? 'Instagram Reel Reference'
         : 'Instagram Post Reference';
+    } else if (domain.includes('linkedin.com')) {
+      platformHint = 'LinkedIn Reference';
+    } else if (domain.includes('facebook.com') || domain === 'fb.com') {
+      platformHint = 'Facebook Reference';
     }
 
     // Skip path words ("watch", "reel") and video ids: they aren't titles.

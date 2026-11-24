@@ -324,6 +324,8 @@ export const PLATFORM_GUIDE: Record<string, string> = {
   instagram_reel: 'a caption that opens strong; hashtags optional (Instagram allows up to 30)',
   instagram_carousel: 'a slide-by-slide outline in notes and a caption that invites swiping; Instagram captions allow up to 2,200 characters',
   tiktok: 'a conversational hook and a short caption; on-screen text ideas in notes',
+  linkedin: 'a short professional post with the point in the first lines and a clear takeaway; hashtags sparingly',
+  facebook: 'a conversational post that stands on its own in the feed, with the hook and the point up front',
   other: 'whatever the destination needs; ask if unsure',
 };
 

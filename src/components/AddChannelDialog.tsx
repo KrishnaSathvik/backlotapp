@@ -10,6 +10,8 @@ const CHANNEL_PLATFORMS: Array<{ key: PlatformKey; label: string }> = [
   { key: 'youtube_long', label: 'YouTube' },
   { key: 'instagram_reel', label: 'Instagram' },
   { key: 'tiktok', label: 'TikTok' },
+  { key: 'linkedin', label: 'LinkedIn' },
+  { key: 'facebook', label: 'Facebook' },
   { key: 'other', label: 'Other' },
 ];
 
@@ -64,7 +66,7 @@ export function AddChannelDialog({
         <div className="mt-5 space-y-4">
           <fieldset>
             <legend className={labelStyles}>Where do you post it?</legend>
-            <div role="radiogroup" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div role="radiogroup" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {CHANNEL_PLATFORMS.map((p) => {
                 const on = platform === p.key;
                 return (

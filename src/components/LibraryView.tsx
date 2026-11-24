@@ -141,7 +141,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       ) : (
         <div
           data-testid={layout === 'list' ? 'library-list' : 'library-grid'}
-          className={layout === 'list' ? 'overflow-hidden rounded-2xl border border-border bg-surface' : 'grid grid-cols-1 items-start gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3'}
+          className={layout === 'list' ? 'overflow-hidden rounded-2xl border border-border bg-surface' : 'grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3'}
         >
           {pageItems.map((item) => {
             const ref = referencePreview(item.attachedReferences);
@@ -240,9 +240,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 key={item.id}
                 className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 hover:border-border-strong"
               >
-                {hasPicture ? (
                 <div className="relative aspect-[16/10] overflow-hidden bg-surface-2">
-                  {thumb}
+                  {hasPicture ? thumb : (
+                    <div className="flex h-full items-center justify-center text-zinc-300 dark:text-zinc-600">
+                      <PlatformIcon platform={item.platform} size={40} />
+                    </div>
+                  )}
                   <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-end p-2.5">
                     {item.videoAsset || slideCount > 0 ? (
                       <span className="flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur tabular-nums">
@@ -261,7 +264,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     ) : null}
                   </div>
                 </div>
-                ) : null}
 
                 <div className="flex flex-1 flex-col p-4">
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">

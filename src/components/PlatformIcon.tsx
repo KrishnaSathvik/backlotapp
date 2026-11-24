@@ -68,6 +68,21 @@ function MutedIcon({
           <path d={TIKTOK_NOTE} />
         </svg>
       );
+    case 'linkedin':
+      return (
+        <svg {...common} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3" />
+          <circle cx="7.4" cy="8" r="0.9" fill="currentColor" stroke="none" />
+          <path d="M7.4 11.1v5.2M11.2 16.3v-3.1c0-1.2.7-1.9 1.7-1.9s1.6.7 1.6 1.9v3.1M11.2 11.1v5.2" />
+        </svg>
+      );
+    case 'facebook':
+      return (
+        <svg {...common} fill="none" stroke="currentColor" strokeWidth="1.7">
+          <rect x="3" y="3" width="18" height="18" rx="5" />
+          <path d="M13.2 17.5v-3.6h1.2l.2-1.5h-1.4v-.9c0-.4.1-.7.7-.7h.7V9.4c-.2 0-.7-.1-1.2-.1-1.2 0-2 .7-2 2v1.1H10v1.5h1.2v3.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
     case 'other':
       return (
         <span
@@ -135,6 +150,22 @@ function BrandIcon({
             <path d={TIKTOK_NOTE} fill="#FE2C55" transform="translate(1 1)" />
             <path d={TIKTOK_NOTE} fill="#fff" />
           </g>
+        </svg>
+      );
+    case 'linkedin':
+      return (
+        <svg {...common}>
+          <rect width="24" height="24" rx="5" fill="#0A66C2" />
+          <rect x="5.1" y="9.3" width="2.5" height="8" fill="#fff" />
+          <circle cx="6.35" cy="6.6" r="1.35" fill="#fff" />
+          <path d="M10.4 9.3h2.4v1.1c.55-.8 1.45-1.35 2.7-1.35 2.15 0 3.15 1.35 3.15 3.6v4.65h-2.5v-4.1c0-1.1-.35-1.85-1.3-1.85-.9 0-1.4.6-1.65 1.25-.08.2-.1.5-.1.8v3.9h-2.5V9.3Z" fill="#fff" />
+        </svg>
+      );
+    case 'facebook':
+      return (
+        <svg {...common}>
+          <rect width="24" height="24" rx="6" fill="#1877F2" />
+          <path d="M13.4 19.2v-5.4h1.8l.3-2.1h-2.1V10.4c0-.6.2-1.1 1-1.1h1.1V7.5c-.2 0-.9-.1-1.7-.1-1.7 0-2.8 1-2.8 2.9v1.4H9.2v2.1h1.8v5.4h2.4Z" fill="#fff" />
         </svg>
       );
     case 'other':

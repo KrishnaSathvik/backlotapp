@@ -29,6 +29,8 @@ const PLATFORMS: Array<{ key: PlatformKey; label: string }> = [
   { key: 'youtube_long', label: 'YouTube' },
   { key: 'instagram_reel', label: 'Instagram' },
   { key: 'tiktok', label: 'TikTok' },
+  { key: 'linkedin', label: 'LinkedIn' },
+  { key: 'facebook', label: 'Facebook' },
 ];
 
 export function authTitle(mode: AuthMode) {
