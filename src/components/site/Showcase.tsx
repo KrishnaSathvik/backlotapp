@@ -36,7 +36,7 @@ export function Shot({
   return (
     <>
       <Image
-        src={`/screens/${kind}-${name}-light.jpg?v=9`}
+        src={`/screens/${kind}-${name}-light.jpg?v=10`}
         alt={alt}
         width={w}
         height={h}
@@ -45,7 +45,7 @@ export function Shot({
         className={cx('block h-auto w-full dark:hidden', className)}
       />
       <Image
-        src={`/screens/${kind}-${name}-dark.jpg?v=9`}
+        src={`/screens/${kind}-${name}-dark.jpg?v=10`}
         alt={alt}
         width={w}
         height={h}

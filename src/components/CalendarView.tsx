@@ -14,8 +14,32 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n: number) => String(n).padStart(2, '0');
 const keyOf = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
 
-/** Posted posts sit on the day they went live. Planned and Made sit on the target day. */
-const dayOf = (item: ContentItem) => (normalizeStatus(item.status) === 'posted' ? item.postDate : item.targetDate) || '';
+/** Posted posts sit on the day they went live, or the target day if no live date was set. Planned and Made sit on the target day. A post belongs to one day, so it never appears twice. */
+const dayOf = (item: ContentItem) => {
+  const status = normalizeStatus(item.status);
+  if (status === 'posted') return item.postDate || item.targetDate || '';
+  return item.targetDate || '';
+};
+
+type DayCell = { y: number; m: number; d: number; inMonth: boolean };
+
+/** The visible month plus the days from the months on either side that fill out the weeks. */
+function monthCells(y: number, m: number): DayCell[] {
+  const first = new Date(y, m, 1);
+  const last = new Date(y, m + 1, 0);
+  const start = new Date(y, m, 1 - first.getDay());
+  const end = new Date(y, m + 1, 6 - last.getDay());
+  const cells: DayCell[] = [];
+  for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+    cells.push({
+      y: cursor.getFullYear(),
+      m: cursor.getMonth(),
+      d: cursor.getDate(),
+      inMonth: cursor.getMonth() === m && cursor.getFullYear() === y,
+    });
+  }
+  return cells;
+}
 
 function todayKey() {
   const t = new Date();
@@ -67,13 +91,7 @@ export function CalendarView({ items, channels, authToken = null, onSelectItem, 
   }, [scoped]);
 
   const { y, m } = cursor;
-  const firstWeekday = new Date(y, m, 1).getDay();
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const cells: Array<number | null> = [
-    ...Array.from({ length: firstWeekday }, () => null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-  while (cells.length % 7) cells.push(null);
+  const cells = monthCells(y, m);
 
   const monthPrefix = `${y}-${pad(m + 1)}-`;
   const inMonth = scoped.filter((i) => dayOf(i).startsWith(monthPrefix)).length;
@@ -162,10 +180,8 @@ export function CalendarView({ items, channels, authToken = null, onSelectItem, 
             ))}
           </div>
           <div className="grid grid-cols-7">
-            {cells.map((day, idx) => {
-              if (!day)
-                return <div key={`e${idx}`} className="min-h-14 border-b border-r border-border bg-surface-2 md:min-h-28 [&:nth-child(7n)]:border-r-0" />;
-              const key = keyOf(y, m, day);
+            {cells.map((cell) => {
+              const key = keyOf(cell.y, cell.m, cell.d);
               const list = byDay.get(key) ?? [];
               const isToday = key === today;
               const isSel = key === selected;
@@ -175,13 +191,13 @@ export function CalendarView({ items, channels, authToken = null, onSelectItem, 
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={dropOn(key)}
                   className={cx(
-                    'relative min-h-14 border-b border-r border-border md:min-h-28 [&:nth-child(7n)]:border-r-0',
+                    'relative min-h-16 border-b border-r border-border md:min-h-24 [&:nth-child(7n)]:border-r-0',
                     isSel && 'bg-accent/10'
                   )}
                 >
                   <button
                     type="button"
-                    onClick={() => (list.length ? setSelected(key) : onCreateOnDay(key))}
+                    onClick={() => (cell.inMonth && list.length === 0 ? onCreateOnDay(key) : setSelected(key))}
                     aria-label={`${prettyDay(key)}, ${list.length} ${list.length === 1 ? 'post' : 'posts'}`}
                     aria-pressed={isSel}
                     className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-electric-500"
@@ -190,41 +206,20 @@ export function CalendarView({ items, channels, authToken = null, onSelectItem, 
                     <span
                       className={cx(
                         'flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums md:self-end',
-                        isToday ? 'bg-accent text-white' : 'text-text',
-                        // Phones: the selected date gets a ring as well as the cell tint.
+                        isToday ? 'bg-accent text-white' : cell.inMonth ? 'text-text' : 'text-zinc-400 dark:text-zinc-500',
                         isSel && !isToday && 'max-md:ring-2 max-md:ring-accent'
                       )}
                     >
-                      {day}
+                      {cell.d}
                     </span>
-                    {/* Phones: one dot per post */}
                     {list.length ? (
-                      <span className="mt-1 flex items-center gap-0.5 md:hidden" aria-hidden="true">
-                        {list.slice(0, 3).map((i) => (
+                      <span className="mt-1 flex items-center justify-center gap-0.5 md:justify-end" aria-hidden="true">
+                        {list.slice(0, 4).map((i) => (
                           <span key={i.id} className={cx('h-1.5 w-1.5 rounded-full', STAGE_STYLES[normalizeStatus(i.status)].dot)} />
                         ))}
-                        {list.length > 3 ? <span className="text-[9px] font-bold leading-none text-zinc-500">+{list.length - 3}</span> : null}
+                        {list.length > 4 ? <span className="text-[10px] font-bold leading-none text-zinc-500">+{list.length - 4}</span> : null}
                       </span>
                     ) : null}
-                    {/* Larger screens: post titles */}
-                    <div className="mt-1 hidden space-y-1 md:block">
-                      {list.slice(0, 2).map((i) => (
-                        <button
-                          key={i.id}
-                          type="button"
-                          draggable
-                          onDragStart={(e) => e.dataTransfer.setData('text/post-id', String(i.id))}
-                          onClick={() => onSelectItem(i)}
-                          className="pointer-events-auto flex w-full items-center gap-1.5 rounded-md bg-surface-2 px-1.5 py-1 text-left text-[11.5px] font-medium text-text transition-colors hover:bg-border"
-                        >
-                          <span className={cx('mt-[5px] h-1.5 w-1.5 shrink-0 self-start rounded-full', STAGE_STYLES[normalizeStatus(i.status)].dot)} />
-                          <span className="line-clamp-2 leading-snug">{i.title}</span>
-                        </button>
-                      ))}
-                      {list.length > 2 ? (
-                        <p className="px-1.5 text-[11px] font-semibold text-zinc-500">+{list.length - 2} more</p>
-                      ) : null}
-                    </div>
                   </div>
                 </div>
               );
@@ -249,6 +244,8 @@ export function CalendarView({ items, channels, authToken = null, onSelectItem, 
                   <li key={i.id}>
                     <button
                       type="button"
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData('text/post-id', String(i.id))}
                       onClick={() => onSelectItem(i)}
                       className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
                     >

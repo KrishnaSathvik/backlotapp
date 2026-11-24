@@ -5,7 +5,6 @@ import { ArrowRight, ExternalLink, Link2, MessageSquare, Trash2 } from 'lucide-r
 import {
   extractDomainAndTitle,
   formatTagsForCopy,
-  getPlatformLabel,
   ideaImages,
   parseTagsInput,
   PLATFORM_OPTIONS,
@@ -127,16 +126,9 @@ export function IdeaDetailSheet({
       <div className="border-b border-zinc-100 px-5 pb-4 pt-3 sm:px-6 sm:pt-5 dark:border-zinc-800">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted">
-                Idea
-              </span>
-              <span className="flex items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-200">
-                <PlatformIcon platform={idea.platform} size={16} />
-                {getPlatformLabel(idea.platform)}
-              </span>
-              {idea.channelName ? <span>· {idea.channelName}</span> : null}
-            </div>
+            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted">
+              Idea
+            </span>
             <h2 className="mt-2 text-lg font-bold leading-snug tracking-tight sm:text-xl">{idea.title}</h2>
           </div>
           <SheetCloseButton onClick={() => leave(onClose)} />
@@ -285,16 +277,6 @@ export function IdeaDetailSheet({
                   placeholder="#hook #lighting"
                   autoCapitalize="none"
                   className={cx(inputStyles, 'h-11 font-mono lg:text-xs')}
-                />
-              </div>
-              <div>
-                <label htmlFor="idea-edit-date" className={labelStyles}>Target date</label>
-                <input
-                  id="idea-edit-date"
-                  type="date"
-                  value={draft.targetDate}
-                  onChange={(e) => set('targetDate')(e.target.value)}
-                  className={cx(inputStyles, 'h-11')}
                 />
               </div>
             </div>

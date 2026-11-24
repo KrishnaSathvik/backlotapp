@@ -1,14 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Calendar, CheckCircle2, ImageIcon, Lightbulb, Link2 } from 'lucide-react';
-import { formatTagsForCopy, getPlatformShortLabel, ideaImages, SORT_OPTIONS, sortIdeas, type ChannelItem, type IdeaItem, type LibrarySort, type PlatformKey } from '@/src/lib/content-logic';
-import { hasLinkPreview } from '@/src/lib/link-preview';
+import { Lightbulb } from 'lucide-react';
+import { getPlatformShortLabel, SORT_OPTIONS, sortIdeas, type ChannelItem, type IdeaItem, type LibrarySort, type PlatformKey } from '@/src/lib/content-logic';
 import { FormSelect } from './CustomSelect';
 import { IdeaCaptureSheet, type IdeaCapturePayload } from './IdeaCaptureSheet';
 import { IdeaDetailSheet, type IdeaFieldsPatch } from './IdeaDetailSheet';
-import { LinkThumbnail } from './LinkThumbnail';
-import { MediaImage } from './MediaImage';
 import { PlatformIcon } from './PlatformIcon';
 import { buttonStyles, cx, PAGE_SIZE, Pager } from './ui';
 
@@ -121,119 +118,50 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
         </div>
       ) : (
         <>
-            <div data-testid="ideas-grid" className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
+            <div data-testid="ideas-list" className="overflow-hidden rounded-2xl border border-border bg-surface">
               {pageItems.map((idea) => {
                 const busy = busyIdeaId === idea.id;
-                const converted = !!idea.convertedItemId;
-                const images = ideaImages(idea);
-                // A picture only when there is one. A note, or a link with no thumbnail, is a text card.
-                const picture = images.length > 0 || hasLinkPreview(idea.linkUrl);
+                const named = idea.platform !== 'other';
                 return (
                   <article
                     key={idea.id}
                     className={cx(
-                      'group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 hover:border-border-strong',
+                      'group relative border-t border-border transition-colors first:border-t-0 hover:bg-surface-2',
                       busy && 'opacity-60'
                     )}
                   >
-                    {picture ? (
-                    <div className="relative aspect-[16/10] overflow-hidden bg-surface-2">
-                      {images.length ? (
-                        <MediaImage
-                          src={images[0]}
-                          alt=""
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                        />
-                      ) : (
-                        <LinkThumbnail
-                          link={idea.linkUrl}
-                          authToken={authToken}
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                          fallback={null}
-                        />
-                      )}
-                      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-2.5">
-                        {converted ? (
-                          <span className="flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-text shadow-sm">
-                            <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
-                            Linked post
-                          </span>
-                        ) : (
-                          <span />
-                        )}
-                        {images.length > 1 ? (
-                          <span className="ml-auto mr-1.5 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur tabular-nums">
-                            <ImageIcon className="h-3 w-3" aria-hidden="true" />
-                            {images.length}
-                          </span>
-                        ) : null}
-                        {idea.targetDate ? (
-                          <span className="flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur tabular-nums">
-                            <Calendar className="h-3 w-3" aria-hidden="true" />
-                            {idea.targetDate}
-                          </span>
+                    <div className="flex items-center gap-3 px-3 py-3 sm:px-4 md:py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="line-clamp-2 text-[15px] font-semibold tracking-tight md:line-clamp-1">
+                          <button
+                            type="button"
+                            onClick={() => setOpenIdeaId(idea.id)}
+                            className="text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-electric-500"
+                          >
+                            {idea.title}
+                          </button>
+                        </h3>
+                        {idea.channelName ? <p className="mt-0.5 hidden truncate text-[13px] text-zinc-500 lg:block dark:text-zinc-400">{idea.channelName}</p> : null}
+                        {named || idea.channelName ? (
+                          <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 md:hidden dark:text-zinc-400">
+                            {named ? (
+                              <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-200">
+                                <PlatformIcon platform={idea.platform} size={14} />
+                                <span className="truncate">{getPlatformShortLabel(idea.platform)}</span>
+                              </span>
+                            ) : null}
+                            {idea.channelName ? <span className="min-w-0 truncate">{idea.channelName}</span> : null}
+                          </div>
                         ) : null}
                       </div>
-                    </div>
-                    ) : null}
-
-                    <div className={cx('flex flex-1 flex-col p-4', !picture && 'min-h-52 p-5')}>
-                      <div className={cx(!picture && 'flex flex-1 flex-col justify-center')}>
-                      {idea.platform !== 'other' || idea.channelName || (!picture && (converted || idea.targetDate)) ? (
-                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                          {idea.platform !== 'other' ? (
-                            <>
-                              <PlatformIcon platform={idea.platform} size={16} />
-                              <span className="shrink-0 font-semibold text-zinc-700 dark:text-zinc-200">{getPlatformShortLabel(idea.platform)}</span>
-                            </>
-                          ) : null}
-                          {idea.channelName ? (
-                            <span className="inline-flex max-w-full items-center gap-1.5">
-                              {idea.platform !== 'other' ? <span aria-hidden="true">·</span> : null}
-                              <span className="truncate">{idea.channelName}</span>
-                            </span>
-                          ) : null}
-                          {!picture && converted ? (
-                            <span className="inline-flex items-center gap-1 font-semibold text-text">
-                              {(idea.platform !== 'other' || idea.channelName) ? <span aria-hidden="true">·</span> : null}
-                              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                              Linked post
-                            </span>
-                          ) : null}
-                          {!picture && idea.targetDate ? (
-                            <span className="inline-flex items-center gap-1 tabular-nums">
-                              {(idea.platform !== 'other' || idea.channelName || converted) ? <span aria-hidden="true">·</span> : null}
-                              <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-                              {idea.targetDate}
-                            </span>
-                          ) : null}
+                      {named ? (
+                        <div className="hidden shrink-0 items-center text-xs text-zinc-500 md:flex dark:text-zinc-400">
+                          <span className="inline-flex w-5 items-center gap-1.5 font-semibold text-zinc-700 lg:w-28 dark:text-zinc-200">
+                            <PlatformIcon platform={idea.platform} size={16} />
+                            <span className="hidden truncate lg:inline">{getPlatformShortLabel(idea.platform)}</span>
+                          </span>
                         </div>
                       ) : null}
-
-                      <h3 className={cx(picture ? 'line-clamp-2 text-[16.5px]' : 'line-clamp-6 text-[22px] leading-snug', 'font-bold tracking-tight', (idea.platform !== 'other' || idea.channelName || (!picture && (converted || idea.targetDate))) && 'mt-1.5')}>
-                        {/* Stretched button: the whole card opens the idea. */}
-                        <button
-                          type="button"
-                          onClick={() => setOpenIdeaId(idea.id)}
-                          className="text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-electric-500"
-                        >
-                          {idea.title}
-                        </button>
-                      </h3>
-                      {!picture && idea.linkDomain ? (
-                        <p className="mt-2 flex min-w-0 items-center gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                          <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                          <span className="truncate">{idea.linkDomain}</span>
-                        </p>
-                      ) : null}
-                      {idea.notes ? (
-                        <p className={cx('mt-2 text-[13px] leading-relaxed text-zinc-500 dark:text-zinc-400', picture ? 'line-clamp-2' : 'line-clamp-4')}>{idea.notes}</p>
-                      ) : idea.tags.length ? (
-                        <p className="mt-2 truncate font-mono text-[11px] text-zinc-500">{formatTagsForCopy(idea.tags)}</p>
-                      ) : null}
-                      </div>
-
-                      <p className="mt-auto pt-4 text-xs font-medium text-muted">Click to edit</p>
                     </div>
                   </article>
                 );

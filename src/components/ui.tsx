@@ -69,7 +69,8 @@ export function chipClass(active: boolean) {
   );
 }
 
-export const PAGE_SIZE = 10;
+/** Twelve fills four rows of the 3-column desktop grid before the next page. */
+export const PAGE_SIZE = 12;
 
 /** Page numbers with gaps when the list is long. */
 export function pageWindow(page: number, pageCount: number): Array<number | 'gap'> {

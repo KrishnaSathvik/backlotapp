@@ -15,6 +15,7 @@ import {
 } from '@/src/lib/content-logic';
 import { firstPreviewLink } from '@/src/lib/link-preview';
 import { FormSelect } from './CustomSelect';
+import { LayoutToggle, useLayoutMode } from './LayoutToggle';
 import { PlatformIcon } from './PlatformIcon';
 import { LinkThumbnail } from './LinkThumbnail';
 import { FramedImage, MediaImage } from './MediaImage';
@@ -47,6 +48,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onCreateNew,
 }) => {
   const [sort, setSort] = useState<LibrarySort>('updated');
+  const [layout, setLayout] = useLayoutMode();
   const [page, setPage] = useState(1);
   const listKey = `${filters.status}|${filters.channel}|${sort}`;
   const [pageKey, setPageKey] = useState(listKey);
@@ -76,6 +78,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </option>
             ))}
           </FormSelect>
+          <LayoutToggle mode={layout} onChange={setLayout} />
           <button type="button" onClick={onCreateNew} className={cx(buttonStyles.primary, 'h-11 shrink-0 px-4 max-md:!hidden md:inline-flex')}>
             New post
           </button>
@@ -123,8 +126,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       ) : (
         <div
-          data-testid="library-grid"
-          className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3"
+          data-testid={layout === 'list' ? 'library-list' : 'library-grid'}
+          className={layout === 'list' ? 'overflow-hidden rounded-2xl border border-border bg-surface' : 'grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3'}
         >
           {pageItems.map((item) => {
             const ref = referencePreview(item.attachedReferences);
@@ -133,28 +136,78 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             const slideCount = item.slides.length;
             const date = item.postDate || item.targetDate;
 
+            if (layout === 'list') {
+              return (
+                <article
+                  key={item.id}
+                  className="group relative border-t border-border transition-colors first:border-t-0 hover:bg-surface-2"
+                >
+                  <div className="flex items-center gap-3 px-3 py-3 sm:px-4 md:py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="line-clamp-2 text-[15px] font-semibold tracking-tight md:line-clamp-1">
+                        <button
+                          type="button"
+                          onClick={() => onSelectItem(item)}
+                          className="text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-electric-500"
+                        >
+                          {item.title}
+                        </button>
+                      </h3>
+                      {item.caption || item.channelName ? (
+                        <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-zinc-500 dark:text-zinc-400">
+                          {item.channelName ? <span className="hidden shrink-0 font-medium lg:inline">{item.channelName}</span> : null}
+                          {item.channelName && item.caption ? <span className="hidden lg:inline" aria-hidden="true">·</span> : null}
+                          {item.caption ? <span className="truncate">{item.caption}</span> : null}
+                        </p>
+                      ) : null}
+                      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 md:hidden dark:text-zinc-400">
+                        <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-200">
+                          <PlatformIcon platform={item.platform} size={14} />
+                          <span className="truncate">{getPlatformShortLabel(item.platform)}</span>
+                        </span>
+                        <StagePill status={item.status} className="shrink-0" />
+                        {date ? <span className="shrink-0 tabular-nums">{date}</span> : null}
+                      </div>
+                    </div>
+                    <div className="hidden shrink-0 items-center gap-3 text-xs text-zinc-500 md:flex dark:text-zinc-400">
+                      <span className="inline-flex w-5 items-center gap-1.5 font-semibold text-zinc-700 lg:w-28 dark:text-zinc-200">
+                        <PlatformIcon platform={item.platform} size={16} />
+                        <span className="hidden truncate lg:inline">{getPlatformShortLabel(item.platform)}</span>
+                      </span>
+                      <span className="flex w-[5.5rem] justify-start">
+                        <StagePill status={item.status} />
+                      </span>
+                      <span className="w-[6.25rem] text-right tabular-nums">{date}</span>
+                    </div>
+                  </div>
+                </article>
+              );
+            }
+
+            const thumb = thumbUrl || !previewLink ? (
+              <FramedImage
+                src={thumbUrl}
+                alt=""
+                fallbackLabel={item.title}
+                isVideo={!!item.videoAsset}
+                preferFull={item.platform === 'instagram_reel' || item.platform === 'instagram_carousel'}
+              />
+            ) : (
+              <LinkThumbnail
+                link={previewLink}
+                authToken={authToken}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                fallback={<MediaImage src={null} alt="" fallbackLabel={item.title} isVideo={!!item.videoAsset} />}
+              />
+            );
+
             return (
               <article
                 key={item.id}
                 className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-950/5 hover:border-border-strong"
               >
                 <div className="relative aspect-[16/10] overflow-hidden bg-surface-2">
-                  {thumbUrl || !previewLink ? (
-                    <FramedImage
-                      src={thumbUrl}
-                      alt=""
-                      fallbackLabel={item.title}
-                      isVideo={!!item.videoAsset}
-                      preferFull={item.platform === 'instagram_reel' || item.platform === 'instagram_carousel'}
-                    />
-                  ) : (
-                    <LinkThumbnail
-                      link={previewLink}
-                      authToken={authToken}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                      fallback={<MediaImage src={null} alt="" fallbackLabel={item.title} isVideo={!!item.videoAsset} />}
-                    />
-                  )}
+                  {thumb}
                   <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-end p-2.5">
                     {item.videoAsset || slideCount > 0 ? (
                       <span className="flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur tabular-nums">

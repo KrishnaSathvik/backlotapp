@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import BoringAvatar from 'boring-avatars';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createAvatar } from '@dicebear/core';
+import * as lorelei from '@dicebear/lorelei';
 import { Check, Download, LogOut, Trash2 } from 'lucide-react';
 import { creatorIdentity } from '@/src/lib/identity';
 import { usePWAInstall } from '@/src/hooks/usePWAInstall';
@@ -18,16 +19,27 @@ function useIdentity(account: AccountInfo) {
   return creatorIdentity(account.uid ?? 'demo');
 }
 
-/** The account's fixed avatar, generated from the uid (style and palette mixed per account). */
+/** The account's fixed picture, drawn in the browser from the uid. The same account always gets the same face. */
 export function Avatar({ account, size = 32 }: { account: AccountInfo; size?: number }) {
   const id = useIdentity(account);
+  const seed = account.uid ?? 'demo';
+  const src = useMemo(
+    () =>
+      createAvatar(lorelei, {
+        seed,
+        size,
+        radius: 50,
+        backgroundColor: id.palette.map((color) => color.slice(1)),
+      }).toDataUri(),
+    [seed, size, id.palette]
+  );
   return (
     <span
       className="block shrink-0 overflow-hidden rounded-full ring-2 ring-white dark:ring-zinc-900"
       style={{ width: size, height: size }}
       aria-hidden="true"
     >
-      <BoringAvatar name={account.uid ?? 'demo'} variant={id.variant} colors={id.palette} size={size} />
+      <img src={src} alt="" width={size} height={size} className="block h-full w-full" />
     </span>
   );
 }

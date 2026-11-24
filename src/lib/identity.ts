@@ -1,8 +1,7 @@
 /**
- * A fun, fixed identity for each account: a two-word name and a generated avatar
- * (one of several Boring Avatars styles in one of several palettes).
- * It's derived from the account's uid, so the same person always gets the same
- * name and icon on every login and device, with nothing stored anywhere.
+ * A fun, fixed identity for each account: a two-word name and a color palette.
+ * The profile picture is a DiceBear face seeded from the uid, so the same person
+ * always gets the same name and picture on every login and device, with nothing stored.
  */
 
 const ADJECTIVES = [
@@ -19,12 +18,8 @@ const NOUNS = [
   'Reel', 'Frame', 'Lens', 'Shutter', 'Studio', 'Story', 'Pulse', 'Spark',
 ];
 
-/** Avatar styles (Boring Avatars variants) and color palettes, mixed per account. */
-export const AVATAR_VARIANTS = ['beam', 'marble', 'bauhaus', 'sunset'] as const;
-export type AvatarVariant = (typeof AVATAR_VARIANTS)[number];
-
-// Bright and mid tones only: no near-black colors, so an avatar is always visible on the dark
-// theme (an avatar can be drawn mostly in one palette color).
+// Bright and mid tones only: no near-black colors, so the picture's background stays visible
+// on the dark theme.
 export const AVATAR_PALETTES: string[][] = [
   ['#2e66ff', '#ff9a5a', '#7c5cff', '#ffd166', '#8fb3ff'], // Backlot
   ['#2a9d8f', '#3fb8af', '#e9c46a', '#f4a261', '#e76f51'], // Desert
@@ -45,7 +40,6 @@ function hash(input: string): number {
 
 export interface CreatorIdentity {
   name: string;
-  variant: AvatarVariant;
   palette: string[];
 }
 
@@ -54,7 +48,6 @@ export function creatorIdentity(uid: string): CreatorIdentity {
   // Different slices of the hash pick each part, so they vary independently.
   return {
     name: `${ADJECTIVES[h % ADJECTIVES.length]} ${NOUNS[(h >>> 5) % NOUNS.length]}`,
-    variant: AVATAR_VARIANTS[(h >>> 10) % AVATAR_VARIANTS.length],
     palette: AVATAR_PALETTES[(h >>> 14) % AVATAR_PALETTES.length],
   };
 }
