@@ -17,6 +17,7 @@ import {
 import {
   formatTagsForCopy,
   getPlatformLabel,
+  getPlatformShortLabel,
   normalizeStatus,
   parseTagsInput,
   PLATFORM_OPTIONS,
@@ -30,6 +31,7 @@ import {
 import { firstPreviewLink } from '@/src/lib/link-preview';
 import { fetchAssetAsBlob, resolveAssetUrl } from '@/src/lib/local-vault';
 import { FormSelect } from './CustomSelect';
+import { PlatformIcon } from './PlatformIcon';
 import { LinkThumbnail } from './LinkThumbnail';
 import { FramedImage, MediaImage } from './MediaImage';
 import {
@@ -42,6 +44,7 @@ import {
   Sheet,
   SheetCloseButton,
   sizes,
+  StagePill,
   StageSwitch,
   useFeedback,
 } from './ui';
@@ -169,6 +172,9 @@ interface ItemDetailModalProps {
   onDuplicate: (item: ContentItem) => Promise<void>;
   onUpdateFields: (itemId: number, patch: ItemFieldsPatch) => Promise<ContentItem | null>;
   onAskAI: (item: ContentItem) => void;
+  /** The same post on other channels, shown as one library card. */
+  alsoOn?: ContentItem[];
+  onOpenItem?: (item: ContentItem) => void;
 }
 
 export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
@@ -182,6 +188,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onDuplicate,
   onUpdateFields,
   onAskAI,
+  alsoOn = [],
+  onOpenItem,
 }) => {
   const [slideIndex, setSlideIndex] = useState(0);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -416,6 +424,23 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               ]}
             />
           </div>
+          {alsoOn.length > 0 && onOpenItem ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Also on</span>
+              {alsoOn.map((other) => (
+                <button
+                  key={other.id}
+                  type="button"
+                  onClick={() => onOpenItem(other)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:border-border-strong dark:text-zinc-200"
+                >
+                  <PlatformIcon platform={other.platform} size={14} />
+                  {getPlatformShortLabel(other.platform)}
+                  <StagePill status={other.status} />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[env(safe-area-inset-bottom)]">

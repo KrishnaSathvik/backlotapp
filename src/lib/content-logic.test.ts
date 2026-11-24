@@ -4,6 +4,8 @@ import {
   convertIdeaToPostDraft,
   extractDomainAndTitle,
   filterContentItems,
+  groupLibraryPosts,
+  libraryCards,
   platformOfChannel,
   postForAnotherChannel,
   postInChannel,
@@ -214,14 +216,13 @@ test('sortContentItems orders by target date with undated posts last', () => {
   assert.deepEqual(items.map((i) => i.id), [1, 2, 3, 4], 'does not mutate input');
 });
 
-test('sortContentItems orders by most recently updated and newest created', () => {
+test('sortContentItems keeps an edited post where it was uploaded', () => {
   const base = sampleItems[0];
   const items: ContentItem[] = [
     { ...base, id: 1, updatedAt: '2026-01-02T00:00:00Z', createdAt: '2026-01-03T00:00:00Z' },
     { ...base, id: 2, updatedAt: '2026-01-05T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' },
   ];
-  assert.deepEqual(sortContentItems(items, 'updated').map((i) => i.id), [2, 1]);
-  assert.deepEqual(sortContentItems(items, 'created').map((i) => i.id), [1, 2]);
+  assert.deepEqual(sortContentItems(items, 'uploaded').map((i) => i.id), [1, 2]);
 });
 
 test('postForAnotherChannel reuses files and starts planned on the other channel', () => {
@@ -255,4 +256,59 @@ test('postForAnotherChannel reuses files and starts planned on the other channel
   assert.equal(draft.slides[0]?.url, '/api/files/same-slide');
   assert.notEqual(draft.coverAsset, source.coverAsset);
   assert.equal(draft.caption, source.caption);
+});
+
+test('groupLibraryPosts shows one library card for the same post on two channels', () => {
+  const base = sampleItems[0];
+  const file = { id: 'slide', name: 'slide.jpg', url: '/api/files/shared', mimeType: 'image/jpeg', size: 5 };
+  const instagram: ContentItem = {
+    ...base,
+    id: 1,
+    title: 'AI engineering stack 2027',
+    platform: 'instagram_reel',
+    channelId: 2,
+    channelName: 'CodeByKrishna',
+    status: 'posted',
+    slides: [file],
+    updatedAt: '2026-11-13T00:00:00Z',
+  };
+  const tiktok: ContentItem = {
+    ...base,
+    id: 2,
+    title: 'AI engineering stack 2027',
+    platform: 'tiktok',
+    channelId: 3,
+    channelName: 'CodeByKrishna',
+    status: 'idea',
+    slides: [{ ...file }],
+    updatedAt: '2026-11-14T00:00:00Z',
+  };
+  const unrelated: ContentItem = { ...base, id: 3, title: 'Something else', channelId: 2 };
+  const groups = groupLibraryPosts([instagram, tiktok, unrelated]);
+  assert.equal(groups.length, 2);
+  const pair = groups.find((group) => group.members.length === 2);
+  assert.equal(pair?.open.id, 2);
+  assert.deepEqual(pair?.members.map((member) => member.id).sort(), [1, 2]);
+
+  const postedOnly = libraryCards([instagram], [instagram, tiktok, unrelated], true);
+  assert.equal(postedOnly.length, 1);
+  assert.equal(postedOnly[0].members.length, 2);
+  assert.equal(libraryCards([instagram, tiktok], [instagram, tiktok], false).length, 2);
+});
+
+test('groupLibraryPosts leaves same-title posts apart when they do not share a file or a channel', () => {
+  const base = sampleItems[0];
+  const file = { id: 'a', name: 'a.jpg', url: '/api/files/a', mimeType: 'image/jpeg', size: 1 };
+  const other = { id: 'b', name: 'b.jpg', url: '/api/files/b', mimeType: 'image/jpeg', size: 1 };
+  const sharedTitle = groupLibraryPosts([
+    { ...base, id: 1, title: 'Same name', channelId: 1, slides: [file] },
+    { ...base, id: 2, title: 'Same name', channelId: 2, slides: [other] },
+  ]);
+  assert.equal(sharedTitle.length, 2);
+
+  const sameChannel = groupLibraryPosts([
+    { ...base, id: 1, title: 'Same name', channelId: 1, slides: [file] },
+    { ...base, id: 2, title: 'Same name', channelId: 1, slides: [{ ...file }] },
+  ]);
+  assert.equal(sameChannel.length, 2);
 });

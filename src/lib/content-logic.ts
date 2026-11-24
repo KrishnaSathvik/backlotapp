@@ -165,6 +165,79 @@ export function getPlatformShortLabel(platform: PlatformKey): string {
   return PLATFORM_OPTIONS.find((p) => p.key === platform)?.shortLabel ?? 'Other';
 }
 
+export interface LibraryGroup {
+  /** The copy a click opens: whichever was updated most recently. */
+  open: ContentItem;
+  members: ContentItem[];
+}
+
+function postAssetUrls(item: ContentItem): string[] {
+  return [item.coverAsset?.url, item.videoAsset?.url, ...item.slides.map((slide) => slide.url)].filter(
+    (url): url is string => Boolean(url)
+  );
+}
+
+function sameChannelPost(a: ContentItem, b: ContentItem): boolean {
+  if (a.channelId != null && b.channelId != null) return a.channelId === b.channelId;
+  return a.channelName.trim().toLowerCase() === b.channelName.trim().toLowerCase() && a.platform === b.platform;
+}
+
+/**
+ * The main library shows one card when the same post was added to another channel.
+ * Those copies share a title and at least one file. A channel page does not use this.
+ */
+export function groupLibraryPosts(items: ContentItem[]): LibraryGroup[] {
+  const parent = items.map((_, index) => index);
+  const find = (index: number): number => (parent[index] === index ? index : (parent[index] = find(parent[index])));
+  const union = (left: number, right: number) => {
+    parent[find(left)] = find(right);
+  };
+
+  const byTitle = new Map<string, number[]>();
+  items.forEach((item, index) => {
+    const title = item.title.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!title || postAssetUrls(item).length === 0) return;
+    const indexes = byTitle.get(title) ?? [];
+    indexes.push(index);
+    byTitle.set(title, indexes);
+  });
+
+  for (const indexes of byTitle.values()) {
+    for (let left = 0; left < indexes.length; left += 1) {
+      for (let right = left + 1; right < indexes.length; right += 1) {
+        const a = items[indexes[left]];
+        const b = items[indexes[right]];
+        if (sameChannelPost(a, b)) continue;
+        const urls = new Set(postAssetUrls(a));
+        if (postAssetUrls(b).some((url) => urls.has(url))) union(indexes[left], indexes[right]);
+      }
+    }
+  }
+
+  const buckets = new Map<number, ContentItem[]>();
+  items.forEach((item, index) => {
+    const root = find(index);
+    const members = buckets.get(root) ?? [];
+    members.push(item);
+    buckets.set(root, members);
+  });
+
+  return [...buckets.values()].map((members) => {
+    const ordered = [...members].sort((a, b) => {
+      const updated = Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
+      return updated || a.id - b.id;
+    });
+    return { open: ordered[0], members: ordered };
+  });
+}
+
+/** One card per visible post, or one card per copy-group when the main library is grouping. */
+export function libraryCards(visible: ContentItem[], universe: ContentItem[], group: boolean): LibraryGroup[] {
+  if (!group) return visible.map((item) => ({ open: item, members: [item] }));
+  const visibleIds = new Set(visible.map((item) => item.id));
+  return groupLibraryPosts(universe).filter((entry) => entry.members.some((member) => visibleIds.has(member.id)));
+}
+
 function copyAsset(asset: MediaAsset | null): MediaAsset | null {
   return asset ? { ...asset } : null;
 }
@@ -202,54 +275,61 @@ export function getStatusLabel(status: string): string {
   return STATUS_OPTIONS.find((s) => s.key === normalizeStatus(status))?.label ?? 'Planned';
 }
 
-export type LibrarySort = 'updated' | 'target' | 'created';
+export type LibrarySort = 'uploaded' | 'target';
 
 export const SORT_OPTIONS: Array<{ key: LibrarySort; label: string }> = [
-  { key: 'updated', label: 'Recently updated' },
+  { key: 'uploaded', label: 'Recently uploaded' },
   { key: 'target', label: 'Target date' },
-  { key: 'created', label: 'Newest first' },
 ];
 
+const timeValue = (value: string) => {
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? 0 : time;
+};
+
 /**
- * Returns a sorted copy. "target" puts the soonest date first (target date, or
- * post date when there is none) and undated posts last.
+ * Returns a sorted copy. "uploaded" is when the post was added, so a later edit
+ * stays put. "target" puts the soonest date first and undated posts last.
  */
 export function sortContentItems(items: ContentItem[], sort: LibrarySort): ContentItem[] {
-  const time = (v: string) => {
-    const t = Date.parse(v);
-    return Number.isNaN(t) ? 0 : t;
-  };
   const copy = [...items];
-  if (sort === 'target') {
-    return copy.sort((a, b) => {
-      const da = a.targetDate || a.postDate;
-      const db = b.targetDate || b.postDate;
-      if (!da && !db) return time(b.updatedAt) - time(a.updatedAt);
-      if (!da) return 1;
-      if (!db) return -1;
-      return da.localeCompare(db);
-    });
+  switch (sort) {
+    case 'target':
+      return copy.sort((a, b) => {
+        const da = a.targetDate || a.postDate;
+        const db = b.targetDate || b.postDate;
+        if (!da && !db) return timeValue(b.createdAt) - timeValue(a.createdAt) || a.id - b.id;
+        if (!da) return 1;
+        if (!db) return -1;
+        return da.localeCompare(db) || a.id - b.id;
+      });
+    case 'uploaded':
+      return copy.sort((a, b) => timeValue(b.createdAt) - timeValue(a.createdAt) || a.id - b.id);
+    default: {
+      const unreachable: never = sort;
+      return unreachable;
+    }
   }
-  const key = sort === 'created' ? 'createdAt' : 'updatedAt';
-  return copy.sort((a, b) => time(b[key]) - time(a[key]));
 }
 
-/** Same order as posts. Ideas have no separate edit time, so "updated" uses when they were saved. */
+/** Same order as posts. An idea edit does not move it; only when it was added does. */
 export function sortIdeas(items: IdeaItem[], sort: LibrarySort): IdeaItem[] {
-  const time = (v: string) => {
-    const t = Date.parse(v);
-    return Number.isNaN(t) ? 0 : t;
-  };
   const copy = [...items];
-  if (sort === 'target') {
-    return copy.sort((a, b) => {
-      if (!a.targetDate && !b.targetDate) return time(b.createdAt) - time(a.createdAt);
-      if (!a.targetDate) return 1;
-      if (!b.targetDate) return -1;
-      return a.targetDate.localeCompare(b.targetDate);
-    });
+  switch (sort) {
+    case 'target':
+      return copy.sort((a, b) => {
+        if (!a.targetDate && !b.targetDate) return timeValue(b.createdAt) - timeValue(a.createdAt) || a.id - b.id;
+        if (!a.targetDate) return 1;
+        if (!b.targetDate) return -1;
+        return a.targetDate.localeCompare(b.targetDate) || a.id - b.id;
+      });
+    case 'uploaded':
+      return copy.sort((a, b) => timeValue(b.createdAt) - timeValue(a.createdAt) || a.id - b.id);
+    default: {
+      const unreachable: never = sort;
+      return unreachable;
+    }
   }
-  return copy.sort((a, b) => time(b.createdAt) - time(a.createdAt));
 }
 
 export interface LibraryFilters {

@@ -9,6 +9,7 @@ import {
   filterContentItems,
   ideaInChannel,
   platformOfChannel,
+  groupLibraryPosts,
   postForAnotherChannel,
   postInChannel,
   type ChannelItem,
@@ -921,7 +922,8 @@ const VaultShell: React.FC = () => {
   const page = PAGE_COPY[activeTab];
   const isChat = activeTab === 'chat';
   const openIdeas = ideas.filter((idea) => !idea.convertedItemId);
-  const librarySubtitle = `${items.length} ${items.length === 1 ? 'post' : 'posts'} · ${openIdeas.length} ${
+  const libraryCount = groupLibraryPosts(items).length;
+  const librarySubtitle = `${libraryCount} ${libraryCount === 1 ? 'post' : 'posts'} · ${openIdeas.length} ${
     openIdeas.length === 1 ? 'idea' : 'ideas'
   } · ${channels.length} ${channels.length === 1 ? 'channel' : 'channels'}`;
 
@@ -1190,6 +1192,12 @@ const VaultShell: React.FC = () => {
             setChatFocus({ kind: 'post', id: item.id });
             setActiveTab('chat');
           }}
+          alsoOn={
+            groupLibraryPosts(items)
+              .find((group) => group.members.some((member) => member.id === selectedItem.id))
+              ?.members.filter((member) => member.id !== selectedItem.id) ?? []
+          }
+          onOpenItem={setSelectedItem}
         />
       ) : null}
 

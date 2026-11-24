@@ -54,7 +54,7 @@ export const IdeasView: React.FC<IdeasViewProps> = ({
     // Only on mount: the request is consumed once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [sort, setSort] = useState<LibrarySort>('updated');
+  const [sort, setSort] = useState<LibrarySort>('uploaded');
   const [page, setPage] = useState(1);
   const [busyIdeaId, setBusyIdeaId] = useState<number | null>(null);
 

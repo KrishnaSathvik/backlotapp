@@ -5,6 +5,7 @@ import { Calendar, Film, Layers, Sparkles } from 'lucide-react';
 import {
   filterContentItems,
   getPlatformShortLabel,
+  libraryCards,
   postInChannel,
   SORT_OPTIONS,
   sortContentItems,
@@ -60,7 +61,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   showPostTo = false,
   onPostToChannel,
 }) => {
-  const [sort, setSort] = useState<LibrarySort>('updated');
+  const [sort, setSort] = useState<LibrarySort>('uploaded');
   const [postingId, setPostingId] = useState<number | null>(null);
   const [layout, setLayout] = useLayoutMode();
   const [page, setPage] = useState(1);
@@ -70,10 +71,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setPageKey(listKey);
     setPage(1);
   }
-  const sortedItems = sortContentItems(items, sort);
-  const pageCount = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
+  const cards = libraryCards(items, allItems, !showPostTo);
+  const openOrder = new Map(sortContentItems(cards.map((card) => cardSortStandIn(card)), sort).map((item, index) => [item.id, index]));
+  const sortedCards = [...cards].sort((a, b) => (openOrder.get(a.open.id) ?? 0) - (openOrder.get(b.open.id) ?? 0));
+  const pageCount = Math.max(1, Math.ceil(sortedCards.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const pageItems = sortedItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageItems = sortedCards.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <section aria-label="Content library" className="space-y-4">
@@ -114,7 +117,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           const active = filters.status === s.key;
           // allItems is already this channel's posts. The channel filter holds an id, which
           // filterContentItems would compare to a name and count as nothing.
-          const n = filterContentItems(allItems, { ...filters, channel: 'all', status: s.key }).length;
+          const matched = filterContentItems(allItems, { ...filters, channel: 'all', status: s.key });
+          const n = libraryCards(matched, allItems, !showPostTo).length;
           return (
             <button
               key={s.key}
@@ -143,7 +147,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           data-testid={layout === 'list' ? 'library-list' : 'library-grid'}
           className={layout === 'list' ? 'overflow-hidden rounded-2xl border border-border bg-surface' : 'grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3'}
         >
-          {pageItems.map((item) => {
+          {pageItems.map((card) => {
+            const item = card.open;
+            const places = card.members;
             const ref = referencePreview(item.attachedReferences);
             const otherChannels = channels.filter((channel) => !postInChannel(item, channel, channels));
             const postTo = showPostTo && channels.length > 1 ? (
@@ -166,7 +172,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             const thumbUrl = item.coverAsset?.url || item.slides[0]?.url || ref.screenshotUrl || null;
             const previewLink = firstPreviewLink(item.liveLink, ref.link);
             const slideCount = item.slides.length;
-            const date = item.postDate || item.targetDate;
+            const date = places.map((member) => member.postDate).filter(Boolean).sort().at(-1) || item.targetDate;
 
             if (layout === 'list') {
               return (
@@ -192,25 +198,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           {item.caption ? <span className="truncate">{item.caption}</span> : null}
                         </p>
                       ) : null}
-                      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 md:hidden dark:text-zinc-400">
-                        <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-200">
-                          <PlatformIcon platform={item.platform} size={14} />
-                          <span className="truncate">{getPlatformShortLabel(item.platform)}</span>
-                        </span>
-                        <StagePill status={item.status} className="shrink-0" />
-                        {date ? <span className="shrink-0 tabular-nums">{date}</span> : null}
+                      <div className="mt-1.5 md:hidden">
+                        <Places places={places} date={date} iconSize={14} />
                       </div>
                     </div>
                     {postTo}
-                    <div className="hidden shrink-0 items-center gap-3 text-xs text-zinc-500 md:flex dark:text-zinc-400">
-                      <span className="inline-flex w-5 items-center gap-1.5 font-semibold text-zinc-700 lg:w-28 dark:text-zinc-200">
-                        <PlatformIcon platform={item.platform} size={16} />
-                        <span className="hidden truncate lg:inline">{getPlatformShortLabel(item.platform)}</span>
-                      </span>
-                      <span className="flex w-[5.5rem] justify-start">
-                        <StagePill status={item.status} />
-                      </span>
-                      <span className="w-[6.25rem] text-right tabular-nums">{date}</span>
+                    <div className="hidden shrink-0 md:block">
+                      <Places places={places} date={date} iconSize={16} />
                     </div>
                   </div>
                 </article>
@@ -266,19 +260,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 </div>
 
                 <div className="flex flex-1 flex-col p-4">
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    <PlatformIcon platform={item.platform} size={16} />
-                    <span className="shrink-0 font-semibold text-zinc-700 dark:text-zinc-200">
-                      {getPlatformShortLabel(item.platform)}
-                    </span>
-                    <StagePill status={item.status} />
-                    {item.channelName ? (
-                      <span className="inline-flex max-w-full items-center gap-1.5">
-                        <span aria-hidden="true">·</span>
-                        <span className="truncate">{item.channelName}</span>
-                      </span>
-                    ) : null}
-                  </div>
+                  <Places places={places} iconSize={16} />
 
                   <h3 className="mt-1.5 line-clamp-2 text-[16.5px] font-bold leading-snug tracking-tight">
                     {/* Stretched link: the whole card opens the post. */}
@@ -321,3 +303,42 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     </section>
   );
 };
+
+/** The card keeps the place of the first copy that was added, and the soonest date on it. */
+function cardSortStandIn(card: { open: ContentItem; members: ContentItem[] }): ContentItem {
+  const firstAdded = [...card.members].sort(
+    (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id - b.id,
+  )[0];
+  const soonest = [...card.members]
+    .filter((member) => member.targetDate || member.postDate)
+    .sort((a, b) => (a.targetDate || a.postDate).localeCompare(b.targetDate || b.postDate) || a.id - b.id)[0];
+  return {
+    ...card.open,
+    createdAt: firstAdded?.createdAt ?? card.open.createdAt,
+    targetDate: soonest?.targetDate || '',
+    postDate: soonest?.postDate || '',
+  };
+}
+
+function Places({ places, date, iconSize }: { places: ContentItem[]; date?: string; iconSize: number }) {
+  const names = [...new Set(places.map((place) => place.channelName.trim()).filter(Boolean))];
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+      {places.map((place, index) => (
+        <span key={place.id} className="inline-flex min-w-0 items-center gap-1.5">
+          {index > 0 ? <span aria-hidden="true">·</span> : null}
+          <PlatformIcon platform={place.platform} size={iconSize} />
+          <span className="shrink-0 font-semibold text-zinc-700 dark:text-zinc-200">{getPlatformShortLabel(place.platform)}</span>
+          <StagePill status={place.status} className="shrink-0" />
+        </span>
+      ))}
+      {names.length === 1 ? (
+        <span className="inline-flex max-w-full items-center gap-1.5">
+          <span aria-hidden="true">·</span>
+          <span className="truncate">{names[0]}</span>
+        </span>
+      ) : null}
+      {date ? <span className="shrink-0 tabular-nums">{date}</span> : null}
+    </div>
+  );
+}
